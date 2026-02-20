@@ -58,3 +58,4 @@ apps/frontend/tsconfig.tsbuildinfo
 # Local browser context data
 /data
 libs/prisma/prisma/.generated
+settings.json

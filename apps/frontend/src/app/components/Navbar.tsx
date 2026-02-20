@@ -7,10 +7,13 @@ import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { useImpersonation } from '../../providers/impersonation-provider';
 import { AdminImpersonationModal } from './AdminImpersonationModal';
+import { SettingsModal } from './SettingsModal';
+import { FiSettings } from 'react-icons/fi';
 
 export const Navbar = ({ rightElement }: { rightElement?: React.ReactNode }) => {
   const [mounted, setMounted] = useState(false);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { isAdmin, impersonatedEmail } = useImpersonation();
 
   useEffect(() => {
@@ -72,7 +75,17 @@ export const Navbar = ({ rightElement }: { rightElement?: React.ReactNode }) => 
                     <UserButton afterSignOutUrl="/" />
                   </SignedIn>
                 </>
-              ) : null}
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  borderColor="app.border"
+                  onClick={() => setSettingsOpen(true)}
+                  aria-label="Settings"
+                >
+                  <FiSettings />
+                </Button>
+              )}
             </>
           )}
         </HStack>
@@ -81,6 +94,7 @@ export const Navbar = ({ rightElement }: { rightElement?: React.ReactNode }) => 
         isOpen={adminModalOpen}
         onClose={() => setAdminModalOpen(false)}
       />
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </Box>
   );
 };

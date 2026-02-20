@@ -1,7 +1,15 @@
 {
   "appId": "com.useautomated.desktop",
   "productName": "Automated",
-  "asar": false,
+  "asar": true,
+  "asarUnpack": [
+    "**/*.node",
+    "**/node_modules/bufferutil/**",
+    "**/node_modules/@prisma/**",
+    "**/node_modules/.prisma/**",
+    "libs/prisma/**"
+  ],
+  "icon": "apps/desktop/icon",
   "directories": {
     "output": "dist/desktop"
   },
@@ -11,19 +19,75 @@
     "apps/frontend/public/**/*",
     "apps/frontend/next.config.js",
     "dist/apps/backend/**/*",
+    "libs/prisma/generated/prisma-sqlite/**/*",
+    "libs/prisma/prisma/.generated/sqlite.prisma",
     "node_modules/**/*",
     "package.json"
   ],
+  "extraResources": [
+    {
+      "from": "node_modules/@prisma/engines",
+      "to": "prisma-engines",
+      "filter": ["schema-engine-*", "LICENSE"]
+    }
+  ],
   "extraMetadata": {
-    "main": "apps/desktop/main.cjs"
+    "main": "apps/desktop/main.cjs",
+    "description": "AI-powered browser automation workflows",
+    "author": "Automated <contact@useautomated.com>",
+    "version": "0.1.0"
   },
   "mac": {
     "target": [
-      "dmg"
+      {
+        "target": "dmg",
+        "arch": ["x64", "arm64"]
+      },
+      {
+        "target": "zip",
+        "arch": ["x64", "arm64"]
+      }
     ],
-    "category": "public.app-category.productivity"
+    "icon": "apps/desktop/icon.icns",
+    "category": "public.app-category.productivity",
+    "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "zip",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "apps/desktop/icon.ico",
+    "artifactName": "${productName}-${version}-win-${arch}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "installerIcon": "apps/desktop/icon.ico",
+    "uninstallerIcon": "apps/desktop/icon.ico"
+  },
+  "linux": {
+    "target": [
+      {
+        "target": "AppImage",
+        "arch": ["x64"]
+      },
+      {
+        "target": "deb",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "apps/desktop/icon.png",
+    "category": "Utility",
+    "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
   },
   "dmg": {
-    "artifactName": "${productName}-${version}-${arch}.${ext}"
+    "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
   }
 }

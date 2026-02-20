@@ -1,13 +1,7 @@
 //@ts-check
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { composePlugins, withNx } = require('@nx/next');
-
-/**
- * @type {import('@nx/next/plugins/with-nx').WithNxOptions}
- **/
+/** @type {import('next').NextConfig} */
 const nextConfig = {
-  nx: {},
   devIndicators: false,
   async rewrites() {
     return [
@@ -51,6 +45,10 @@ const nextConfig = {
   },
 };
 
-const plugins = [withNx];
-
-module.exports = composePlugins(...plugins)(nextConfig);
+// In Nx dev/build, apply withNx plugin. In packaged Electron, @nx/next isn't available.
+try {
+  const { composePlugins, withNx } = require('@nx/next');
+  module.exports = composePlugins(withNx)(Object.assign(nextConfig, { nx: {} }));
+} catch {
+  module.exports = nextConfig;
+}

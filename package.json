@@ -1,6 +1,9 @@
 {
   "name": "@automated/source",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "AI-powered browser automation workflows",
+  "author": "Automated <contact@useautomated.com>",
+  "homepage": "https://useautomated.com",
   "main": "apps/desktop/main.cjs",
   "license": "MIT",
   "scripts": {
@@ -21,8 +24,10 @@
     "db:up": "docker-compose up -d",
     "db:down": "docker-compose down",
     "desktop:dev": "concurrently -k -n BACKEND,FRONTEND,ELECTRON \"npm run start:backend\" \"npm run start:frontend\" \"wait-on tcp:127.0.0.1:8080 tcp:127.0.0.1:3000 && ELECTRON_START_URL=http://127.0.0.1:3000 electron .\"",
-    "desktop:build": "nx build backend --configuration=production && nx build frontend --configuration=production",
-    "desktop:dist:mac": "npm run desktop:build && electron-builder --config electron-builder.json --mac dmg",
+    "desktop:build": "nx build backend --configuration=production && NEXT_PUBLIC_API_URL=http://127.0.0.1:52140 nx build frontend --configuration=production",
+    "desktop:dist:mac": "npm run desktop:build && electron-builder --config electron-builder.json --mac",
+    "desktop:dist:win": "npm run desktop:build && electron-builder --config electron-builder.json --win",
+    "desktop:dist:linux": "npm run desktop:build && electron-builder --config electron-builder.json --linux",
     "desktop:dist:dir": "npm run desktop:build && electron-builder --config electron-builder.json --mac dir"
   },
   "private": true,

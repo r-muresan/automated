@@ -6,8 +6,12 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
+import { SettingsService } from './app/settings/settings.service';
 
 async function bootstrap() {
+  // Load persisted settings (e.g. OPENROUTER_API_KEY) into process.env before NestJS init
+  SettingsService.loadSettingsToEnv();
+
   const app = await NestFactory.create(AppModule, {
     bodyParser: true,
   });

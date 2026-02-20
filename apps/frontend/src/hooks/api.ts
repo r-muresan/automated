@@ -555,6 +555,44 @@ export function useStopWorkflowExecution() {
   });
 }
 
+// Settings Hooks
+
+export function useGetSettings() {
+  const getHeaders = useGetHeaders();
+
+  return useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const headers = await getHeaders();
+      const response = await axios.get<{ openrouterApiKey: string | null }>(
+        `${API_BASE}/settings`,
+        { headers },
+      );
+      return response.data;
+    },
+  });
+}
+
+export function useUpdateSettings() {
+  const queryClient = useQueryClient();
+  const getHeaders = useGetHeaders();
+
+  return useMutation({
+    mutationFn: async (payload: { openrouterApiKey: string }) => {
+      const headers = await getHeaders();
+      const response = await axios.put<{ success: boolean }>(
+        `${API_BASE}/settings`,
+        payload,
+        { headers },
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+  });
+}
+
 export type {
   WorkflowAction,
   WorkflowExecutionState,

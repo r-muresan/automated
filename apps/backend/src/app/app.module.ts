@@ -17,6 +17,8 @@ import { WorkflowScheduleService } from './workflow/workflow-schedule.service';
 import { ResendWebhookController } from './email/resend-webhook.controller';
 import { ResendEmailService } from './email/resend-email.service';
 import { ResendWebhookService } from './email/resend-webhook.service';
+import { SettingsController } from './settings/settings.controller';
+import { SettingsService } from './settings/settings.service';
 
 const BrowserProviderFactory = {
   provide: BrowserProvider,
@@ -40,6 +42,7 @@ const BrowserProviderFactory = {
     BrowserSessionController,
     WorkflowController,
     ResendWebhookController,
+    SettingsController,
   ],
   providers: [
     AppService,
@@ -53,6 +56,7 @@ const BrowserProviderFactory = {
     WorkflowScheduleService,
     ResendEmailService,
     ResendWebhookService,
+    SettingsService,
   ],
 })
 export class AppModule {}
