@@ -6,8 +6,7 @@ RUN apt-get update -y \
   && apt-get install -y openssl \
   && rm -rf /var/lib/apt/lists/*
 
-ARG DATABASE_URL=file:/workspace/data/local.db
-ENV DATABASE_URL=${DATABASE_URL}
+ARG DB_PROVIDER=postgres
 
 COPY package.json package-lock.json ./
 COPY nx.json tsconfig.base.json ./
@@ -15,8 +14,11 @@ COPY apps ./apps
 COPY libs ./libs
 
 RUN npm ci
-RUN npm run prisma:generate
-RUN npm run prisma:generate:sqlite
+RUN if [ "$DB_PROVIDER" = "sqlite" ]; then \
+      DATABASE_URL="file:/workspace/data/local.db" npm run prisma:generate:sqlite; \
+    else \
+      DATABASE_URL="postgresql://placeholder" npm run prisma:generate; \
+    fi
 
 # Install Playwright Chromium for Browserbase provider
 RUN npx playwright install --with-deps chromium

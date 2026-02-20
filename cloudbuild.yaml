@@ -3,6 +3,8 @@ steps:
     name: gcr.io/cloud-builders/docker
     args:
       - build
+      - --build-arg
+      - DB_PROVIDER=${_DB_PROVIDER}
       - -t
       - gcr.io/$PROJECT_ID/${_SERVICE}:$COMMIT_SHA
       - -f
@@ -36,6 +38,7 @@ images:
 substitutions:
   _SERVICE: automated
   _REGION: us-east4
+  _DB_PROVIDER: postgres
 
 options:
   logging: CLOUD_LOGGING_ONLY
