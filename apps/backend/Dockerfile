@@ -12,12 +12,12 @@ COPY package.json package-lock.json ./
 COPY nx.json tsconfig.base.json ./
 COPY apps ./apps
 COPY libs ./libs
+COPY scripts ./scripts
 
 RUN npm ci
+RUN DATABASE_URL="postgresql://placeholder" npm run prisma:generate
 RUN if [ "$DB_PROVIDER" = "sqlite" ]; then \
       DATABASE_URL="file:/workspace/data/local.db" npm run prisma:generate:sqlite; \
-    else \
-      DATABASE_URL="postgresql://placeholder" npm run prisma:generate; \
     fi
 
 # Install Playwright Chromium for Browserbase provider
