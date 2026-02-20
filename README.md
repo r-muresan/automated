@@ -15,15 +15,16 @@
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
   <a href="#configuration">Configuration</a> &bull;
-  <a href="#desktop-app">Desktop App</a> &bull;
+  <a href="#desktop-app">Desktop App</a>
 </p>
+
 
 ---
 
 **Automated** is an open-source, AI-powered browser automation platform. Record a workflow once by interacting with your browser, and let the AI replay, adapt, and execute it on autopilot — triggered manually, via email, on a schedule, or through the API.
 
 <p align="center">
-  <img src="apps/frontend/public/brand/icon.png" alt="Automated Icon" width="120">
+[sat-feb-14.webm](https://github.com/user-attachments/assets/3dd44b80-2ebb-477a-b5a6-171a2f3e1dae)
 </p>
 
 ## Features
