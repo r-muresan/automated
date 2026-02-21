@@ -10,6 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const ws = searchParams.get('ws') || '';
+  const secure = searchParams.get('secure') === '1';
+  const watchOnly = searchParams.get('watchOnly') === '1';
 
   const html = `<!DOCTYPE html>
 <html>
@@ -39,7 +41,8 @@ export async function GET(request: NextRequest) {
 <div id="overlay"></div>
 <script>
 (function() {
-  const wsUrl = 'ws://' + ${JSON.stringify(ws)};
+  const wsUrl = ${JSON.stringify(secure)} ? 'wss://' + ${JSON.stringify(ws)} : 'ws://' + ${JSON.stringify(ws)};
+  const watchOnly = ${JSON.stringify(watchOnly)};
   const img = document.getElementById('screencast');
   const overlay = document.getElementById('overlay');
   let socket = null;
@@ -49,6 +52,7 @@ export async function GET(request: NextRequest) {
   let sessionId = null;
   let lastFrameTime = 0;
   let heartbeatTimer = null;
+  let lastFrameNotifyTime = 0;
 
   var SCREENCAST_OPTS = {
     format: 'jpeg',
@@ -182,7 +186,9 @@ export async function GET(request: NextRequest) {
       send('Runtime.evaluate', { expression: EVENT_TRACKING_SCRIPT });
       // Start screencast with good quality
       startScreencast();
-      startHeartbeat();
+      // In watch-only mode, skip the heartbeat so background tabs don't
+      // re-request screencast and cause the parent to flip between tabs.
+      if (!watchOnly) startHeartbeat();
     };
 
     socket.onmessage = function(event) {
@@ -198,6 +204,15 @@ export async function GET(request: NextRequest) {
           img.src = 'data:image/jpeg;base64,' + params.data;
           // Acknowledge the frame
           send('Page.screencastFrameAck', { sessionId: params.sessionId });
+          // Notify parent that this page is receiving frames (throttled to ~1/s)
+          var now = Date.now();
+          if (now - lastFrameNotifyTime > 1000) {
+            lastFrameNotifyTime = now;
+            window.parent.postMessage({
+              type: 'screencast:frame-received',
+              pageId: pageId,
+            }, '*');
+          }
         }
 
         // Forward interaction events (click, keydown) to parent frame.

@@ -91,11 +91,19 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
     }, [pages, showLoadSkeleton]);
 
     const getIframeSrc = (page: Page) => {
+      let url: string;
       if (inspectorUrlTemplate) {
-        return inspectorUrlTemplate.replace(/{pageId}/g, page.id);
+        url = inspectorUrlTemplate.replace(/{pageId}/g, page.id);
+      } else {
+        // Default to local screencast viewer for Browserbase
+        url = `/api/local-screencast?ws=connect.browserbase.com/debug/${sessionId}/devtools/page/${page.id}&secure=1`;
       }
-      // Default to Browserbase proxy
-      return `/api/browserbase-proxy/inspector?wss=connect.browserbase.com/debug/${sessionId}/devtools/page/${page.id}?debug=true&navbar=false`;
+      // In read-only (watch) mode, disable the heartbeat so background tabs
+      // don't re-request screencast frames and cause tab flickering.
+      if (readOnly) {
+        url += (url.includes('?') ? '&' : '?') + 'watchOnly=1';
+      }
+      return url;
     };
 
     const setIframeRef = useCallback((pageId: string, el: HTMLIFrameElement | null) => {
@@ -121,15 +129,17 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
 
     // When the active tab changes, tell the screencast iframe to bring its
     // CDP page to the front so Chrome produces fresh frames (headless mode).
+    // Skip in readOnly mode – the agent controls which tab is active and we
+    // must not call Page.bringToFront which could interfere with it.
     useEffect(() => {
-      if (pages.length === 0 || isExcelMode) return;
+      if (readOnly || pages.length === 0 || isExcelMode) return;
       const activePage = pages[activePageIndex];
       if (!activePage || activePage.isSkeleton) return;
       const iframe = iframeRefs.current.get(activePage.id);
       if (iframe?.contentWindow) {
         iframe.contentWindow.postMessage('screencast:activate', '*');
       }
-    }, [activePageIndex, pages, isExcelMode]);
+    }, [activePageIndex, pages, isExcelMode, readOnly]);
 
     // Expose methods via ref
     useImperativeHandle(

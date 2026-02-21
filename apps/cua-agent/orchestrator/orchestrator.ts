@@ -807,24 +807,8 @@ export class OrchestratorAgent {
     let stepOutput: string | undefined;
 
     const sessionId = this.stagehand.browserbaseSessionID ?? this.activeSessionId;
-    const liveViewUrl = !this.options.localCdpUrl && sessionId
-      ? `https://browserbase.com/sessions/${sessionId}`
-      : '';
-
-    // try {
-    //   const result = await this.stagehand.act(contextualInstruction);
-
-    //   this.stepResults.push({
-    //     instruction,
-    //     success: result.success,
-    //     output: stepOutput,
-    //   });
-    //   this.emit({ type: 'step:end', step, index, success: Boolean(result.success) });
-
-    //   return;
-    // } catch (error: any) {
-    //   console.log('Act Failed');
-    // }
+    const liveViewUrl =
+      !this.options.localCdpUrl && sessionId ? `https://browserbase.com/sessions/${sessionId}` : '';
 
     const tools = {
       request_login: tool({
@@ -851,6 +835,31 @@ export class OrchestratorAgent {
           reason: z.string().optional().describe('Optional reason why login is needed'),
         }),
       }),
+      // double_click: tool({
+      //   description:
+      //     'Double-click on an element to open it. Use this only after a normal click failed to open the item (e.g. a file in Google Drive that highlights on single click but requires double-click to open).',
+      //   execute: async ({ text }) => {
+      //     console.log(`[ORCHESTRATOR] Double-clicking on "${text}"`);
+      //     const observeResult = await this.stagehand!.observe(`the element containing "${text}"`);
+      //     if (!observeResult || observeResult.length === 0) {
+      //       return {
+      //         success: false,
+      //         message: `Could not find element with text "${text}"`,
+      //       };
+      //     }
+      //     const element = observeResult[0];
+
+      //     const page = this.stagehand!.context.activePage() || this.stagehand!.context.pages()[0];
+      //     await page.locator(`xpath=${element.selector}`).click({ clickCount: 2 });
+      //     return {
+      //       success: true,
+      //       message: `Double-clicked on "${text}"`,
+      //     };
+      //   },
+      //   inputSchema: z.object({
+      //     text: z.string().describe('The visible text of the element to double-click'),
+      //   }),
+      // }),
     };
 
     const agent = this.stagehand.agent({
@@ -869,10 +878,19 @@ export class OrchestratorAgent {
         instruction,
         success: result.success,
         output: stepOutput,
+        error: result.success ? undefined : result.message,
       });
 
-      console.log(`[ORCHESTRATOR] Step completed: success=${result.success}`);
-      this.emit({ type: 'step:end', step, index, success: Boolean(result.success) });
+      console.log(
+        `[ORCHESTRATOR] Step completed: success=${result.success}${result.success ? '' : ` | message: ${result.message}`}`,
+      );
+      this.emit({
+        type: 'step:end',
+        step,
+        index,
+        success: Boolean(result.success),
+        ...(result.success ? {} : { error: result.message || 'Agent could not complete the task' }),
+      });
     } catch (error: any) {
       console.error(`[ORCHESTRATOR] Step failed:`, error.message ?? error);
       if (error.cause) console.error(`[ORCHESTRATOR] Cause:`, error.cause);

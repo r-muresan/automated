@@ -73,7 +73,7 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "@ai-sdk/provider": "^3.0.7",
+    "@ai-sdk/provider": "^2.0.0",
     "@aws-sdk/client-s3": "^3.993.0",
     "@browserbasehq/stagehand": "^3.0.8",
     "@chakra-ui/icons": "^2.2.4",
@@ -93,7 +93,7 @@
     "@roamhq/wrtc": "^0.9.1",
     "@tanstack/react-query": "^5.90.19",
     "@xyflow/react": "^12.10.0",
-    "ai": "^6.0.69",
+    "ai": "^5.0.0",
     "axios": "^1.6.0",
     "framer-motion": "^12.29.0",
     "html2canvas-pro": "^1.5.8",

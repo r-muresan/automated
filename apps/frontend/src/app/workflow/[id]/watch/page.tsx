@@ -74,6 +74,27 @@ export default function WatchWorkflowPage() {
     return () => clearInterval(interval);
   }, [sessionId, isRunning, refreshPagesMutation]);
 
+  // Auto-switch to the active tab by listening for screencast frame events.
+  // Chrome only sends frequent screencast frames to the foreground page, so
+  // when the agent switches tabs the new active page starts emitting frames.
+  useEffect(() => {
+    if (!isRunning) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type !== 'screencast:frame-received') return;
+      const framePageId = event.data.pageId;
+      if (!framePageId) return;
+
+      const idx = pages.findIndex((p) => p.id === framePageId);
+      if (idx !== -1 && idx !== activePageIndex) {
+        setActivePageIndex(idx);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [isRunning, pages, activePageIndex, setActivePageIndex]);
+
   const handleStopClick = () => {
     stopExecution.mutate(workflowId);
   };

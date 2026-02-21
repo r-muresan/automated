@@ -280,7 +280,9 @@ export class WorkflowExecutionService {
         throw new Error('Failed to get browser CDP URL for local session');
       }
       this.workflowLocalSessions.set(workflowId, session.id);
-      console.log(`[WORKFLOW] Created local browser session ${session.id} for workflow ${workflowId}`);
+      console.log(
+        `[WORKFLOW] Created local browser session ${session.id} for workflow ${workflowId}`,
+      );
     }
 
     const localSessionId = this.workflowLocalSessions.get(workflowId);
@@ -352,9 +354,11 @@ export class WorkflowExecutionService {
         const localSessionId = this.workflowLocalSessions.get(workflowId);
         if (localSessionId) {
           this.workflowLocalSessions.delete(workflowId);
-          this.browserProvider.stopSession(localSessionId).catch((err) =>
-            console.error(`[WORKFLOW] Failed to stop local session ${localSessionId}:`, err),
-          );
+          this.browserProvider
+            .stopSession(localSessionId)
+            .catch((err) =>
+              console.error(`[WORKFLOW] Failed to stop local session ${localSessionId}:`, err),
+            );
         }
       });
 
@@ -402,9 +406,11 @@ export class WorkflowExecutionService {
     const localSessionId = this.workflowLocalSessions.get(workflowId);
     if (localSessionId) {
       this.workflowLocalSessions.delete(workflowId);
-      await this.browserProvider.stopSession(localSessionId).catch((err) =>
-        console.error(`[WORKFLOW] Failed to stop local session ${localSessionId}:`, err),
-      );
+      await this.browserProvider
+        .stopSession(localSessionId)
+        .catch((err) =>
+          console.error(`[WORKFLOW] Failed to stop local session ${localSessionId}:`, err),
+        );
     }
 
     this.closeActionStream(currentState.runId);
@@ -432,13 +438,19 @@ export class WorkflowExecutionService {
         case 'tab_navigate':
           return { ...step, url: substitute(step.url) };
         case 'loop':
-          return { ...step, description: substitute(step.description), steps: this.substituteInputValues(step.steps, inputValues) };
+          return {
+            ...step,
+            description: substitute(step.description),
+            steps: this.substituteInputValues(step.steps, inputValues),
+          };
         case 'conditional':
           return {
             ...step,
             condition: substitute(step.condition),
             trueSteps: this.substituteInputValues(step.trueSteps, inputValues),
-            falseSteps: step.falseSteps ? this.substituteInputValues(step.falseSteps, inputValues) : undefined,
+            falseSteps: step.falseSteps
+              ? this.substituteInputValues(step.falseSteps, inputValues)
+              : undefined,
           };
         default:
           return step;

@@ -55,6 +55,9 @@ class OpenRouterOpenAIClient extends CustomOpenAIClient {
     const mergedOptions = {
       ...options,
       provider: options?.provider ?? this.provider,
+      reasoning: options?.reasoning ?? {
+        effort: 'low',
+      },
     };
 
     const response = await super.createChatCompletion({
@@ -75,6 +78,9 @@ class OpenRouterOpenAIClient extends CustomOpenAIClient {
 
     merged.openrouter = {
       ...existing,
+      reasoning: existing.reasoning ?? {
+        effort: 'low',
+      },
       provider: {
         ...(this.provider ?? {}),
         ...(existing.provider ?? {}),
