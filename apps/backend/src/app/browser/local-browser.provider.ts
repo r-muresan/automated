@@ -63,7 +63,6 @@ export class LocalBrowserProvider extends BrowserProvider {
 
     const context = await chromium.launchPersistentContext(userDataDir, {
       headless: true,
-      channel: 'chrome',
       ignoreDefaultArgs: ['--enable-automation', '--enable-blink-features=AutomationControlled'],
       args: [
         '--no-sandbox',
