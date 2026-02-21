@@ -9,6 +9,7 @@ import { BrowserContainer, BrowserContainerRef } from '../components/Browser/Bro
 import { RecordingGuideModal } from '../components/RecordingGuideModal';
 import { MicrophoneSwitchModal } from '../components/MicrophoneSwitchModal';
 import { Box, VStack, HStack, Text, Button, Spinner } from '@chakra-ui/react';
+import { LuMic } from 'react-icons/lu';
 import { toaster } from '../../components/ui/toaster';
 import {
   useGenerateWorkflow,
@@ -185,7 +186,12 @@ export default function NewWorkflow() {
       analyser.getByteFrequencyData(dataArray);
       const maxLevel = Math.max(...dataArray);
       const hasTranscripts = pendingTranscriptRef.current.length > 0;
-      console.log('[SILENCE DETECTION] Max audio level after 5s:', maxLevel, 'hasTranscripts:', hasTranscripts);
+      console.log(
+        '[SILENCE DETECTION] Max audio level after 5s:',
+        maxLevel,
+        'hasTranscripts:',
+        hasTranscripts,
+      );
 
       if (maxLevel < 5 && !hasTranscripts) {
         // No meaningful audio detected and no transcripts received
@@ -712,7 +718,14 @@ export default function NewWorkflow() {
         });
       }
     },
-    [sessionId, stopSpeechToText, stopAudioRecording, setAudioStream, clearTranscripts, startSpeechToText],
+    [
+      sessionId,
+      stopSpeechToText,
+      stopAudioRecording,
+      setAudioStream,
+      clearTranscripts,
+      startSpeechToText,
+    ],
   );
 
   const handleConfirmCurrentMic = useCallback(() => {
@@ -754,14 +767,109 @@ export default function NewWorkflow() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const transcriptTextRef = useRef<HTMLDivElement>(null);
+
+  const transcriptWords = useMemo(() => {
+    if (!pendingTranscript) return [];
+    return pendingTranscript.split(/\s+/).filter(Boolean);
+  }, [pendingTranscript]);
+
+  // Track how many words were already visible so only new ones animate
+  const stableWordCount = useRef(0);
+  useEffect(() => {
+    // Update after render so the animation plays first
+    const timeout = setTimeout(() => {
+      stableWordCount.current = transcriptWords.length;
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [transcriptWords.length]);
+
+  // Auto-scroll transcript text to show the latest words
+  useEffect(() => {
+    if (transcriptTextRef.current) {
+      transcriptTextRef.current.scrollLeft = transcriptTextRef.current.scrollWidth;
+    }
+  }, [pendingTranscript]);
+
   const isLoadingRecording =
     isLoading || !!(recordingStatus && recordingStatus.localVideoUrl) || isRequestingPermissions;
 
   const isRecording = !isRequestingPermissions && sessionId && audioStream;
+  const isFirstStep = filteredInteractions.length <= 1;
 
   return (
     <VStack h="100vh" bg="app.bg" overflow="hidden" align="stretch" gap={0}>
       <Navbar
+        centerElement={
+          isRecording ? (
+            <HStack
+              bg="white"
+              borderRadius="full"
+              border="1px solid"
+              borderColor="gray.200"
+              px={2}
+              pr={4}
+              py={1}
+              gap={2}
+              maxW="500px"
+              overflow="hidden"
+              transition="width 0.3s ease"
+              shadow="sm"
+            >
+              <Box
+                borderRadius="full"
+                p={1.5}
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                flexShrink={0}
+                bg="gray.200"
+              >
+                <LuMic size={16} />
+              </Box>
+              <Box
+                ref={transcriptTextRef}
+                fontSize="sm"
+                fontWeight="semibold"
+                color="gray.800"
+                whiteSpace="nowrap"
+                overflow="hidden"
+                display="flex"
+                gap="0.35em"
+                alignItems="center"
+              >
+                {transcriptWords.length === 0 ? (
+                  <Text
+                    as="span"
+                    opacity={0.5}
+                    style={{ animation: 'transcript-word-fade-in 0.4s ease forwards' }}
+                  >
+                    {isFirstStep ? 'Describe your workflow out loud' : 'Describe the next step'}
+                  </Text>
+                ) : (
+                  transcriptWords.map((word, i) => {
+                    const isNew = i >= stableWordCount.current;
+                    const delayIndex = i - stableWordCount.current;
+                    return (
+                      <Text
+                        as="span"
+                        key={`${i}-${word}`}
+                        style={{
+                          animation: isNew
+                            ? `transcript-word-fade-in 0.3s ease ${delayIndex * 80}ms forwards`
+                            : undefined,
+                          opacity: isNew ? 0 : 1,
+                        }}
+                      >
+                        {word}
+                      </Text>
+                    );
+                  })
+                )}
+              </Box>
+            </HStack>
+          ) : undefined
+        }
         rightElement={
           <HStack gap={3}>
             <Button

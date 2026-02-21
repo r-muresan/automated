@@ -10,7 +10,7 @@ import { AdminImpersonationModal } from './AdminImpersonationModal';
 import { SettingsModal } from './SettingsModal';
 import { FiSettings } from 'react-icons/fi';
 
-export const Navbar = ({ rightElement }: { rightElement?: React.ReactNode }) => {
+export const Navbar = ({ rightElement, centerElement }: { rightElement?: React.ReactNode; centerElement?: React.ReactNode }) => {
   const [mounted, setMounted] = useState(false);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -22,7 +22,7 @@ export const Navbar = ({ rightElement }: { rightElement?: React.ReactNode }) => 
 
   return (
     <Box as="header" bg="app.bg">
-      <Flex justify="space-between" align="center" px={6} py={4}>
+      <Flex justify="space-between" align="center" px={6} py={4} position="relative">
         <Flex align="center" gap={4}>
           <a href="/">
             <Image src="/brand/logo-dark.png" alt="Automated" width={120} height={25} priority />
@@ -34,6 +34,18 @@ export const Navbar = ({ rightElement }: { rightElement?: React.ReactNode }) => 
             </Button>
           </a>
         </Flex>
+        {centerElement && (
+          <Box
+            position="absolute"
+            left="50%"
+            top="50%"
+            transform="translate(-50%, -50%)"
+            zIndex={1}
+            animation="transcript-pill-slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards"
+          >
+            {centerElement}
+          </Box>
+        )}
         <HStack gap={4} color="app.snow">
           {rightElement ? (
             rightElement
