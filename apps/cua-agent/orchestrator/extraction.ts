@@ -1,12 +1,13 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import type { ZodTypeAny } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { LoopContext } from '../types';
 import { LLMClient } from '@browserbasehq/stagehand';
+import {
+  buildExtractInformationPrompt,
+  ExtractInformationParams,
+} from './prompts/extract-information';
 
 const DEFAULT_MAX_TOKENS = 20000;
-const PROMPT_CACHE = new Map<string, string>();
 
 type SchemaMap = Record<string, string>;
 
@@ -19,20 +20,7 @@ export type ExtractOutput = {
   scraped_data: any;
 };
 
-type ExtractPromptParams = {
-  elements: string;
-  extracted_information_schema?: string | null;
-  previous_extracted_information?: string | null;
-  error_code_mapping_str?: string | null;
-  data_extraction_goal: string;
-  navigation_payload?: string | null;
-  navigation_goal?: string | null;
-  current_url: string;
-  extracted_text: string;
-  local_datetime: string;
-};
-
-type LoadPromptParams = Omit<ExtractPromptParams, 'elements'> & {
+type LoadPromptParams = Omit<ExtractInformationParams, 'elements'> & {
   element_tree_builder: ElementTreeBuilder;
   html_need_skyvern_attrs?: boolean;
 };
@@ -225,7 +213,6 @@ export async function extractWithLlm(params: LlmExtractParams): Promise<ExtractO
     current_url: currentUrl,
     extracted_text: extractedText,
     error_code_mapping_str: null,
-    local_datetime: new Date().toISOString(),
   });
 
   const messages: any[] = [
@@ -327,53 +314,8 @@ export async function loadPromptWithElements(params: LoadPromptParams): Promise<
   return prompt;
 }
 
-function renderPromptTemplate(templateName: string, params: ExtractPromptParams): string {
-  const template = loadPromptTemplate(templateName);
-  return renderJinjaTemplate(template, params);
-}
-
-function loadPromptTemplate(templateName: string): string {
-  const cached = PROMPT_CACHE.get(templateName);
-  if (cached) return cached;
-
-  const templatePath = path.join(__dirname, 'prompts', `${templateName}.j2`);
-  const template = fs.readFileSync(templatePath, 'utf8');
-  PROMPT_CACHE.set(templateName, template);
-  return template;
-}
-
-function renderJinjaTemplate(template: string, params: Record<string, any>): string {
-  const rawBlocks: string[] = [];
-  let rendered = template.replace(
-    /{%\s*raw\s*%}([\s\S]*?){%\s*endraw\s*%}/g,
-    (_match, rawContent: string) => {
-      rawBlocks.push(rawContent);
-      return `__RAW_BLOCK_${rawBlocks.length - 1}__`;
-    },
-  );
-
-  const ifBlockRegex =
-    /{%\s*if\s+([a-zA-Z0-9_]+)\s*%}([\s\S]*?)(?:{%\s*else\s*%}([\s\S]*?))?{%\s*endif\s*%}/g;
-  rendered = rendered.replace(
-    ifBlockRegex,
-    (_match, varName: string, truthyContent: string, falsyContent: string) => {
-      const value = params[varName];
-      const isTruthy = Boolean(value);
-      return isTruthy ? truthyContent : falsyContent || '';
-    },
-  );
-
-  rendered = rendered.replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_match, varName: string) => {
-    const value = params[varName];
-    return value == null ? '' : String(value);
-  });
-
-  rendered = rendered.replace(/__RAW_BLOCK_(\d+)__/g, (_match, index: string) => {
-    const rawContent = rawBlocks[Number(index)];
-    return rawContent ?? '';
-  });
-
-  return rendered;
+function renderPromptTemplate(_templateName: string, params: ExtractInformationParams): string {
+  return buildExtractInformationPrompt(params);
 }
 
 function parseJsonFromText(text: string): any {
