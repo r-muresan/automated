@@ -287,7 +287,6 @@ export class WorkflowExecutionService {
 
     const localSessionId = this.workflowLocalSessions.get(workflowId);
     const orchestrator = new OrchestratorAgent({
-      modelName: process.env.OPENROUTER_MODEL ?? 'google/gemini-2.5-flash',
       browserbaseProjectId: process.env.BROWSERBASE_PROJECT_ID,
       browserbaseContextId,
       localCdpUrl,

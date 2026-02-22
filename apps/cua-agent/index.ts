@@ -6,7 +6,7 @@ export {
   releaseBrowserbaseSession,
 } from './browserbase-session-limiter';
 export type { BrowserbaseSessionCreateLease } from './browserbase-session-limiter';
-export type { OrchestratorEvent, OrchestratorOptions } from './types';
+export type { OrchestratorEvent, OrchestratorOptions, OrchestratorModels } from './types';
 export type {
   Workflow,
   Step,
@@ -23,4 +23,3 @@ export type {
   BrowserState,
   TabState,
 } from './types';
-export { createOpenRouterClient } from './openrouter-client';

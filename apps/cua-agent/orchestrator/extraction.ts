@@ -1,7 +1,7 @@
 import type { ZodTypeAny } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { LoopContext } from '../types';
-import { LLMClient } from '@browserbasehq/stagehand';
+import OpenAI from 'openai';
 import {
   buildExtractInformationPrompt,
   ExtractInformationParams,
@@ -26,7 +26,8 @@ type LoadPromptParams = Omit<ExtractInformationParams, 'elements'> & {
 };
 
 type LlmExtractParams = {
-  llmClient: LLMClient;
+  llmClient: OpenAI;
+  model: string;
   page: any;
   dataExtractionGoal: string;
   schema?: ParsedSchema | null;
@@ -164,6 +165,7 @@ export function normalizeLoopItems(extractionResult: any): { items: Array<{ text
 export async function extractWithLlm(params: LlmExtractParams): Promise<ExtractOutput> {
   const {
     llmClient,
+    model,
     page,
     dataExtractionGoal,
     schema,
@@ -234,17 +236,12 @@ export async function extractWithLlm(params: LlmExtractParams): Promise<ExtractO
     messages.push({ role: 'user', content: prompt });
   }
 
-  const response = await llmClient.createChatCompletion({
-    options: {
-      messages,
-    },
-    logger: (logLine: any) => {},
+  const response = await llmClient.chat.completions.create({
+    model,
+    messages,
   });
 
-  let rawContent =
-    (response as any)?.choices?.[0]?.message?.content ??
-    (response as any)?.data ??
-    (response as any);
+  let rawContent: any = response.choices[0]?.message?.content ?? '';
 
   if (Array.isArray(rawContent)) {
     rawContent = rawContent

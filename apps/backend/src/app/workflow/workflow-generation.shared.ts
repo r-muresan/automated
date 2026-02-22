@@ -22,15 +22,23 @@ const SaveStepSchema = z.object({
 
 const SingleStepSchema = z.object({
   type: z.literal('step').describe('A single logical step'),
-  description: z.string().describe('The action to perform. Describe the logical outcome or the complete interaction sequence.'),
+  description: z
+    .string()
+    .describe(
+      'The action to perform. Describe the logical outcome or the complete interaction sequence.',
+    ),
 });
 
 const ExtractStepSchema = z.object({
   type: z.literal('extract').describe('Extract data from the page'),
-  description: z.string().describe('The specific data points to be extracted from the current page content'),
+  description: z
+    .string()
+    .describe('The specific data points to be extracted from the current page content'),
   dataSchema: z
     .string()
-    .describe('A TypeScript interface or object schema defining the structure of the data to extract')
+    .describe(
+      'A TypeScript interface or object schema defining the structure of the data to extract',
+    )
     .optional(),
 });
 
@@ -58,7 +66,12 @@ export const StepSchema: z.ZodType<Step> = z.lazy(() =>
 
 export const WorkflowSchema = z.object({
   name: z.string().describe('Name of the workflow'),
-  inputs: z.array(z.string()).optional().describe('Array of input names required to run this workflow. For example, if the workflow adds a person to a CRM, inputs might be ["Name", "Email"]. Leave empty if the workflow needs no dynamic data.'),
+  inputs: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Array of input names required to run this workflow. For example, if the workflow adds a person to a CRM, inputs might be ["Name", "Email"]. Leave empty if the workflow needs no dynamic data.',
+    ),
   steps: z.array(StepSchema).describe('Array of workflow steps'),
 }) as z.ZodType<Workflow>;
 
@@ -119,7 +132,8 @@ const WORKFLOW_JSON_SCHEMA = {
             type: { const: 'step', description: 'A single logical step' },
             description: {
               type: 'string',
-              description: 'The action to perform. Describe the logical outcome or the complete interaction sequence.',
+              description:
+                'The action to perform. Describe the logical outcome or the complete interaction sequence.',
             },
           },
         },
@@ -128,10 +142,14 @@ const WORKFLOW_JSON_SCHEMA = {
           required: ['type', 'description'],
           properties: {
             type: { const: 'extract', description: 'Extract data from the page' },
-            description: { type: 'string', description: 'The specific data points to be extracted from the current page content' },
+            description: {
+              type: 'string',
+              description: 'The specific data points to be extracted from the current page content',
+            },
             dataSchema: {
               type: 'string',
-              description: 'A TypeScript interface or object schema defining the structure of the data to extract',
+              description:
+                'A TypeScript interface or object schema defining the structure of the data to extract',
             },
           },
         },
@@ -181,7 +199,8 @@ const WORKFLOW_JSON_SCHEMA = {
     name: { type: 'string', description: 'Name of the workflow' },
     inputs: {
       type: 'array',
-      description: 'Array of input names required to run this workflow (e.g. ["Name", "Email"]). Omit if no dynamic data is needed.',
+      description:
+        'Array of input names required to run this workflow (e.g. ["Name", "Email"]). Omit if no dynamic data is needed.',
       items: { type: 'string' },
     },
     steps: {

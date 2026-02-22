@@ -1,5 +1,6 @@
 import * as dotenv from 'dotenv';
-import { LLMClient, Stagehand, type AgentTools } from '@browserbasehq/stagehand';
+import OpenAI from 'openai';
+import { Stagehand, type AgentTools } from '@browserbasehq/stagehand';
 import { tool } from 'ai';
 import { z } from 'zod';
 import type {
@@ -22,11 +23,10 @@ import type {
 } from '../types';
 
 import { AGENT_TIMEOUT_MS } from './constants';
-import { withTimeout, waitForUserInput } from './utils';
+import { withTimeout, waitForUserInput, DEFAULT_PROVIDER_ORDER } from './utils';
 import { LOADING_SELECTORS, getDomStabilityJs } from './page-scripts';
 import { buildSystemPrompt } from './system-prompt';
 import { extractWithLlm, normalizeLoopItems, parseSchemaMap } from './extraction';
-import { createOpenRouterClient, DEFAULT_PROVIDER_ORDER } from '../openrouter-client';
 import {
   acquireBrowserbaseSessionCreateLease,
   releaseBrowserbaseSession,
@@ -34,10 +34,17 @@ import {
 
 dotenv.config();
 
-const DEFAULT_OPENROUTER_MODEL = 'google/gemini-2.5-flash';
+const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+
+const DEFAULT_MODELS = {
+  extract: 'google/gemini-2.5-flash',
+  agent: 'moonshotai/kimi-k2.5',
+  conditional: 'google/gemini-3-flash-preview',
+  save: 'google/gemini-3-flash-preview',
+};
 
 export class OrchestratorAgent {
-  private llmClient: LLMClient | null = null;
+  private openai: OpenAI | null = null;
   private stagehand: Stagehand | null = null;
   private activeSessionId: string | null = null;
   private aborted = false;
@@ -51,6 +58,15 @@ export class OrchestratorAgent {
 
   constructor(options?: OrchestratorOptions) {
     this.options = options ?? {};
+  }
+
+  private resolveModels() {
+    return {
+      extract: this.options.models?.extract ?? DEFAULT_MODELS.extract,
+      agent: this.options.models?.agent ?? DEFAULT_MODELS.agent,
+      conditional: this.options.models?.conditional ?? DEFAULT_MODELS.conditional,
+      save: this.options.models?.save ?? DEFAULT_MODELS.save,
+    };
   }
 
   private emit(event: OrchestratorEvent): void {
@@ -151,32 +167,35 @@ export class OrchestratorAgent {
 
   private async init(startingUrl?: string): Promise<void> {
     this.assertNotAborted();
-    const modelName =
-      this.options.modelName ?? process.env.OPENROUTER_MODEL ?? DEFAULT_OPENROUTER_MODEL;
-    this.llmClient = createOpenRouterClient({ modelName });
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) throw new Error('Missing OPENROUTER_API_KEY for OpenRouter');
+    this.openai = new OpenAI({ baseURL: OPENROUTER_BASE_URL, apiKey });
 
     if (this.options.localCdpUrl) {
-      await this.initLocal(modelName, startingUrl);
+      await this.initLocal(startingUrl);
     } else {
-      await this.initBrowserbase(modelName, startingUrl);
+      await this.initBrowserbase(startingUrl);
     }
   }
 
-  private async initLocal(modelName: string, startingUrl?: string): Promise<void> {
+  private async initLocal(startingUrl?: string): Promise<void> {
     const cdpUrl = this.options.localCdpUrl!;
+    const models = this.resolveModels();
     console.log(`[ORCHESTRATOR] Using local browser via CDP: ${cdpUrl}`);
 
     this.stagehand = new Stagehand({
       env: 'LOCAL',
       verbose: 0,
-      llmClient: this.llmClient!,
       model: {
-        modelName: modelName,
+        modelName: models.extract,
+        apiKey: process.env.OPENROUTER_API_KEY,
+        baseURL: OPENROUTER_BASE_URL,
       },
       localBrowserLaunchOptions: {
         cdpUrl,
       },
       experimental: true,
+      disableAPI: true,
     });
 
     await this.stagehand.init();
@@ -193,7 +212,8 @@ export class OrchestratorAgent {
     }
   }
 
-  private async initBrowserbase(modelName: string, startingUrl?: string): Promise<void> {
+  private async initBrowserbase(startingUrl?: string): Promise<void> {
+    const models = this.resolveModels();
     const projectId = this.options.browserbaseProjectId ?? process.env.BROWSERBASE_PROJECT_ID ?? '';
     if (!projectId) {
       throw new Error('Missing BROWSERBASE_PROJECT_ID for Browserbase');
@@ -209,9 +229,10 @@ export class OrchestratorAgent {
       this.stagehand = new Stagehand({
         env: 'BROWSERBASE',
         verbose: 2,
-        llmClient: this.llmClient!,
         model: {
-          modelName: modelName,
+          modelName: models.extract,
+          apiKey: process.env.OPENROUTER_API_KEY,
+          baseURL: OPENROUTER_BASE_URL,
         },
         browserbaseSessionCreateParams: {
           projectId,
@@ -226,6 +247,7 @@ export class OrchestratorAgent {
           },
         },
         experimental: true,
+        disableAPI: true,
       });
 
       await this.stagehand.init();
@@ -590,7 +612,7 @@ export class OrchestratorAgent {
     index: number,
   ): Promise<void> {
     if (!this.stagehand) throw new Error('Browser session not initialized');
-    if (!this.llmClient) throw new Error('LLM client not initialized');
+    if (!this.openai) throw new Error('LLM client not initialized');
 
     console.log(`[EXTRACT] Executing extract: ${step.description}`);
 
@@ -608,7 +630,8 @@ export class OrchestratorAgent {
       const page = this.stagehand.context.activePage() || this.stagehand.context.pages()[0];
       const schema = parseSchemaMap(step.dataSchema);
       const result = await extractWithLlm({
-        llmClient: this.llmClient,
+        llmClient: this.openai,
+        model: this.resolveModels().extract,
         page,
         dataExtractionGoal: contextualInstruction,
         schema,
@@ -729,52 +752,43 @@ export class OrchestratorAgent {
   }
 
   private async generateSavedFile(saveDescription: string): Promise<SavedFile> {
-    if (!this.llmClient) throw new Error('LLM client not initialized');
+    if (!this.openai) throw new Error('LLM client not initialized');
 
     const globalStateJson = JSON.stringify(this.globalState ?? [], null, 2);
 
-    const response = await this.llmClient.createChatCompletion<{
-      output: string;
-      outputExtension: string;
-    }>({
-      options: {
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You generate an output file for a completed workflow. ' +
-              'The output should contain ONLY the data the user asked to save — no titles, summaries, or metadata about the workflow itself. ' +
-              'Choose the best file format based on the data:\n' +
-              '- "csv" for tabular/list data\n' +
-              '- "excel" when the user asks for an Excel/spreadsheet file (return CSV content in "output" for conversion)\n' +
-              '- "json" for structured data\n' +
-              '- "txt" for plain text\n' +
-              '- "md" for rich formatted text\n' +
-              'Return a JSON object with "output" (the file contents) and "outputExtension" (one of: txt, csv, excel, md, json).',
-          },
-          {
-            role: 'user',
-            content:
-              `Workflow: ${this.workflowName}\n\n` +
-              `Save instruction: ${saveDescription}\n\n` +
-              `Collected data JSON:\n${globalStateJson}\n\n` +
-              'Generate the output file containing only the saved data in the most appropriate format. ' +
-              'Do not include workflow metadata, summaries, or descriptions — just the data itself.',
-          },
-        ],
-        response_model: {
-          name: 'workflow_output_file',
-          schema: z.object({
-            output: z.string(),
-            outputExtension: z.enum(['txt', 'csv', 'excel', 'md', 'json']),
-          }),
+    const response = await this.openai.chat.completions.create({
+      model: this.resolveModels().save,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You generate an output file for a completed workflow. ' +
+            'The output should contain ONLY the data the user asked to save — no titles, summaries, or metadata about the workflow itself. ' +
+            'Choose the best file format based on the data:\n' +
+            '- "csv" for tabular/list data\n' +
+            '- "excel" when the user asks for an Excel/spreadsheet file (return CSV content in "output" for conversion)\n' +
+            '- "json" for structured data\n' +
+            '- "txt" for plain text\n' +
+            '- "md" for rich formatted text\n' +
+            'Return a JSON object with "output" (the file contents) and "outputExtension" (one of: txt, csv, excel, md, json).',
         },
-      },
-      logger: () => {},
+        {
+          role: 'user',
+          content:
+            `Workflow: ${this.workflowName}\n\n` +
+            `Save instruction: ${saveDescription}\n\n` +
+            `Collected data JSON:\n${globalStateJson}\n\n` +
+            'Generate the output file containing only the saved data in the most appropriate format. ' +
+            'Do not include workflow metadata, summaries, or descriptions — just the data itself.',
+        },
+      ],
+      response_format: { type: 'json_object' },
     });
 
-    const output = response?.data?.output;
-    const outputExtension = response?.data?.outputExtension;
+    const rawContent = response.choices[0]?.message?.content ?? '{}';
+    const parsed = JSON.parse(rawContent);
+    const output = parsed?.output;
+    const outputExtension = parsed?.outputExtension;
 
     console.log({ output, outputExtension });
     if (typeof output !== 'string' || output.trim().length === 0) {
@@ -840,9 +854,9 @@ export class OrchestratorAgent {
       tools: tools as AgentTools,
       stream: false,
       model: {
-        modelName: 'moonshotai/kimi-k2.5', // 'google/gemini-3-flash-preview'
+        modelName: this.resolveModels().agent,
         apiKey: process.env.OPENROUTER_API_KEY,
-        baseURL: 'https://openrouter.ai/api/v1',
+        baseURL: OPENROUTER_BASE_URL,
         provider: {
           order: DEFAULT_PROVIDER_ORDER,
           allow_fallbacks: false,
@@ -895,13 +909,14 @@ export class OrchestratorAgent {
 
   private async extractLoopItems(step: LoopStep): Promise<any[]> {
     if (!this.stagehand) throw new Error('Browser session not initialized');
-    if (!this.llmClient) throw new Error('LLM client not initialized');
+    if (!this.openai) throw new Error('LLM client not initialized');
 
     const page = this.stagehand.context.activePage() || this.stagehand.context.pages()[0];
     const goal = `List of ${step.description}`;
 
     const result = await extractWithLlm({
-      llmClient: this.llmClient,
+      llmClient: this.openai,
+      model: this.resolveModels().extract,
       page,
       dataExtractionGoal: goal,
       skipValidation: true,
@@ -928,7 +943,7 @@ export class OrchestratorAgent {
 
   private async executeLoopStep(step: LoopStep, index: number): Promise<void> {
     if (!this.stagehand) throw new Error('Browser session not initialized');
-    if (!this.llmClient) throw new Error('LLM client not initialized');
+    if (!this.openai) throw new Error('LLM client not initialized');
 
     console.log(`[ORCHESTRATOR] Starting loop: ${step.description}`);
 
@@ -1034,34 +1049,27 @@ export class OrchestratorAgent {
     let conditionMet: boolean | 'unsure' = 'unsure';
 
     this.assertNotAborted();
-    if (context && this.llmClient) {
+    if (context && this.openai) {
       try {
-        const response = await this.llmClient.createChatCompletion<{
-          result: 'true' | 'false' | 'unsure';
-        }>({
-          options: {
-            messages: [
-              {
-                role: 'system',
-                content:
-                  'You are a helpful assistant that evaluates conditions based on provided context. You must return a JSON object with a single key "result" which can be "true", "false", or "unsure". Only return "unsure" if the context does not contain enough information to be certain.',
-              },
-              {
-                role: 'user',
-                content: `Context:\n${this.formatLoopContext(context)}\n\nExtracted Variables:\n${JSON.stringify(this.extractedVariables, null, 2)}\n\nCondition: ${step.condition}`,
-              },
-            ],
-            response_model: {
-              name: 'condition_evaluation',
-              schema: z.object({
-                result: z.enum(['true', 'false', 'unsure']),
-              }),
+        const response = await this.openai.chat.completions.create({
+          model: this.resolveModels().conditional,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are a helpful assistant that evaluates conditions based on provided context. You must return a JSON object with a single key "result" which can be "true", "false", or "unsure". Only return "unsure" if the context does not contain enough information to be certain.',
             },
-          },
-          logger: (logLine: any) => {},
+            {
+              role: 'user',
+              content: `Context:\n${this.formatLoopContext(context)}\n\nExtracted Variables:\n${JSON.stringify(this.extractedVariables, null, 2)}\n\nCondition: ${step.condition}`,
+            },
+          ],
+          response_format: { type: 'json_object' },
         });
 
-        const result = response.data.result;
+        const rawContent = response.choices[0]?.message?.content ?? '{}';
+        const parsed = JSON.parse(rawContent);
+        const result = parsed?.result as 'true' | 'false' | 'unsure';
         console.log(`[ORCHESTRATOR] Quick evaluation result: ${result}`);
 
         if (result === 'true') {

@@ -136,9 +136,20 @@ export type OrchestratorEvent =
   | { type: 'loop:iteration:end'; step: LoopStep; index: number; iteration: number; totalItems: number; success: boolean; error?: string }
   | { type: 'log'; level: 'info' | 'warn' | 'error'; message: string; data?: any };
 
+export interface OrchestratorModels {
+  /** Model for data extraction steps (default: google/gemini-2.5-flash) */
+  extract?: string;
+  /** Model for agent/browser steps (default: moonshotai/kimi-k2.5) */
+  agent?: string;
+  /** Model for conditional evaluation (default: google/gemini-3-flash-preview) */
+  conditional?: string;
+  /** Model for save/file-generation steps (default: google/gemini-3-flash-preview) */
+  save?: string;
+}
+
 export interface OrchestratorOptions {
   onEvent?: (event: OrchestratorEvent) => void;
-  modelName?: string;
+  models?: OrchestratorModels;
   browserbaseProjectId?: string;
   browserbaseContextId?: string;
   /** CDP WebSocket URL to connect to an existing local browser session instead of Browserbase */
