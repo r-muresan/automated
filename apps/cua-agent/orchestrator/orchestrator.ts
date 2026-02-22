@@ -26,7 +26,7 @@ import { withTimeout, waitForUserInput } from './utils';
 import { LOADING_SELECTORS, getDomStabilityJs } from './page-scripts';
 import { buildSystemPrompt } from './system-prompt';
 import { extractWithLlm, normalizeLoopItems, parseSchemaMap } from './extraction';
-import { createOpenRouterClient } from '../openrouter-client';
+import { createOpenRouterClient, DEFAULT_PROVIDER_ORDER } from '../openrouter-client';
 import {
   acquireBrowserbaseSessionCreateLease,
   releaseBrowserbaseSession,
@@ -208,7 +208,7 @@ export class OrchestratorAgent {
     try {
       this.stagehand = new Stagehand({
         env: 'BROWSERBASE',
-        verbose: 0,
+        verbose: 2,
         llmClient: this.llmClient!,
         model: {
           modelName: modelName,
@@ -811,53 +811,26 @@ export class OrchestratorAgent {
       !this.options.localCdpUrl && sessionId ? `https://browserbase.com/sessions/${sessionId}` : '';
 
     const tools = {
-      request_login: tool({
-        description:
-          'Request manual login from the user. Use this when you encounter a login page or need authentication credentials. The user will manually log in via the browser session.',
-        execute: async ({ site, reason }) => {
-          console.log('\n' + '='.repeat(60));
-          console.log(`[LOGIN REQUIRED] ${site}`);
-          if (reason) console.log(`Reason: ${reason}`);
-          console.log(`\nPlease log in manually using the live browser view:`);
-          console.log(`${liveViewUrl}`);
-          console.log('='.repeat(60) + '\n');
-
-          await waitForUserInput('Press ENTER when you have completed the login...');
-
-          console.log('[ORCHESTRATOR] User confirmed login complete. Resuming workflow...\n');
-          return {
-            success: true,
-            message: 'User has completed manual login. You may now continue with the workflow.',
-          };
-        },
-        inputSchema: z.object({
-          site: z.string().describe('The name of the site or service that requires login'),
-          reason: z.string().optional().describe('Optional reason why login is needed'),
-        }),
-      }),
-      // double_click: tool({
+      // request_login: tool({
       //   description:
-      //     'Double-click on an element to open it. Use this only after a normal click failed to open the item (e.g. a file in Google Drive that highlights on single click but requires double-click to open).',
-      //   execute: async ({ text }) => {
-      //     console.log(`[ORCHESTRATOR] Double-clicking on "${text}"`);
-      //     const observeResult = await this.stagehand!.observe(`the element containing "${text}"`);
-      //     if (!observeResult || observeResult.length === 0) {
-      //       return {
-      //         success: false,
-      //         message: `Could not find element with text "${text}"`,
-      //       };
-      //     }
-      //     const element = observeResult[0];
-
-      //     const page = this.stagehand!.context.activePage() || this.stagehand!.context.pages()[0];
-      //     await page.locator(`xpath=${element.selector}`).click({ clickCount: 2 });
+      //     'Request manual login from the user. Use this when you encounter a login page or need authentication credentials. The user will manually log in via the browser session.',
+      //   execute: async ({ site, reason }) => {
+      //     console.log('\n' + '='.repeat(60));
+      //     console.log(`[LOGIN REQUIRED] ${site}`);
+      //     if (reason) console.log(`Reason: ${reason}`);
+      //     console.log(`\nPlease log in manually using the live browser view:`);
+      //     console.log(`${liveViewUrl}`);
+      //     console.log('='.repeat(60) + '\n');
+      //     await waitForUserInput('Press ENTER when you have completed the login...');
+      //     console.log('[ORCHESTRATOR] User confirmed login complete. Resuming workflow...\n');
       //     return {
       //       success: true,
-      //       message: `Double-clicked on "${text}"`,
+      //       message: 'User has completed manual login. You may now continue with the workflow.',
       //     };
       //   },
       //   inputSchema: z.object({
-      //     text: z.string().describe('The visible text of the element to double-click'),
+      //     site: z.string().describe('The name of the site or service that requires login'),
+      //     reason: z.string().optional().describe('Optional reason why login is needed'),
       //   }),
       // }),
     };
@@ -866,12 +839,22 @@ export class OrchestratorAgent {
       systemPrompt: buildSystemPrompt(this.extractedVariables, context),
       tools: tools as AgentTools,
       stream: false,
+      model: {
+        modelName: 'moonshotai/kimi-k2.5', // 'google/gemini-3-flash-preview'
+        apiKey: process.env.OPENROUTER_API_KEY,
+        baseURL: 'https://openrouter.ai/api/v1',
+        provider: {
+          order: DEFAULT_PROVIDER_ORDER,
+          allow_fallbacks: false,
+        },
+      },
+      mode: 'cua',
     });
 
     try {
       const result = await agent.execute({
         instruction: instruction,
-        maxSteps: 10,
+        maxSteps: 30,
       });
 
       this.stepResults.push({

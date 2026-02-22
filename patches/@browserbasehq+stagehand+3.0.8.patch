@@ -1,0 +1,270 @@
+diff --git a/node_modules/@browserbasehq/stagehand/dist/index.js b/node_modules/@browserbasehq/stagehand/dist/index.js
+index a0120e7..42a1939 100644
+--- a/node_modules/@browserbasehq/stagehand/dist/index.js
++++ b/node_modules/@browserbasehq/stagehand/dist/index.js
+@@ -35578,8 +35578,8 @@ var OpenAICUAClient = class extends AgentClient {
+     this.currentViewport = { width: 1288, height: 711 };
+     this.reasoningItems = /* @__PURE__ */ new Map();
+     this.environment = "browser";
+-    this.apiKey = (clientOptions == null ? void 0 : clientOptions.apiKey) || process.env.OPENAI_API_KEY || "";
+-    this.baseURL = (clientOptions == null ? void 0 : clientOptions.baseURL) || void 0;
++    this.apiKey = (clientOptions == null ? void 0 : clientOptions.apiKey) || process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || "";
++    this.baseURL = (clientOptions == null ? void 0 : clientOptions.baseURL) || process.env.OPENROUTER_BASE_URL || void 0;
+     this.organization = (clientOptions == null ? void 0 : clientOptions.organization) || process.env.OPENAI_ORG;
+     if ((clientOptions == null ? void 0 : clientOptions.environment) && typeof clientOptions.environment === "string") {
+       this.environment = clientOptions.environment;
+@@ -37700,6 +37700,188 @@ ${finalMessage}`;
+   }
+ };
+ 
++// lib/v3/agent/OpenRouterCUAClient.ts (patched)
++var OpenRouterCUAClient = class extends AgentClient {
++  constructor(type, modelName, userProvidedInstructions, clientOptions, tools) {
++    super(type, modelName, userProvidedInstructions);
++    this.currentViewport = { width: 1288, height: 711 };
++    this.tools = tools;
++    this.apiKey = (clientOptions && clientOptions.apiKey) || process.env.OPENROUTER_API_KEY || "";
++    this.baseURL = (clientOptions && clientOptions.baseURL) || "https://openrouter.ai/api/v1";
++    this.providerOptions = (clientOptions && clientOptions.provider && typeof clientOptions.provider === "object") ? clientOptions.provider : void 0;
++    this.reasoningOptions = (clientOptions && clientOptions.reasoning) ? clientOptions.reasoning : void 0;
++    const defaultHeaders = {};
++    if (process.env.OPENROUTER_SITE_URL) defaultHeaders["HTTP-Referer"] = process.env.OPENROUTER_SITE_URL;
++    if (process.env.OPENROUTER_APP_NAME) defaultHeaders["X-Title"] = process.env.OPENROUTER_APP_NAME;
++    this.client = new import_openai.default({ apiKey: this.apiKey, baseURL: this.baseURL, defaultHeaders });
++  }
++  setViewport(width, height) { this.currentViewport = { width, height }; }
++  setCurrentUrl(url) { this.currentUrl = url; }
++  setScreenshotProvider(provider) { this.screenshotProvider = provider; }
++  setActionHandler(handler) { this.actionHandler = handler; }
++  setSafetyConfirmationHandler(handler) { this.safetyConfirmationHandler = handler; }
++  normalizeCoordinates(x2, y) {
++    // Models that return 0-1 normalized coordinates
++    const UNIT_SCALE_MODELS = { "moonshotai/kimi-k2.5": true };
++    if (UNIT_SCALE_MODELS[this.modelName]) {
++      return {
++        x: Math.floor(Math.min(1, Math.max(0, x2)) * this.currentViewport.width),
++        y: Math.floor(Math.min(1, Math.max(0, y)) * this.currentViewport.height)
++      };
++    }
++    // Default: 0-1000 range (Google Gemini)
++    const clampedX = Math.min(999, Math.max(0, x2));
++    const clampedY = Math.min(999, Math.max(0, y));
++    return {
++      x: Math.floor(clampedX / 1e3 * this.currentViewport.width),
++      y: Math.floor(clampedY / 1e3 * this.currentViewport.height)
++    };
++  }
++  captureScreenshot(options) {
++    return __async(this, null, function* () {
++      if (options && options.currentUrl) this.currentUrl = options.currentUrl;
++      if (options && options.base64Image) {
++        this._lastScreenshotBase64 = options.base64Image;
++        return `data:image/png;base64,${options.base64Image}`;
++      }
++      if (this.screenshotProvider) {
++        const b64 = yield this.screenshotProvider();
++        this._lastScreenshotBase64 = b64;
++        return `data:image/png;base64,${b64}`;
++      }
++      return "";
++    });
++  }
++  getCuaTools() {
++    const cuaTools = [
++      { type: "function", function: { name: "click", description: "Click at (x, y) on the screen. Use for buttons, links, inputs.", parameters: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, button: { type: "string", enum: ["left", "right", "middle"] } }, required: ["x", "y"] } } },
++      { type: "function", function: { name: "double_click", description: "Double-click at (x, y).", parameters: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } }, required: ["x", "y"] } } },
++      { type: "function", function: { name: "type", description: "Type text into the focused element.", parameters: { type: "object", properties: { text: { type: "string" } }, required: ["text"] } } },
++      { type: "function", function: { name: "keypress", description: "Press keyboard key(s). E.g. ['Enter'], ['Control','a'], ['Tab'].", parameters: { type: "object", properties: { keys: { type: "array", items: { type: "string" } } }, required: ["keys"] } } },
++      { type: "function", function: { name: "scroll", description: "Scroll at position (x,y). scroll_y positive = down, negative = up.", parameters: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, scroll_x: { type: "number" }, scroll_y: { type: "number" } }, required: ["x", "y", "scroll_y"] } } },
++      { type: "function", function: { name: "move", description: "Move mouse to (x, y) to hover.", parameters: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } }, required: ["x", "y"] } } },
++      { type: "function", function: { name: "goto", description: "Navigate browser to a URL.", parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } } },
++      { type: "function", function: { name: "done", description: "Signal task completion. Call this when finished.", parameters: { type: "object", properties: { success: { type: "boolean" }, message: { type: "string" } }, required: ["success", "message"] } } }
++    ];
++    if (this.tools) {
++      for (const [name, tool] of Object.entries(this.tools)) {
++        if (tool && tool.description && tool.inputSchema) {
++          try { cuaTools.push({ type: "function", function: { name, description: tool.description, parameters: toJsonSchema(tool.inputSchema) } }); } catch (e) {}
++        }
++      }
++    }
++    return cuaTools;
++  }
++  execute(executionOptions) {
++    return __async(this, null, function* () {
++      const { options, logger } = executionOptions;
++      const { instruction } = options;
++      const maxSteps = options.maxSteps || 10;
++      let completed = false;
++      let currentStep = 0;
++      const actions = [];
++      let finalMessage = "";
++      let totalInputTokens = 0;
++      let totalOutputTokens = 0;
++      let totalCachedTokens = 0;
++      const CUA_MODEL_PRICING = {
++        "google/gemini-3-flash-preview":   { inputPerM: 0.50, outputPerM: 3.00, cacheReadPerM: 0.05 },
++        "google/gemini-2.5-flash-preview": { inputPerM: 0.50, outputPerM: 3.50, cacheReadPerM: 0.05 },
++        "google/gemini-2.5-pro-preview":   { inputPerM: 1.25, outputPerM: 10.00, cacheReadPerM: 0.31 },
++        "moonshotai/kimi-k2.5":            { inputPerM: 0.60, outputPerM: 3.00, cacheReadPerM: 0.10 },
++      };
++      const CUA_PRICING = CUA_MODEL_PRICING[this.modelName] || { inputPerM: 0.50, outputPerM: 3.00, cacheReadPerM: 0.05 };
++      const messages = [];
++      const systemPrompt = this.userProvidedInstructions || "You are a computer use agent controlling a web browser. Use the provided tools to complete tasks. Call done() when finished.";
++      messages.push({ role: "system", content: systemPrompt });
++      try {
++        const initialScreenshot = yield this.screenshotProvider();
++        const vp = this.currentViewport;
++        messages.push({ role: "user", content: [{ type: "text", text: `Viewport: ${vp.width}x${vp.height}. URL: ${this.currentUrl || "unknown"}.\n\nTask: ${instruction}` }, { type: "image_url", image_url: { url: `data:image/png;base64,${initialScreenshot}`, detail: "high" } }] });
++        while (!completed && currentStep < maxSteps) {
++          logger({ category: "agent", message: `OpenRouter CUA step ${currentStep + 1}/${maxSteps}`, level: 1 });
++          const requestBody = { model: this.modelName, messages, tools: this.getCuaTools(), tool_choice: "auto", max_tokens: 4096 };
++          if (this.providerOptions) requestBody.provider = this.providerOptions;
++          if (this.reasoningOptions) requestBody.reasoning = this.reasoningOptions;
++          const response = yield this.client.chat.completions.create(requestBody);
++          const _stepIn = (response.usage && response.usage.prompt_tokens) || 0;
++          const _stepOut = (response.usage && response.usage.completion_tokens) || 0;
++          const _stepCached = (response.usage && response.usage.prompt_tokens_details && response.usage.prompt_tokens_details.cached_tokens) || 0;
++          totalInputTokens += _stepIn;
++          totalOutputTokens += _stepOut;
++          totalCachedTokens += _stepCached;
++          const _runCost = (totalInputTokens / 1e6) * CUA_PRICING.inputPerM + (totalOutputTokens / 1e6) * CUA_PRICING.outputPerM + (totalCachedTokens / 1e6) * CUA_PRICING.cacheReadPerM;
++          console.log(`[CUA] step=${currentStep + 1} in=${_stepIn} out=${_stepOut} cached=${_stepCached} msgs=${messages.length} | total: in=${totalInputTokens} out=${totalOutputTokens} cached=${totalCachedTokens} cost=$${_runCost.toFixed(6)}`);
++          console.log(`[CUA] raw usage:`, JSON.stringify(response.usage));
++          const choice = response.choices[0];
++          const assistantMessage = choice.message;
++          messages.push(assistantMessage);
++          if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
++            finalMessage = (typeof assistantMessage.content === "string" ? assistantMessage.content : "") || "Task completed";
++            completed = true;
++            break;
++          }
++          const toolResults = [];
++          let doneSignaled = false;
++          for (const toolCall of assistantMessage.tool_calls) {
++            const toolName = toolCall.function.name;
++            let args;
++            try { args = JSON.parse(toolCall.function.arguments); } catch (e) { args = {}; }
++            logger({ category: "agent", message: `Tool: ${toolName} args: ${JSON.stringify(args)}`, level: 1 });
++            if (toolName === "done") {
++              doneSignaled = true;
++              finalMessage = args.message || "Task completed";
++              toolResults.push({ tool_call_id: toolCall.id, role: "tool", content: JSON.stringify({ success: true }) });
++              continue;
++            }
++            let action = null;
++            if (toolName === "click") { const c = this.normalizeCoordinates(args.x, args.y); action = { type: "click", x: c.x, y: c.y, button: args.button || "left" }; }
++            else if (toolName === "double_click") { const c = this.normalizeCoordinates(args.x, args.y); action = { type: "click", x: c.x, y: c.y, button: "left", clickCount: 2 }; }
++            else if (toolName === "type") action = { type: "type", text: args.text };
++            else if (toolName === "keypress") action = { type: "keypress", keys: args.keys };
++            else if (toolName === "scroll") { const c = this.normalizeCoordinates(args.x, args.y); action = { type: "scroll", x: c.x, y: c.y, scroll_x: args.scroll_x || 0, scroll_y: args.scroll_y }; }
++            else if (toolName === "move") { const c = this.normalizeCoordinates(args.x, args.y); action = { type: "move", x: c.x, y: c.y }; }
++            else if (toolName === "goto") action = { type: "goto", url: args.url };
++            else if (this.tools && toolName in this.tools) {
++              try {
++                const result = yield this.tools[toolName].execute(args);
++                toolResults.push({ tool_call_id: toolCall.id, role: "tool", content: JSON.stringify(result || { success: true }) });
++              } catch (err) { toolResults.push({ tool_call_id: toolCall.id, role: "tool", content: JSON.stringify({ error: err.message || String(err) }) }); }
++              continue;
++            }
++            if (action) {
++              try {
++                actions.push(action);
++                this._lastScreenshotBase64 = null;
++                yield this.actionHandler(action);
++                // Tool results must be string-only; screenshot goes in the follow-up user message
++                toolResults.push({ tool_call_id: toolCall.id, role: "tool", content: `Action ${toolName} executed successfully.` });
++              } catch (err) { toolResults.push({ tool_call_id: toolCall.id, role: "tool", content: JSON.stringify({ error: err.message || String(err) }) }); }
++            } else {
++              toolResults.push({ tool_call_id: toolCall.id, role: "tool", content: JSON.stringify({ error: `Unknown tool: ${toolName}` }) });
++            }
++          }
++          if (toolResults.length > 0) {
++            messages.push(...toolResults);
++            // After all tool results, add a user message with the latest screenshot so the model can see the current state
++            if (!doneSignaled) {
++              const screenshotB64 = this._lastScreenshotBase64 || (yield this.screenshotProvider());
++              messages.push({ role: "user", content: [{ type: "image_url", image_url: { url: `data:image/png;base64,${screenshotB64}`, detail: "high" } }] });
++            }
++          }
++          if (doneSignaled) { completed = true; break; }
++          currentStep++;
++        }
++        return { success: completed, actions, message: finalMessage || (completed ? "Done" : "Max steps reached"), completed, usage: { input_tokens: totalInputTokens, output_tokens: totalOutputTokens, inference_time_ms: 0 } };
++      } catch (error) {
++        const msg = error instanceof Error ? error.message : String(error);
++        logger({ category: "agent", message: `OpenRouter CUA error: ${msg}`, level: 0 });
++        return { success: false, actions, message: `Failed: ${msg}`, completed: false, usage: { input_tokens: totalInputTokens, output_tokens: totalOutputTokens, inference_time_ms: 0 } };
++      }
++    });
++  }
++};
++
+ // lib/v3/agent/AgentProvider.ts
+ var modelToAgentProviderMap = {
+   "computer-use-preview": "openai",
+@@ -37720,8 +37902,9 @@ var AgentProvider = class _AgentProvider {
+     this.logger = logger;
+   }
+   getClient(modelName, clientOptions, userProvidedInstructions, tools) {
+-    const explicitProvider = clientOptions == null ? void 0 : clientOptions.provider;
+-    const type = explicitProvider || _AgentProvider.getAgentProvider(modelName);
++    const explicitProvider = (clientOptions != null && typeof clientOptions.provider === "string") ? clientOptions.provider : void 0;
++    const isOpenRouter = !!(clientOptions && clientOptions.baseURL && String(clientOptions.baseURL).includes("openrouter.ai"));
++    const type = isOpenRouter ? "openrouter" : (explicitProvider || _AgentProvider.getAgentProvider(modelName));
+     this.logger({
+       category: "agent",
+       message: `Getting agent client for type: ${type}, model: ${modelName}${explicitProvider ? " (explicit provider)" : ""}`,
+@@ -37760,6 +37943,14 @@ var AgentProvider = class _AgentProvider {
+             userProvidedInstructions,
+             clientOptions
+           );
++        case "openrouter":
++          return new OpenRouterCUAClient(
++            type,
++            modelName,
++            userProvidedInstructions,
++            clientOptions,
++            tools
++          );
+         default:
+           throw new UnsupportedModelProviderError(
+             ["openai", "anthropic", "google", "microsoft"],
+@@ -37777,14 +37968,22 @@ var AgentProvider = class _AgentProvider {
+     }
+   }
+   static getAgentProvider(modelName) {
+-    const normalized = modelName.includes("/") ? modelName.split("/")[1] : modelName;
+-    if (normalized in modelToAgentProviderMap) {
+-      return modelToAgentProviderMap[normalized];
++    const prefixToProvider = { google: "google", anthropic: "anthropic", openai: "openai", microsoft: "microsoft" };
++    if (modelName.includes("/")) {
++      const prefix = modelName.split("/")[0].toLowerCase();
++      const normalized = modelName.split("/")[1];
++      if (normalized in modelToAgentProviderMap) {
++        return modelToAgentProviderMap[normalized];
++      }
++      if (prefixToProvider[prefix]) {
++        return prefixToProvider[prefix];
++      }
++    } else {
++      if (modelName in modelToAgentProviderMap) {
++        return modelToAgentProviderMap[modelName];
++      }
+     }
+-    throw new UnsupportedModelError(
+-      Object.keys(modelToAgentProviderMap),
+-      "Computer Use Agent"
+-    );
++    return "openai";
+   }
+ };
+ 
+@@ -67110,7 +67309,7 @@ function resolveModel(model) {
+     provider = split.provider;
+     parsedModelName = split.modelName;
+   }
+-  const isCua = hasExplicitProvider || AVAILABLE_CUA_MODELS.includes(modelString);
++  const isCua = true;
+   return {
+     provider,
+     modelName: parsedModelName,

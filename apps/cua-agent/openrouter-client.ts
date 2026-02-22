@@ -5,7 +5,7 @@ import OpenAI from 'openai';
 
 const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_OPENROUTER_MODEL = 'google/gemini-3-flash-preview';
-const DEFAULT_PROVIDER_ORDER = ['google-vertex/global', 'google-vertexO'];
+export const DEFAULT_PROVIDER_ORDER = ['google-vertex/global', 'google-vertex', 'fireworks'];
 
 type OpenRouterProviderConfig = {
   order: string[];
@@ -55,9 +55,7 @@ class OpenRouterOpenAIClient extends CustomOpenAIClient {
     const mergedOptions = {
       ...options,
       provider: options?.provider ?? this.provider,
-      reasoning: options?.reasoning ?? {
-        effort: 'low',
-      },
+      reasoning: options?.reasoning,
     };
 
     const response = await super.createChatCompletion({

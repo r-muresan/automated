@@ -28,7 +28,8 @@
     "desktop:dist:mac": "npm run desktop:build && electron-builder --config electron-builder.json --mac",
     "desktop:dist:win": "npm run desktop:build && electron-builder --config electron-builder.json --win",
     "desktop:dist:linux": "npm run desktop:build && electron-builder --config electron-builder.json --linux",
-    "desktop:dist:dir": "npm run desktop:build && electron-builder --config electron-builder.json --mac dir"
+    "desktop:dist:dir": "npm run desktop:build && electron-builder --config electron-builder.json --mac dir",
+    "postinstall": "patch-package"
   },
   "private": true,
   "devDependencies": {
@@ -63,6 +64,7 @@
     "eslint": "^9.8.0",
     "eslint-config-prettier": "^10.0.0",
     "nx": "22.3.3",
+    "patch-package": "^8.0.1",
     "postcss": "^8.5.6",
     "prettier": "~3.6.2",
     "prisma": "6.12.0",
