@@ -69,7 +69,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingTab, setIsAddingTab] = useState(false);
   const [focusUrlBarTrigger, setFocusUrlBarTrigger] = useState(0);
-  const [lastInteraction, setLastInteraction] = useState<number>(Date.now());
+  const lastInteractionRef = useRef<number>(Date.now());
   const [cdpWsUrlTemplate, setCdpWsUrlTemplate] = useState<string | null>(null);
 
   // React Query mutations
@@ -838,7 +838,9 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   }, [sessionId, pages, activePageIndex]);
 
   useEffect(() => {
-    const handleInteraction = () => setLastInteraction(Date.now());
+    const handleInteraction = () => {
+      lastInteractionRef.current = Date.now();
+    };
     const handleWindowBlur = () => {
       setTimeout(() => {
         if (document.activeElement?.tagName === 'IFRAME') handleInteraction();
@@ -860,7 +862,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
     if (!sessionId) return;
 
     const interval = setInterval(async () => {
-      if (Date.now() - lastInteraction > 5 * 60 * 1000) {
+      if (Date.now() - lastInteractionRef.current > 5 * 60 * 1000) {
         await handleStopSession();
         return;
       }
@@ -879,7 +881,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
     }, 15000);
 
     return () => clearInterval(interval);
-  }, [sessionId, lastInteraction, pingSessionMutation, handleStopSession, recreateSession]);
+  }, [sessionId, pingSessionMutation, handleStopSession, recreateSession]);
 
   useEffect(() => {
     if (!sessionId || !isCDPConnected) return;

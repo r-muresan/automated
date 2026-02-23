@@ -280,8 +280,6 @@ export default function NewWorkflow() {
     pendingTranscriptRef.current = pendingTranscript;
   }, [pendingTranscript]);
 
-  console.log(pendingTranscript);
-
   // Associate pending transcript with the NEW interaction when it occurs
   // Uses a 1s buffer to account for transcription latency
   useEffect(() => {

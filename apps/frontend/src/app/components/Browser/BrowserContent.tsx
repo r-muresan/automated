@@ -9,6 +9,7 @@ import {
   useMemo,
   forwardRef,
   useImperativeHandle,
+  memo,
 } from 'react';
 import { Box, VStack, Spinner, Text } from '@chakra-ui/react';
 import { Workbook } from '@fortune-sheet/react';
@@ -31,6 +32,8 @@ export interface BrowserContentRef {
   getIframeForPage: (pageId: string) => HTMLIFrameElement | undefined;
   /** Direct frame source exposed by the React CDP player for Browserbase pages. */
   getFrameDataUrl: (pageId: string) => string | null;
+  /** Updates the freeze-frame image without triggering a React render. */
+  setFrozenFrame: (frameDataUrl: string | null) => void;
 }
 
 interface BrowserContentProps {
@@ -43,10 +46,9 @@ interface BrowserContentProps {
   isExcelMode?: boolean;
   readOnly?: boolean;
   freeze?: boolean;
-  frozenFrame?: string | null;
 }
 
-export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>(
+const BrowserContentComponent = forwardRef<BrowserContentRef, BrowserContentProps>(
   (
     {
       pages,
@@ -58,7 +60,6 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
       isExcelMode = false,
       readOnly = false,
       freeze = false,
-      frozenFrame = null,
     },
     ref,
   ) => {
@@ -70,8 +71,14 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
 
     const iframeRefs = useRef<Map<string, HTMLIFrameElement>>(new Map());
     const remotePlayerRefs = useRef<Map<string, RemoteCdpPlayerRef>>(new Map());
+    const frozenOverlayRef = useRef<HTMLDivElement | null>(null);
+    const frozenImageRef = useRef<HTMLImageElement | null>(null);
+    const frozenFrameRef = useRef<string | null>(null);
+    const freezeRef = useRef(freeze);
 
     const excelWorkbookRef = useRef<any>(null);
+
+    freezeRef.current = freeze;
 
     const handleExcelChange = useCallback((workbook: any) => {
       if (workbook && typeof workbook.getData === 'function') {
@@ -118,6 +125,31 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
       [showLoadSkeleton],
     );
 
+    const syncFrozenOverlay = useCallback(() => {
+      const overlay = frozenOverlayRef.current;
+      if (!overlay) return;
+      overlay.style.display =
+        freezeRef.current && Boolean(frozenFrameRef.current) ? 'block' : 'none';
+    }, []);
+
+    const setFrozenFrame = useCallback(
+      (frameDataUrl: string | null) => {
+        frozenFrameRef.current = frameDataUrl;
+
+        const image = frozenImageRef.current;
+        if (image) {
+          if (frameDataUrl) {
+            image.src = frameDataUrl;
+          } else {
+            image.removeAttribute('src');
+          }
+        }
+
+        syncFrozenOverlay();
+      },
+      [syncFrozenOverlay],
+    );
+
     // Expose refs to parent
     useImperativeHandle(
       ref,
@@ -125,9 +157,27 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
         getIframeForPage: (pageId) => iframeRefs.current.get(pageId),
         getFrameDataUrl: (pageId) =>
           remotePlayerRefs.current.get(pageId)?.getCurrentFrameDataUrl() || null,
+        setFrozenFrame,
       }),
-      [],
+      [setFrozenFrame],
     );
+
+    useEffect(() => {
+      syncFrozenOverlay();
+    }, [freeze, syncFrozenOverlay]);
+
+    useEffect(() => {
+      const image = frozenImageRef.current;
+      if (image) {
+        const frameDataUrl = frozenFrameRef.current;
+        if (frameDataUrl) {
+          image.src = frameDataUrl;
+        } else {
+          image.removeAttribute('src');
+        }
+      }
+      syncFrozenOverlay();
+    }, [pages.length, syncFrozenOverlay]);
 
     useEffect(() => {
       if (isBrowserbaseSession) return;
@@ -137,6 +187,8 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
       const frame = iframeRefs.current.get(activePage.id);
       frame?.contentWindow?.postMessage('screencast:activate', '*');
     }, [activePageIndex, pages, isBrowserbaseSession]);
+
+    console.log('RENDER');
 
     return (
       <>
@@ -282,20 +334,26 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
               </Box>
             )}
 
-            {freeze && frozenFrame && (
-              <Box position="absolute" inset={0} zIndex={30} bg="white" pointerEvents="none">
-                <img
-                  src={frozenFrame}
-                  alt="Frozen browser content"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                    backgroundColor: 'white',
-                  }}
-                />
-              </Box>
-            )}
+            <Box
+              ref={frozenOverlayRef}
+              position="absolute"
+              inset={0}
+              zIndex={30}
+              bg="white"
+              pointerEvents="none"
+              display="none"
+            >
+              <img
+                ref={frozenImageRef}
+                alt="Frozen browser content"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  backgroundColor: 'white',
+                }}
+              />
+            </Box>
           </Box>
         ) : (
           <Box
@@ -357,4 +415,7 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
   },
 );
 
+BrowserContentComponent.displayName = 'BrowserContent';
+
+export const BrowserContent = memo(BrowserContentComponent);
 BrowserContent.displayName = 'BrowserContent';

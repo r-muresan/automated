@@ -6,6 +6,7 @@ import {
   useEffect,
   useImperativeHandle,
   forwardRef,
+  memo,
 } from 'react';
 import { Box } from '@chakra-ui/react';
 import html2canvas from 'html2canvas-pro';
@@ -52,7 +53,7 @@ interface BrowserContainerProps {
   cdpWsUrlTemplate?: string | null;
 }
 
-export const BrowserContainer = forwardRef<BrowserContainerRef, BrowserContainerProps>(
+const BrowserContainerComponent = forwardRef<BrowserContainerRef, BrowserContainerProps>(
   (
     {
       containerRef,
@@ -82,7 +83,6 @@ export const BrowserContainer = forwardRef<BrowserContainerRef, BrowserContainer
     ref,
   ) => {
     const [isExcelMode, setIsExcelMode] = useState(false);
-    const [frozenContentFrame, setFrozenContentFrame] = useState<string | null>(null);
 
     const activePageRef = useRef<Page | null>(null);
     const isExcelModeRef = useRef(isExcelMode);
@@ -210,14 +210,14 @@ export const BrowserContainer = forwardRef<BrowserContainerRef, BrowserContainer
 
     useEffect(() => {
       if (!freeze) {
-        setFrozenContentFrame(null);
+        browserContentRef.current?.setFrozenFrame(null);
         return;
       }
 
       let cancelled = false;
 
       if (lastContentFrameRef.current) {
-        setFrozenContentFrame(lastContentFrameRef.current);
+        browserContentRef.current?.setFrozenFrame(lastContentFrameRef.current);
       }
 
       const captureForFreeze = async () => {
@@ -227,7 +227,7 @@ export const BrowserContainer = forwardRef<BrowserContainerRef, BrowserContainer
           const frame = await captureCurrentFrame();
           if (!cancelled && frame) {
             lastContentFrameRef.current = frame;
-            setFrozenContentFrame(frame);
+            browserContentRef.current?.setFrozenFrame(frame);
           }
         } finally {
           frameCaptureInFlightRef.current = false;
@@ -313,7 +313,6 @@ export const BrowserContainer = forwardRef<BrowserContainerRef, BrowserContainer
             isExcelMode={isExcelMode}
             readOnly={readOnly}
             freeze={freeze}
-            frozenFrame={frozenContentFrame}
             cdpWsUrlTemplate={cdpWsUrlTemplate}
           />
         </Box>
@@ -322,4 +321,7 @@ export const BrowserContainer = forwardRef<BrowserContainerRef, BrowserContainer
   },
 );
 
+BrowserContainerComponent.displayName = 'BrowserContainer';
+
+export const BrowserContainer = memo(BrowserContainerComponent);
 BrowserContainer.displayName = 'BrowserContainer';
