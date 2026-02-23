@@ -123,7 +123,8 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
       ref,
       () => ({
         getIframeForPage: (pageId) => iframeRefs.current.get(pageId),
-        getFrameDataUrl: (pageId) => remotePlayerRefs.current.get(pageId)?.getCurrentFrameDataUrl() || null,
+        getFrameDataUrl: (pageId) =>
+          remotePlayerRefs.current.get(pageId)?.getCurrentFrameDataUrl() || null,
       }),
       [],
     );

@@ -1,15 +1,7 @@
 'use client';
 
 import { Box } from '@chakra-ui/react';
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 
 const SCREENCAST_OPTIONS = {
   format: 'jpeg',
@@ -173,13 +165,59 @@ type PreventableEvent = {
   timeStamp: number;
 };
 
+type RenderMode = 'canvas' | 'offscreen';
+
+function decodeBase64Jpeg(data: string): Blob {
+  const binary = window.atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: 'image/jpeg' });
+}
+
+function drawContainFrame(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  bitmap: ImageBitmap,
+  viewportWidth: number,
+  viewportHeight: number,
+  sourceWidth: number,
+  sourceHeight: number,
+) {
+  const imageWidth = sourceWidth || bitmap.width;
+  const imageHeight = sourceHeight || bitmap.height;
+  if (!imageWidth || !imageHeight) return;
+
+  const imageAspect = imageWidth / imageHeight;
+  const viewportAspect = viewportWidth / viewportHeight;
+
+  let renderWidth = viewportWidth;
+  let renderHeight = viewportHeight;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (imageAspect > viewportAspect) {
+    renderHeight = viewportWidth / imageAspect;
+    offsetY = (viewportHeight - renderHeight) / 2;
+  } else {
+    renderWidth = viewportHeight * imageAspect;
+    offsetX = (viewportWidth - renderWidth) / 2;
+  }
+
+  ctx.clearRect(0, 0, viewportWidth, viewportHeight);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, viewportWidth, viewportHeight);
+  ctx.drawImage(bitmap, offsetX, offsetY, renderWidth, renderHeight);
+}
+
 export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerProps>(
   ({ wsUrl, pageId, active, watchOnly = false, onFirstFrame }, ref) => {
-    const [frameSrc, setFrameSrc] = useState<string | null>(null);
-
     const socketRef = useRef<WebSocket | null>(null);
     const overlayRef = useRef<HTMLDivElement | null>(null);
-    const imageRef = useRef<HTMLImageElement | null>(null);
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const canvasCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+    const offscreenCanvasRef = useRef<OffscreenCanvas | null>(null);
+    const offscreenCtxRef = useRef<OffscreenCanvasRenderingContext2D | null>(null);
 
     const messageIdRef = useRef(1);
     const reconnectTimeoutRef = useRef<number | null>(null);
@@ -194,6 +232,11 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
     const lastClickRef = useRef<LastClickInfo | null>(null);
     const activeClickRef = useRef<{ button: number; count: number } | null>(null);
     const currentUrlRef = useRef<string>('');
+    const latestFrameDataRef = useRef<string | null>(null);
+    const decodeInFlightRef = useRef(false);
+    const pendingFrameDataRef = useRef<string | null>(null);
+    const renderModeRef = useRef<RenderMode>('canvas');
+    const renderModeLockedRef = useRef(false);
     const activeRef = useRef(active);
     const screencastRunningRef = useRef(false);
     const pendingResponseHandlersRef = useRef<Map<number, (message: CdpMessage) => void>>(
@@ -303,14 +346,180 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
       }, 2000);
     }, [clearHeartbeat, startScreencast, watchOnly]);
 
+    const ensureCanvasContexts = useCallback(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+
+      const rect = canvas.getBoundingClientRect();
+      const cssWidth = Math.max(1, Math.round(rect.width || canvas.clientWidth || 1));
+      const cssHeight = Math.max(1, Math.round(rect.height || canvas.clientHeight || 1));
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const pixelWidth = Math.max(1, Math.round(cssWidth * dpr));
+      const pixelHeight = Math.max(1, Math.round(cssHeight * dpr));
+
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth;
+        canvas.height = pixelHeight;
+      }
+
+      if (!canvasCtxRef.current) {
+        canvasCtxRef.current = canvas.getContext('2d', {
+          alpha: false,
+          desynchronized: true,
+        });
+      }
+      const canvasCtx = canvasCtxRef.current;
+      if (!canvasCtx) return null;
+
+      if (typeof OffscreenCanvas !== 'undefined') {
+        const needsOffscreenResize =
+          !offscreenCanvasRef.current ||
+          offscreenCanvasRef.current.width !== pixelWidth ||
+          offscreenCanvasRef.current.height !== pixelHeight;
+
+        if (needsOffscreenResize) {
+          offscreenCanvasRef.current = new OffscreenCanvas(pixelWidth, pixelHeight);
+          offscreenCtxRef.current = offscreenCanvasRef.current.getContext('2d', {
+            alpha: false,
+          });
+        } else if (!offscreenCtxRef.current) {
+          const existingOffscreenCanvas = offscreenCanvasRef.current;
+          if (existingOffscreenCanvas) {
+            offscreenCtxRef.current = existingOffscreenCanvas.getContext('2d', {
+              alpha: false,
+            });
+          }
+        }
+      } else {
+        offscreenCanvasRef.current = null;
+        offscreenCtxRef.current = null;
+      }
+
+      return { canvasCtx, pixelWidth, pixelHeight };
+    }, []);
+
+    const chooseRenderMode = useCallback(
+      (
+        bitmap: ImageBitmap,
+        canvasCtx: CanvasRenderingContext2D,
+        pixelWidth: number,
+        pixelHeight: number,
+        sourceWidth: number,
+        sourceHeight: number,
+      ): RenderMode => {
+        if (renderModeLockedRef.current) return renderModeRef.current;
+
+        if (!offscreenCanvasRef.current || !offscreenCtxRef.current) {
+          renderModeRef.current = 'canvas';
+          renderModeLockedRef.current = true;
+          return 'canvas';
+        }
+        const offscreenCanvas = offscreenCanvasRef.current;
+        const offscreenCtx = offscreenCtxRef.current;
+
+        const runs = 2;
+
+        const canvasStart = performance.now();
+        for (let i = 0; i < runs; i += 1) {
+          drawContainFrame(canvasCtx, bitmap, pixelWidth, pixelHeight, sourceWidth, sourceHeight);
+        }
+        const canvasDuration = performance.now() - canvasStart;
+
+        const offscreenStart = performance.now();
+        for (let i = 0; i < runs; i += 1) {
+          drawContainFrame(
+            offscreenCtx,
+            bitmap,
+            pixelWidth,
+            pixelHeight,
+            sourceWidth,
+            sourceHeight,
+          );
+          canvasCtx.drawImage(offscreenCanvas, 0, 0);
+        }
+        const offscreenDuration = performance.now() - offscreenStart;
+
+        renderModeRef.current = offscreenDuration < canvasDuration ? 'offscreen' : 'canvas';
+        renderModeLockedRef.current = true;
+        return renderModeRef.current;
+      },
+      [],
+    );
+
+    const renderFrameBitmap = useCallback(
+      (bitmap: ImageBitmap) => {
+        const contexts = ensureCanvasContexts();
+        if (!contexts) return;
+
+        const { canvasCtx, pixelWidth, pixelHeight } = contexts;
+        const sourceWidth = screencastWidthRef.current || bitmap.width;
+        const sourceHeight = screencastHeightRef.current || bitmap.height;
+        const mode = chooseRenderMode(
+          bitmap,
+          canvasCtx,
+          pixelWidth,
+          pixelHeight,
+          sourceWidth,
+          sourceHeight,
+        );
+
+        if (mode === 'offscreen' && offscreenCanvasRef.current && offscreenCtxRef.current) {
+          drawContainFrame(
+            offscreenCtxRef.current,
+            bitmap,
+            pixelWidth,
+            pixelHeight,
+            sourceWidth,
+            sourceHeight,
+          );
+          canvasCtx.drawImage(offscreenCanvasRef.current, 0, 0);
+          return;
+        }
+
+        drawContainFrame(canvasCtx, bitmap, pixelWidth, pixelHeight, sourceWidth, sourceHeight);
+      },
+      [chooseRenderMode, ensureCanvasContexts],
+    );
+
+    const decodeAndRenderFrame = useCallback(
+      async (frameData: string) => {
+        if (decodeInFlightRef.current) {
+          pendingFrameDataRef.current = frameData;
+          return;
+        }
+
+        decodeInFlightRef.current = true;
+        let nextFrameData: string | null = frameData;
+
+        while (nextFrameData) {
+          pendingFrameDataRef.current = null;
+          try {
+            const frameBlob = decodeBase64Jpeg(nextFrameData);
+            const bitmap = await createImageBitmap(frameBlob);
+            try {
+              renderFrameBitmap(bitmap);
+            } finally {
+              bitmap.close();
+            }
+          } catch {
+            // Ignore decode failures; next frames can still render.
+          }
+          nextFrameData = pendingFrameDataRef.current;
+        }
+
+        decodeInFlightRef.current = false;
+      },
+      [renderFrameBitmap],
+    );
+
     const toDeviceCoords = useCallback((clientX: number, clientY: number) => {
-      const image = imageRef.current;
+      const canvas = canvasRef.current;
       const screencastWidth = screencastWidthRef.current;
       const screencastHeight = screencastHeightRef.current;
 
-      if (!image || !screencastWidth || !screencastHeight) return null;
+      if (!canvas || !screencastWidth || !screencastHeight) return null;
 
-      const rect = image.getBoundingClientRect();
+      const rect = canvas.getBoundingClientRect();
       if (!rect.width || !rect.height) return null;
 
       const imageAspect = screencastWidth / screencastHeight;
@@ -404,7 +613,8 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
           }
 
           lastFrameTimeRef.current = Date.now();
-          setFrameSrc(`data:image/jpeg;base64,${params.data}`);
+          latestFrameDataRef.current = `data:image/jpeg;base64,${params.data}`;
+          void decodeAndRenderFrame(params.data);
 
           send('Page.screencastFrameAck', { sessionId: params.sessionId });
 
@@ -530,6 +740,9 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
           socket.close();
           socketRef.current = null;
         }
+
+        pendingFrameDataRef.current = null;
+        decodeInFlightRef.current = false;
       };
     }, [clearHeartbeat, connect, stopScreencast]);
 
@@ -563,9 +776,9 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
     useImperativeHandle(
       ref,
       () => ({
-        getCurrentFrameDataUrl: () => frameSrc,
+        getCurrentFrameDataUrl: () => latestFrameDataRef.current,
       }),
-      [frameSrc],
+      [],
     );
 
     const getButtonName = useCallback((button: number) => {
@@ -659,19 +872,16 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
 
     return (
       <Box position="absolute" inset={0} bg="white" overflow="hidden">
-        <img
-          ref={imageRef}
+        <canvas
+          ref={canvasRef}
           id="screencast"
-          src={frameSrc || ''}
-          alt="Remote browser screencast"
           style={{
             width: '100%',
             height: '100%',
-            objectFit: 'contain',
             display: 'block',
             userSelect: 'none',
+            backgroundColor: 'white',
           }}
-          draggable={false}
         />
         <Box
           ref={overlayRef}
