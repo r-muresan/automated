@@ -9,7 +9,7 @@
   "scripts": {
     "start": "nx run-many --targets=dev,serve",
     "start:frontend": "nx dev frontend --no-tui",
-    "start:backend": "if ! printf '%s' \"${DATABASE_URL:-}\" | grep -qi 'postgres'; then npm run prisma:generate:sqlite && npm run db:local:prepare; fi; DATABASE_URL=\"${DATABASE_URL:-file:./data/local.db}\" nx serve backend --no-tui",
+    "start:backend": "nx serve backend --no-tui",
     "build": "nx run-many --target=build",
     "lint": "nx run-many --target=lint",
     "test": "nx run-many --target=test",

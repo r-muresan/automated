@@ -88,7 +88,7 @@ const BrowserContentComponent = forwardRef<BrowserContentRef, BrowserContentProp
 
     const excelToolbarItems = useMemo(() => [exportToolBarItem(), importToolBarItem()], []);
     const isBrowserbaseSession = useMemo(
-      () => Boolean(cdpWsUrlTemplate?.includes('connect.browserbase.com/debug/')),
+      () => Boolean(cdpWsUrlTemplate?.includes('browserbase.com/debug/')),
       [cdpWsUrlTemplate],
     );
 

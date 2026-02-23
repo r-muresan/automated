@@ -188,12 +188,12 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
 
   async initializeSession(sessionId: string, options?: InitSessionOptions): Promise<PageInfo[]> {
     try {
-      const { colorScheme, width, height } = options ?? {};
+      const { colorScheme, width, height, connectUrl } = options ?? {};
       console.log(`[BrowserbaseBrowserProvider] Initializing session ${sessionId}...`);
 
-      const browser = await chromium.connectOverCDP(
-        `wss://connect.browserbase.com?apiKey=${this.apiKey}&sessionId=${sessionId}`,
-      );
+      const wsUrl =
+        connectUrl ?? `wss://connect.browserbase.com?apiKey=${this.apiKey}&sessionId=${sessionId}`;
+      const browser = await chromium.connectOverCDP(wsUrl);
       const defaultContext = browser.contexts()[0];
 
       await this.injectInitScript(defaultContext);
@@ -224,13 +224,16 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
     }
   }
 
-  async connectForKeepalive(sessionId: string): Promise<BrowserHandle | null> {
+  async connectForKeepalive(sessionId: string, connectUrl?: string): Promise<BrowserHandle | null> {
     try {
-      return await chromium.connectOverCDP(
-        `wss://connect.browserbase.com?apiKey=${this.apiKey}&sessionId=${sessionId}`,
-      );
+      const wsUrl =
+        connectUrl ?? `wss://connect.browserbase.com?apiKey=${this.apiKey}&sessionId=${sessionId}`;
+      return await chromium.connectOverCDP(wsUrl);
     } catch (error) {
-      console.error(`[BrowserbaseBrowserProvider] Failed to connect for keepalive: ${sessionId}`, error);
+      console.error(
+        `[BrowserbaseBrowserProvider] Failed to connect for keepalive: ${sessionId}`,
+        error,
+      );
       return null;
     }
   }

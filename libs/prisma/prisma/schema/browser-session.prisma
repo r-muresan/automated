@@ -1,6 +1,7 @@
 model BrowserSession {
   id                   String   @id @default(uuid())
   browserbaseSessionId String   @unique
+  connectUrl           String?
   userId               Int
   user                 User     @relation(fields: [userId], references: [id])
   workflowId           String?

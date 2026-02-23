@@ -266,7 +266,7 @@ export class LocalBrowserProvider extends BrowserProvider {
     }
   }
 
-  async connectForKeepalive(sessionId: string): Promise<BrowserHandle | null> {
+  async connectForKeepalive(sessionId: string, _connectUrl?: string): Promise<BrowserHandle | null> {
     const session = this.sessions.get(sessionId);
     return session?.context.browser() ?? null;
   }

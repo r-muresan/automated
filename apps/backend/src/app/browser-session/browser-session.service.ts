@@ -11,11 +11,22 @@ import {
 const BROWSER_MINUTES_CAP = 10000;
 const isUsingBrowserbase = !!process.env.BROWSERBASE_API_KEY;
 
+function buildCdpWsUrlTemplate(connectUrl: string | null | undefined, sessionId: string): string | undefined {
+  if (!connectUrl) return undefined;
+  try {
+    const url = new URL(connectUrl);
+    return `${url.protocol}//${url.host}/debug/${sessionId}/devtools/page/{pageId}`;
+  } catch {
+    return undefined;
+  }
+}
+
 interface RecordingSession {
   sessionId: string;
   startTime: number;
   browser: BrowserHandle | null;
   lastPingTime: number;
+  connectUrl?: string;
 }
 
 @Injectable()
@@ -145,7 +156,7 @@ export class BrowserSessionService implements OnModuleInit {
             return {
               id: existingSession.browserbaseSessionId,
               pages: debugInfo.pages,
-              cdpWsUrlTemplate: debugInfo.cdpWsUrlTemplate,
+              cdpWsUrlTemplate: buildCdpWsUrlTemplate(existingSession.connectUrl, existingSession.browserbaseSessionId),
             };
           }
         } catch (error) {
@@ -184,6 +195,7 @@ export class BrowserSessionService implements OnModuleInit {
           data: {
             user: { connect: { email: userId } },
             browserbaseSessionId: session.id,
+            connectUrl: session.connectUrl ?? null,
             lastUsedAt: new Date(),
           },
         })
@@ -193,15 +205,13 @@ export class BrowserSessionService implements OnModuleInit {
         colorScheme,
         width,
         height,
+        connectUrl: session.connectUrl,
       });
-
-      // Get URL templates for CDP connections
-      const debugInfo = await this.browserProvider.getDebugInfo(session.id);
 
       return {
         ...session,
         pages,
-        cdpWsUrlTemplate: debugInfo.cdpWsUrlTemplate,
+        cdpWsUrlTemplate: buildCdpWsUrlTemplate(session.connectUrl, session.id),
       };
     } catch (error) {
       if (!leaseConfirmed) {
@@ -266,13 +276,19 @@ export class BrowserSessionService implements OnModuleInit {
 
     try {
       console.log(`[BrowserSessionService] Starting recording keepalive for session ${sessionId}`);
-      const browser = await this.browserProvider.connectForKeepalive(sessionId);
+      const dbSession = await this.prisma.browserSession.findFirst({
+        where: { browserbaseSessionId: sessionId },
+        select: { connectUrl: true },
+      });
+      const connectUrl = dbSession?.connectUrl ?? undefined;
+      const browser = await this.browserProvider.connectForKeepalive(sessionId, connectUrl);
 
       this.activeRecordingSessions.set(sessionId, {
         sessionId,
         startTime: Date.now(),
         browser,
         lastPingTime: Date.now(),
+        connectUrl,
       });
 
       await this.updateLastUsed(sessionId);
@@ -332,7 +348,7 @@ export class BrowserSessionService implements OnModuleInit {
         } else {
           // Try to reconnect
           try {
-            const browser = await this.browserProvider.connectForKeepalive(sessionId);
+            const browser = await this.browserProvider.connectForKeepalive(sessionId, recordingSession.connectUrl);
             recordingSession.browser = browser;
             recordingSession.lastPingTime = now;
           } catch (reconnectError) {

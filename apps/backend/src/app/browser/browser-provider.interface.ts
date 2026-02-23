@@ -33,6 +33,7 @@ export interface InitSessionOptions {
   colorScheme?: 'light' | 'dark';
   width?: number;
   height?: number;
+  connectUrl?: string;
 }
 
 export abstract class BrowserProvider {
@@ -41,5 +42,5 @@ export abstract class BrowserProvider {
   abstract getSession(sessionId: string): Promise<any>;
   abstract getDebugInfo(sessionId: string): Promise<any>;
   abstract initializeSession(sessionId: string, options?: InitSessionOptions): Promise<PageInfo[]>;
-  abstract connectForKeepalive(sessionId: string): Promise<BrowserHandle | null>;
+  abstract connectForKeepalive(sessionId: string, connectUrl?: string): Promise<BrowserHandle | null>;
 }

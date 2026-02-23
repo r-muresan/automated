@@ -319,17 +319,36 @@ function parseJsonFromText(text: string): any {
   let trimmed = text.trim();
   if (!trimmed) return {};
 
-  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenceMatch && fenceMatch[1]) {
-    trimmed = fenceMatch[1].trim();
+  // Strip markdown code fences; also handle responses with a missing closing fence
+  const closedFenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```\s*$/i);
+  if (closedFenceMatch?.[1]) {
+    trimmed = closedFenceMatch[1].trim();
+  } else {
+    const openFenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*)$/i);
+    if (openFenceMatch?.[1]) {
+      trimmed = openFenceMatch[1].trim();
+    }
   }
 
   const firstBrace = trimmed.indexOf('{');
   const lastBrace = trimmed.lastIndexOf('}');
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    const substring = trimmed.slice(firstBrace, lastBrace + 1);
+  const firstBracket = trimmed.indexOf('[');
+  const lastBracket = trimmed.lastIndexOf(']');
+
+  // Try whichever delimiter (object or array) appears first in the string
+  const hasObject = firstBrace >= 0 && lastBrace > firstBrace;
+  const hasArray = firstBracket >= 0 && lastBracket > firstBracket;
+  const arrayFirst = hasArray && (!hasObject || firstBracket < firstBrace);
+
+  if (arrayFirst) {
     try {
-      return JSON.parse(substring);
+      return JSON.parse(trimmed.slice(firstBracket, lastBracket + 1));
+    } catch {
+      // fallthrough
+    }
+  } else if (hasObject) {
+    try {
+      return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
     } catch {
       // fallthrough
     }
