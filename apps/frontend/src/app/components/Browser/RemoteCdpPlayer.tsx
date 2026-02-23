@@ -25,6 +25,7 @@ const SPECIAL_KEY_TEXT: Record<string, string> = {
 
 const DOUBLE_CLICK_WINDOW_MS = 450;
 const DOUBLE_CLICK_MAX_DISTANCE_PX = 6;
+const LATEST_SCREENCAST_FRAMES_KEY = '__cuaLatestScreencastFrameByPage';
 
 const EVENT_TRACKING_SCRIPT = `(${function eventTrackingScript() {
   if ((window as any).__bbEventListenerInjected) return;
@@ -83,6 +84,9 @@ const EVENT_TRACKING_SCRIPT = `(${function eventTrackingScript() {
         type: 'click',
         x: event.clientX,
         y: event.clientY,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        devicePixelRatio: window.devicePixelRatio || 1,
         target: getElementInfo(event.target),
         timestamp: Date.now(),
       });
@@ -315,6 +319,23 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
     const emitMessage = useCallback((payload: Record<string, unknown>) => {
       window.postMessage(payload, '*');
     }, []);
+
+    const setLatestScreencastFrame = useCallback(
+      (frameDataUrl: string | null) => {
+        if (typeof window === 'undefined') return;
+        const windowWithFrameStore = window as Window & {
+          [LATEST_SCREENCAST_FRAMES_KEY]?: Record<string, string>;
+        };
+        const frameStore = windowWithFrameStore[LATEST_SCREENCAST_FRAMES_KEY] || {};
+        if (frameDataUrl) {
+          frameStore[pageId] = frameDataUrl;
+        } else {
+          delete frameStore[pageId];
+        }
+        windowWithFrameStore[LATEST_SCREENCAST_FRAMES_KEY] = frameStore;
+      },
+      [pageId],
+    );
 
     const clearHeartbeat = useCallback(() => {
       if (heartbeatIntervalRef.current) {
@@ -614,6 +635,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
 
           lastFrameTimeRef.current = Date.now();
           latestFrameDataRef.current = `data:image/jpeg;base64,${params.data}`;
+          setLatestScreencastFrame(latestFrameDataRef.current);
           void decodeAndRenderFrame(params.data);
 
           send('Page.screencastFrameAck', { sessionId: params.sessionId });
@@ -719,6 +741,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
       startScreencast,
       watchOnly,
       wsUrl,
+      setLatestScreencastFrame,
     ]);
 
     useEffect(() => {
@@ -743,8 +766,9 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
 
         pendingFrameDataRef.current = null;
         decodeInFlightRef.current = false;
+        setLatestScreencastFrame(null);
       };
-    }, [clearHeartbeat, connect, stopScreencast]);
+    }, [clearHeartbeat, connect, stopScreencast, setLatestScreencastFrame]);
 
     useEffect(() => {
       if (active) {
