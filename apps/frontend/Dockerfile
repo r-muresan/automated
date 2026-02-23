@@ -7,6 +7,7 @@ RUN apt-get update -y \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
+COPY patches ./patches
 COPY nx.json tsconfig.base.json ./
 COPY apps ./apps
 COPY libs ./libs
