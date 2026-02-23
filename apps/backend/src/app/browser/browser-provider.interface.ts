@@ -15,6 +15,7 @@ export interface CreateBrowserSessionOptions {
   height?: number;
   contextId?: string;
   userAgent?: string;
+  timezone?: string;
 }
 
 export interface BrowserSessionResult {

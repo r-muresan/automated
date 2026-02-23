@@ -64,11 +64,17 @@ export function useCreateSession() {
       width,
       height,
       reuseExisting = true,
+      timezone,
     }: BrowserSessionCreateRequest) => {
+      const resolvedTimezone =
+        timezone ||
+        (typeof Intl !== 'undefined'
+          ? Intl.DateTimeFormat().resolvedOptions().timeZone
+          : undefined);
       const headers = await getHeaders();
       const response = await axios.post<BrowserSessionCreateResponse>(
         `${API_BASE}/browser-session`,
-        { colorScheme, width, height, reuseExisting },
+        { colorScheme, width, height, reuseExisting, timezone: resolvedTimezone },
         { headers },
       );
       return response.data;

@@ -5,7 +5,7 @@ import { useAudioStream } from '../../providers/audio-stream-provider';
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import posthog from 'posthog-js';
-import { BrowserContainer, BrowserContainerRef } from '../components/Browser/BrowserContainer';
+import { BrowserContainer } from '../components/Browser/BrowserContainer';
 import { RecordingGuideModal } from '../components/RecordingGuideModal';
 import { MicrophoneSwitchModal } from '../components/MicrophoneSwitchModal';
 import { Box, VStack, HStack, Text, Button, Spinner } from '@chakra-ui/react';
@@ -24,7 +24,6 @@ export default function NewWorkflow() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const browserContainerRef = useRef<BrowserContainerRef>(null);
 
   const recordingStatusRef = useRef<{
     status: 'idle' | 'processing' | 'completed' | 'failed';
@@ -35,7 +34,6 @@ export default function NewWorkflow() {
   const sessionIdRef = useRef<string | null>(null);
   const isInitializingRef = useRef(false);
 
-  const [recordingAttempt, setRecordingAttempt] = useState(0);
   const [duration, setDuration] = useState(0);
 
   const [hasFailed, setHasFailed] = useState(false);
@@ -77,14 +75,12 @@ export default function NewWorkflow() {
     goForwardCurrentTab,
     reloadCurrentTab,
     focusUrlBar,
-    setCaptureScreenshot,
-    inspectorUrlTemplate,
+    cdpWsUrlTemplate,
   } = useBrowser();
 
   const {
     audioStream,
     setAudioStream,
-    setLocalVideoUrl,
     recordingStatus,
     setRecordingStatus,
     stopAudioRecording,
@@ -221,19 +217,6 @@ export default function NewWorkflow() {
     };
   }, [audioStream]);
 
-  // Set up screenshot capture callback when recording
-  useEffect(() => {
-    if (audioStream && browserContainerRef.current) {
-      setCaptureScreenshot(() => browserContainerRef.current?.captureScreenshot() || null);
-    } else {
-      setCaptureScreenshot(null);
-    }
-
-    return () => {
-      setCaptureScreenshot(null);
-    };
-  }, [audioStream, setCaptureScreenshot]);
-
   // Store starting URL interaction - captured once when recording starts
   const [startingUrlInteraction, setStartingUrlInteraction] = useState<Interaction | null>(null);
   const hasSetStartingUrlRef = useRef(false);
@@ -296,8 +279,6 @@ export default function NewWorkflow() {
   useEffect(() => {
     pendingTranscriptRef.current = pendingTranscript;
   }, [pendingTranscript]);
-
-  console.log(pendingTranscript);
 
   // Associate pending transcript with the NEW interaction when it occurs
   // Uses a 1s buffer to account for transcription latency
@@ -428,13 +409,6 @@ export default function NewWorkflow() {
     startRecordingKeepaliveMutation,
   ]);
 
-  const handleRecordingReady = useCallback(
-    (videoUrl: string) => {
-      setLocalVideoUrl(videoUrl);
-    },
-    [setLocalVideoUrl],
-  );
-
   const handleStopRecording = useCallback(async () => {
     if (sessionId) {
       stopSpeechToText(sessionId);
@@ -445,9 +419,6 @@ export default function NewWorkflow() {
         .catch((err) => console.error('[RECORD PAGE] Failed to stop recording keepalive:', err));
     }
 
-    if (browserContainerRef.current) {
-      await browserContainerRef.current.stopRecording();
-    }
     await stopAudioRecording();
 
     // Track recording stopped event
@@ -953,10 +924,8 @@ export default function NewWorkflow() {
       >
         <Box height="100%" overflow="hidden" width="full" borderRadius="2xl">
           <BrowserContainer
-            ref={browserContainerRef}
             containerRef={containerRef}
             contentRef={contentRef}
-            recordingKey={recordingAttempt}
             sessionId={sessionId}
             pages={pages}
             activePageIndex={activePageIndex}
@@ -971,14 +940,10 @@ export default function NewWorkflow() {
             onGoForward={goForwardCurrentTab}
             onReload={reloadCurrentTab}
             focusUrlBar={focusUrlBar}
-            autoRecord={!!audioStream}
-            onRecordingReady={handleRecordingReady}
-            onVideoRecordingStarted={setVideoRecordingStartTime}
-            audioStream={audioStream}
             emptyState="skeleton"
             showLoadSkeleton={true}
             minimalOverlay={true}
-            inspectorUrlTemplate={inspectorUrlTemplate}
+            cdpWsUrlTemplate={cdpWsUrlTemplate}
           />
         </Box>
       </Box>
