@@ -297,7 +297,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
 
     const startScreencast = useCallback(
       (force = false) => {
-        if (!activeRef.current) return;
+        if (!activeRef.current && !watchOnly) return;
         if (!force && screencastRunningRef.current) return;
         const requestId = send(
           'Page.startScreencast',
@@ -592,13 +592,12 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
         send('Page.addScriptToEvaluateOnNewDocument', { source: EVENT_TRACKING_SCRIPT });
         send('Runtime.evaluate', { expression: EVENT_TRACKING_SCRIPT });
 
-        if (activeRef.current) {
+        if (watchOnly) {
+          startScreencast(true);
+        } else if (activeRef.current) {
           send('Page.bringToFront');
           startScreencast(true);
           startHeartbeat();
-        }
-
-        if (!watchOnly && activeRef.current) {
           focusOverlay();
         }
 
@@ -732,7 +731,6 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
     }, [
       clearHeartbeat,
       emitMessage,
-      focusOverlay,
       onFirstFrame,
       pageId,
       requestCurrentUrl,
@@ -742,6 +740,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
       watchOnly,
       wsUrl,
       setLatestScreencastFrame,
+      focusOverlay,
     ]);
 
     useEffect(() => {
@@ -771,13 +770,19 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
     }, [clearHeartbeat, connect, stopScreencast, setLatestScreencastFrame]);
 
     useEffect(() => {
+      if (watchOnly) {
+        // Watch mode should never steal browser focus. Keep screencast running on
+        // every connected page so external tab switches can be detected.
+        clearHeartbeat();
+        startScreencast(true);
+        return;
+      }
+
       if (active) {
         send('Page.bringToFront');
         startScreencast(true);
         startHeartbeat();
-        if (!watchOnly) {
-          focusOverlay();
-        }
+        focusOverlay();
         return;
       }
 
