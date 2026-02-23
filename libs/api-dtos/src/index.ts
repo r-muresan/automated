@@ -17,19 +17,18 @@ export interface BrowserSessionCreateRequest {
   width?: number;
   height?: number;
   reuseExisting?: boolean;
+  timezone?: string;
 }
 
 export interface BrowserSessionCreateResponse {
   sessionId: string;
   pages: BrowserbasePage[];
   cdpWsUrlTemplate?: string;
-  inspectorUrlTemplate?: string;
 }
 
 export interface BrowserSessionDebugResponse extends Record<string, unknown> {
   pages: BrowserbasePage[];
   cdpWsUrlTemplate?: string;
-  inspectorUrlTemplate?: string;
 }
 
 export interface BrowserSessionPingResponse {

@@ -8,7 +8,7 @@ import {
   releaseBrowserbaseSession,
 } from 'apps/cua-agent';
 
-const BROWSER_MINUTES_CAP = 120;
+const BROWSER_MINUTES_CAP = 10000;
 const isUsingBrowserbase = !!process.env.BROWSERBASE_API_KEY;
 
 interface RecordingSession {
@@ -76,9 +76,7 @@ export class BrowserSessionService implements OnModuleInit {
     const data = await this.browserProvider.getSession(sessionId);
 
     // Update lastUsedAt in background
-    this.updateLastUsed(sessionId).catch((err) =>
-      console.error('Error updating lastUsedAt:', err),
-    );
+    this.updateLastUsed(sessionId).catch((err) => console.error('Error updating lastUsedAt:', err));
 
     return data;
   }
@@ -94,7 +92,9 @@ export class BrowserSessionService implements OnModuleInit {
     if (!userContext) {
       // Only create Browserbase context if using BrowserbaseBrowserProvider
       if (this.browserProvider instanceof BrowserbaseBrowserProvider) {
-        const contextId = await (this.browserProvider as BrowserbaseBrowserProvider).createContext();
+        const contextId = await (
+          this.browserProvider as BrowserbaseBrowserProvider
+        ).createContext();
 
         userContext = await this.prisma.userContext.upsert({
           where: { userId: user.id },
@@ -121,6 +121,7 @@ export class BrowserSessionService implements OnModuleInit {
     height?: number,
     reuseExisting = false,
     userAgent?: string,
+    timezone?: string,
   ) {
     await this.assertBrowserMinutesRemaining(userId);
 
@@ -145,7 +146,6 @@ export class BrowserSessionService implements OnModuleInit {
               id: existingSession.browserbaseSessionId,
               pages: debugInfo.pages,
               cdpWsUrlTemplate: debugInfo.cdpWsUrlTemplate,
-              inspectorUrlTemplate: debugInfo.inspectorUrlTemplate,
             };
           }
         } catch (error) {
@@ -172,6 +172,7 @@ export class BrowserSessionService implements OnModuleInit {
         height,
         contextId: contextId ?? undefined,
         userAgent,
+        timezone,
       });
 
       createdSessionId = session.id;
@@ -201,7 +202,6 @@ export class BrowserSessionService implements OnModuleInit {
         ...session,
         pages,
         cdpWsUrlTemplate: debugInfo.cdpWsUrlTemplate,
-        inspectorUrlTemplate: debugInfo.inspectorUrlTemplate,
       };
     } catch (error) {
       if (!leaseConfirmed) {
