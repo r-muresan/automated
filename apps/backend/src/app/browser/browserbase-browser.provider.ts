@@ -100,7 +100,6 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
       return {
         ...data,
         cdpWsUrlTemplate: `wss://connect.browserbase.com/debug/${sessionId}/devtools/page/{pageId}`,
-        inspectorUrlTemplate: `/api/local-screencast?ws=connect.browserbase.com/debug/${sessionId}/devtools/page/{pageId}&secure=1`,
       };
     } catch (error) {
       throw new NotFoundException('Session not found');

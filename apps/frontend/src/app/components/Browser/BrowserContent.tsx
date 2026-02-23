@@ -17,6 +17,7 @@ import {
   FortuneExcelHelper as ImportHelper,
   importToolBarItem,
 } from '@corbe30/fortune-excel';
+import { RemoteCdpPlayer, RemoteCdpPlayerRef } from './RemoteCdpPlayer';
 
 interface Page {
   id: string;
@@ -26,7 +27,10 @@ interface Page {
 }
 
 export interface BrowserContentRef {
+  /** Active page iframe used for direct frame capture in BrowserContainer. */
   getIframeForPage: (pageId: string) => HTMLIFrameElement | undefined;
+  /** Direct frame source exposed by the React CDP player for Browserbase pages. */
+  getFrameDataUrl: (pageId: string) => string | null;
 }
 
 interface BrowserContentProps {
@@ -35,12 +39,11 @@ interface BrowserContentProps {
   contentRef: RefObject<HTMLDivElement | null>;
   emptyState?: 'google' | 'skeleton';
   showLoadSkeleton?: boolean;
-  sessionId?: string | null;
+  cdpWsUrlTemplate?: string | null;
   isExcelMode?: boolean;
   readOnly?: boolean;
   freeze?: boolean;
   frozenFrame?: string | null;
-  inspectorUrlTemplate?: string | null;
 }
 
 export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>(
@@ -51,12 +54,11 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
       contentRef,
       emptyState = 'google',
       showLoadSkeleton = false,
-      sessionId,
+      cdpWsUrlTemplate = null,
       isExcelMode = false,
       readOnly = false,
       freeze = false,
       frozenFrame = null,
-      inspectorUrlTemplate = null,
     },
     ref,
   ) => {
@@ -67,6 +69,8 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
     const [excelWorkbookKey, setExcelWorkbookKey] = useState(0);
 
     const iframeRefs = useRef<Map<string, HTMLIFrameElement>>(new Map());
+    const remotePlayerRefs = useRef<Map<string, RemoteCdpPlayerRef>>(new Map());
+
     const excelWorkbookRef = useRef<any>(null);
 
     const handleExcelChange = useCallback((workbook: any) => {
@@ -76,45 +80,32 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
     }, []);
 
     const excelToolbarItems = useMemo(() => [exportToolBarItem(), importToolBarItem()], []);
+    const isBrowserbaseSession = useMemo(
+      () => Boolean(cdpWsUrlTemplate?.includes('connect.browserbase.com/debug/')),
+      [cdpWsUrlTemplate],
+    );
 
     useEffect(() => {
       if (!showLoadSkeleton) return;
       setLoadedPageIds((prev) => {
         const next = new Set<string>();
         pages.forEach((page) => {
-          if (prev.has(page.id)) {
-            next.add(page.id);
-          }
+          if (prev.has(page.id)) next.add(page.id);
         });
         return next;
       });
     }, [pages, showLoadSkeleton]);
 
-    const getIframeSrc = (page: Page) => {
-      let url: string;
-      if (inspectorUrlTemplate) {
-        url = inspectorUrlTemplate.replace(/{pageId}/g, page.id);
-      } else {
-        // Default to local screencast viewer for Browserbase
-        url = `/api/local-screencast?ws=connect.browserbase.com/debug/${sessionId}/devtools/page/${page.id}&secure=1`;
-      }
-      // In read-only (watch) mode, disable the heartbeat so background tabs
-      // don't re-request screencast frames and cause tab flickering.
-      if (readOnly) {
-        url += (url.includes('?') ? '&' : '?') + 'watchOnly=1';
-      }
-      return url;
-    };
-
     const setIframeRef = useCallback((pageId: string, el: HTMLIFrameElement | null) => {
-      if (el) {
-        iframeRefs.current.set(pageId, el);
-      } else {
-        iframeRefs.current.delete(pageId);
-      }
+      if (el) iframeRefs.current.set(pageId, el);
+      else iframeRefs.current.delete(pageId);
+    }, []);
+    const setRemotePlayerRef = useCallback((pageId: string, el: RemoteCdpPlayerRef | null) => {
+      if (el) remotePlayerRefs.current.set(pageId, el);
+      else remotePlayerRefs.current.delete(pageId);
     }, []);
 
-    const handleIframeLoad = useCallback(
+    const handleScreencastConnected = useCallback(
       (pageId: string) => {
         if (showLoadSkeleton) {
           setLoadedPageIds((prev) => {
@@ -127,28 +118,24 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
       [showLoadSkeleton],
     );
 
-    // When the active tab changes, tell the screencast iframe to bring its
-    // CDP page to the front so Chrome produces fresh frames (headless mode).
-    // Skip in readOnly mode – the agent controls which tab is active and we
-    // must not call Page.bringToFront which could interfere with it.
-    useEffect(() => {
-      if (readOnly || pages.length === 0 || isExcelMode) return;
-      const activePage = pages[activePageIndex];
-      if (!activePage || activePage.isSkeleton) return;
-      const iframe = iframeRefs.current.get(activePage.id);
-      if (iframe?.contentWindow) {
-        iframe.contentWindow.postMessage('screencast:activate', '*');
-      }
-    }, [activePageIndex, pages, isExcelMode, readOnly]);
-
-    // Expose methods via ref
+    // Expose refs to parent
     useImperativeHandle(
       ref,
       () => ({
-        getIframeForPage: (pageId: string) => iframeRefs.current.get(pageId),
+        getIframeForPage: (pageId) => iframeRefs.current.get(pageId),
+        getFrameDataUrl: (pageId) => remotePlayerRefs.current.get(pageId)?.getCurrentFrameDataUrl() || null,
       }),
       [],
     );
+
+    useEffect(() => {
+      if (isBrowserbaseSession) return;
+      const activePage = pages[activePageIndex];
+      if (!activePage || activePage.isSkeleton) return;
+
+      const frame = iframeRefs.current.get(activePage.id);
+      frame?.contentWindow?.postMessage('screencast:activate', '*');
+    }, [activePageIndex, pages, isBrowserbaseSession]);
 
     return (
       <>
@@ -166,14 +153,34 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
             {pages.map((page, index) => {
               const isLoaded = loadedPageIds.has(page.id);
               const showSkeleton = showLoadSkeleton && !isLoaded && !page.isSkeleton;
+              const isPageActive = activePageIndex === index && !isExcelMode;
+              const wsUrl = cdpWsUrlTemplate ? cdpWsUrlTemplate.replace('{pageId}', page.id) : null;
+              const localWsParam = wsUrl ? wsUrl.replace(/^wss?:\/\//, '') : null;
+              const localScreencastSrc = localWsParam
+                ? `/api/local-screencast?${new URLSearchParams({
+                    ws: localWsParam,
+                    secure: wsUrl?.startsWith('wss://') ? '1' : '0',
+                    watchOnly: readOnly ? '1' : '0',
+                  }).toString()}`
+                : null;
+              const browserbaseWssParam = wsUrl
+                ? (() => {
+                    if (wsUrl.includes('debug=')) {
+                      return wsUrl;
+                    }
+                    const separator = wsUrl.includes('?') ? '&' : '?';
+                    return `${wsUrl}${separator}debug=true`;
+                  })()
+                : null;
+              const iframeSrc = isBrowserbaseSession ? null : localScreencastSrc;
 
               return (
                 <Box
                   key={page.id}
                   position="absolute"
                   inset={0}
-                  opacity={activePageIndex === index && !isExcelMode ? 1 : 0}
-                  pointerEvents={activePageIndex === index && !isExcelMode ? 'auto' : 'none'}
+                  opacity={isPageActive ? 1 : 0}
+                  pointerEvents={isPageActive ? 'auto' : 'none'}
                 >
                   {page.isSkeleton ? (
                     <VStack
@@ -189,7 +196,7 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
                         Opening new tab...
                       </Text>
                     </VStack>
-                  ) : (
+                  ) : isBrowserbaseSession && browserbaseWssParam ? (
                     <>
                       {showSkeleton && (
                         <VStack
@@ -207,28 +214,56 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
                           </Text>
                         </VStack>
                       )}
-                      <Box
-                        as="iframe"
-                        ref={(el: HTMLIFrameElement | null) => setIframeRef(page.id, el)}
-                        position="absolute"
-                        inset={0}
-                        width="full"
-                        height="full"
-                        border="none"
-                        opacity={showSkeleton ? 0 : 1}
-                        {...({
-                          src: getIframeSrc(page),
-                          allow: 'clipboard-read; clipboard-write',
-                          onLoad: () => handleIframeLoad(page.id),
-                          onError: () =>
-                            console.error(`[PAGE] ❌ Iframe error for page ${page.id}`),
-                        } as any)}
-                      />
+                      <Box position="absolute" inset={0} opacity={showSkeleton ? 0 : 1}>
+                        <RemoteCdpPlayer
+                          ref={(el) => setRemotePlayerRef(page.id, el)}
+                          wsUrl={browserbaseWssParam}
+                          pageId={page.id}
+                          active={isPageActive}
+                          watchOnly={readOnly}
+                          onFirstFrame={handleScreencastConnected}
+                        />
+                      </Box>
                     </>
-                  )}
+                  ) : iframeSrc ? (
+                    <>
+                      {showSkeleton && (
+                        <VStack
+                          position="absolute"
+                          inset={0}
+                          bg="white"
+                          align="center"
+                          justify="center"
+                          gap={4}
+                          zIndex={1}
+                        >
+                          <Spinner size="xl" color="blue.500" />
+                          <Text color="gray.500" fontWeight="medium">
+                            Loading...
+                          </Text>
+                        </VStack>
+                      )}
+                      <Box position="absolute" inset={0} opacity={showSkeleton ? 0 : 1}>
+                        <iframe
+                          ref={(el) => setIframeRef(page.id, el)}
+                          src={iframeSrc}
+                          title={
+                            isBrowserbaseSession
+                              ? `Remote CDP Player ${page.id}`
+                              : `Local Screencast ${page.id}`
+                          }
+                          width="100%"
+                          height="100%"
+                          style={{ border: 'none', colorScheme: 'light' }}
+                          onLoad={() => handleScreencastConnected(page.id)}
+                        />
+                      </Box>
+                    </>
+                  ) : null}
                 </Box>
               );
             })}
+
             {isExcelMode && (
               <Box position="absolute" inset={0} bg="white" zIndex={5} width="full" height="full">
                 <ImportHelper
@@ -245,6 +280,7 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
                 />
               </Box>
             )}
+
             {freeze && frozenFrame && (
               <Box position="absolute" inset={0} zIndex={30} bg="white" pointerEvents="none">
                 <img

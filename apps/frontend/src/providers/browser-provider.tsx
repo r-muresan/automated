@@ -56,9 +56,7 @@ interface BrowserContextType {
   goBackCurrentTab: () => Promise<void>;
   goForwardCurrentTab: () => Promise<void>;
   reloadCurrentTab: () => Promise<void>;
-  setCaptureScreenshot: (fn: (() => string | null) | null) => void;
   cdpWsUrlTemplate: string | null;
-  inspectorUrlTemplate: string | null;
 }
 
 const BrowserContext = createContext<BrowserContextType | undefined>(undefined);
@@ -73,10 +71,6 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   const [focusUrlBarTrigger, setFocusUrlBarTrigger] = useState(0);
   const [lastInteraction, setLastInteraction] = useState<number>(Date.now());
   const [cdpWsUrlTemplate, setCdpWsUrlTemplate] = useState<string | null>(null);
-  const [inspectorUrlTemplate, setInspectorUrlTemplate] = useState<string | null>(null);
-
-  // Callback refs for screenshot capture
-  const captureScreenshotRef = useRef<(() => string | null) | null>(null);
 
   // React Query mutations
   const createSessionMutation = useCreateSession();
@@ -99,12 +93,15 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
 
   // Callbacks for useBrowserCDP
   const cdpCallbacks = useCallback((): InteractionCallbacks => ({
-    captureScreenshot: () => captureScreenshotRef.current?.() || null,
     onFrameNavigation: (url: string, frameId: string, pageId: string) => {
       // Update URL immediately from CDP event (no server round-trip needed)
       setPages((prev) =>
         prev.map((p) =>
-          p.id === pageId ? { ...p, url, title: 'Loading...', favicon: undefined } : p
+          p.id === pageId
+            ? p.url === url
+              ? p
+              : { ...p, url, title: 'Loading...', favicon: undefined }
+            : p
         )
       );
     },
@@ -260,7 +257,6 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
       const sid = data.sessionId;
       console.log('[FRONTEND] Session recreated:', sid);
       setCdpWsUrlTemplate(data.cdpWsUrlTemplate || null);
-      setInspectorUrlTemplate(data.inspectorUrlTemplate || null);
       setSessionId(sid);
       sessionCreatedAtRef.current = Date.now();
 
@@ -342,7 +338,6 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         const sid = data.sessionId;
         console.log('[FRONTEND] Session created:', sid);
         setCdpWsUrlTemplate(data.cdpWsUrlTemplate || null);
-        setInspectorUrlTemplate(data.inspectorUrlTemplate || null);
         setSessionId(sid);
         sessionCreatedAtRef.current = Date.now();
 
@@ -391,7 +386,6 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
       setPages([]);
       setActivePageIndex(0);
       setCdpWsUrlTemplate(null);
-      setInspectorUrlTemplate(null);
       deletedTabIds.current = []; // Reset deleted tabs when session is stopped
     }
   }, [sessionId, stopSessionMutation, deleteSessionMutation]);
@@ -901,10 +895,6 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
     console.log('Submitted input:', input);
   };
 
-  const setCaptureScreenshot = useCallback((fn: (() => string | null) | null) => {
-    captureScreenshotRef.current = fn;
-  }, []);
-
   return (
     <BrowserContext.Provider
       value={{
@@ -931,9 +921,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         goBackCurrentTab,
         goForwardCurrentTab,
         reloadCurrentTab,
-        setCaptureScreenshot,
         cdpWsUrlTemplate,
-        inspectorUrlTemplate,
       }}
     >
       {children}

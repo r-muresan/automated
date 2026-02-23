@@ -175,7 +175,6 @@ export class LocalBrowserProvider extends BrowserProvider {
         wsUrl: '',
         pages: [],
         cdpWsUrlTemplate: '',
-        inspectorUrlTemplate: '',
       };
     }
 
@@ -204,7 +203,6 @@ export class LocalBrowserProvider extends BrowserProvider {
     }
 
     const cdpWsUrlTemplate = `ws://localhost:${debugPort}/devtools/page/{pageId}`;
-    const inspectorUrlTemplate = `/api/local-screencast?ws=localhost:${debugPort}/devtools/page/{pageId}`;
 
     // Get browser-level CDP WebSocket URL
     let browserWsUrl = '';
@@ -222,7 +220,6 @@ export class LocalBrowserProvider extends BrowserProvider {
       browserWsUrl,
       pages,
       cdpWsUrlTemplate,
-      inspectorUrlTemplate,
     };
   }
 

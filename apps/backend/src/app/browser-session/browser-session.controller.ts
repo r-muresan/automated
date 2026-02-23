@@ -58,7 +58,6 @@ export class BrowserSessionController {
       sessionId: session.id,
       pages: session.pages,
       cdpWsUrlTemplate: session.cdpWsUrlTemplate,
-      inspectorUrlTemplate: session.inspectorUrlTemplate,
     };
   }
 
@@ -72,7 +71,6 @@ export class BrowserSessionController {
       ...debugInfo,
       pages: debugInfo.pages || [],
       cdpWsUrlTemplate: debugInfo.cdpWsUrlTemplate,
-      inspectorUrlTemplate: debugInfo.inspectorUrlTemplate,
     };
   }
 

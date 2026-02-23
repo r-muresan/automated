@@ -261,7 +261,7 @@ export default function WatchWorkflowPage() {
               showLoadSkeleton={false}
               readOnly={true}
               freeze={isFinished}
-              inspectorUrlTemplate={debugInfo?.inspectorUrlTemplate as string | undefined}
+              cdpWsUrlTemplate={debugInfo?.cdpWsUrlTemplate as string | undefined}
             />
           </Box>
           <Box w="360px" p={4} overflowY="auto">
