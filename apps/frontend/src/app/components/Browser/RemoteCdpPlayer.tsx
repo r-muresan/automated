@@ -13,7 +13,7 @@ import {
 
 const SCREENCAST_OPTIONS = {
   format: 'jpeg',
-  quality: 80,
+  quality: 70,
   maxWidth: 1920,
   maxHeight: 1080,
   everyNthFrame: 1,
@@ -234,28 +234,34 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
             currentUrlRef.current = url;
           }
 
-          window.postMessage({
-            type: 'screencast:url-sync',
-            pageId,
-            url,
-            reason,
-          }, '*');
+          window.postMessage(
+            {
+              type: 'screencast:url-sync',
+              pageId,
+              url,
+              reason,
+            },
+            '*',
+          );
         });
       },
       [pageId, send],
     );
 
-    const startScreencast = useCallback((force = false) => {
-      if (!activeRef.current) return;
-      if (!force && screencastRunningRef.current) return;
-      const requestId = send(
-        'Page.startScreencast',
-        SCREENCAST_OPTIONS as unknown as Record<string, unknown>,
-      );
-      if (requestId === null) return;
-      screencastRunningRef.current = true;
-      lastFrameTimeRef.current = Date.now();
-    }, [send]);
+    const startScreencast = useCallback(
+      (force = false) => {
+        if (!activeRef.current) return;
+        if (!force && screencastRunningRef.current) return;
+        const requestId = send(
+          'Page.startScreencast',
+          SCREENCAST_OPTIONS as unknown as Record<string, unknown>,
+        );
+        if (requestId === null) return;
+        screencastRunningRef.current = true;
+        lastFrameTimeRef.current = Date.now();
+      },
+      [send],
+    );
 
     const stopScreencast = useCallback(() => {
       if (!screencastRunningRef.current) return;
@@ -329,14 +335,17 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
       return { x: Math.round(x), y: Math.round(y) };
     }, []);
 
-    const getModifiers = useCallback((event: Pick<MouseEvent | KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>) => {
-      let modifiers = 0;
-      if (event.altKey) modifiers |= 1;
-      if (event.ctrlKey) modifiers |= 2;
-      if (event.metaKey) modifiers |= 4;
-      if (event.shiftKey) modifiers |= 8;
-      return modifiers;
-    }, []);
+    const getModifiers = useCallback(
+      (event: Pick<MouseEvent | KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>) => {
+        let modifiers = 0;
+        if (event.altKey) modifiers |= 1;
+        if (event.ctrlKey) modifiers |= 2;
+        if (event.metaKey) modifiers |= 4;
+        if (event.shiftKey) modifiers |= 8;
+        return modifiers;
+      },
+      [],
+    );
 
     const connect = useCallback(() => {
       if (destroyedRef.current) return;
@@ -460,7 +469,10 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
           return;
         }
 
-        if (message.method === 'Page.loadEventFired' || message.method === 'Page.domContentEventFired') {
+        if (
+          message.method === 'Page.loadEventFired' ||
+          message.method === 'Page.domContentEventFired'
+        ) {
           requestCurrentUrl(message.method);
           emitMessage({
             type: 'screencast:page-loaded',
@@ -485,7 +497,19 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
       socket.onerror = () => {
         // Error details are surfaced via the close/reconnect flow.
       };
-    }, [clearHeartbeat, emitMessage, focusOverlay, onFirstFrame, pageId, requestCurrentUrl, send, startHeartbeat, startScreencast, watchOnly, wsUrl]);
+    }, [
+      clearHeartbeat,
+      emitMessage,
+      focusOverlay,
+      onFirstFrame,
+      pageId,
+      requestCurrentUrl,
+      send,
+      startHeartbeat,
+      startScreencast,
+      watchOnly,
+      wsUrl,
+    ]);
 
     useEffect(() => {
       destroyedRef.current = false;
@@ -525,7 +549,16 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
       }
       clearHeartbeat();
       stopScreencast();
-    }, [active, clearHeartbeat, focusOverlay, send, startHeartbeat, startScreencast, stopScreencast, watchOnly]);
+    }, [
+      active,
+      clearHeartbeat,
+      focusOverlay,
+      send,
+      startHeartbeat,
+      startScreencast,
+      stopScreencast,
+      watchOnly,
+    ]);
 
     useImperativeHandle(
       ref,
@@ -549,11 +582,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
     }, []);
 
     const maybePreventDefault = useCallback(
-      (
-        event: PreventableEvent,
-        source: string,
-        details?: Record<string, unknown>,
-      ) => {
+      (event: PreventableEvent, source: string, details?: Record<string, unknown>) => {
         const nativeEvent = event.nativeEvent;
         if (!nativeEvent.cancelable) {
           const target = nativeEvent.target as HTMLElement | null;
@@ -697,8 +726,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
             });
             const button = event.nativeEvent.button ?? 0;
             const activeClick = activeClickRef.current;
-            const clickCount =
-              activeClick && activeClick.button === button ? activeClick.count : 1;
+            const clickCount = activeClick && activeClick.button === button ? activeClick.count : 1;
             sendMouseEvent('mouseReleased', event.nativeEvent, clickCount);
             activeClickRef.current = null;
           }}
@@ -723,7 +751,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
             });
             if (MODIFIER_KEYS[event.key]) return;
 
-            const text = event.key.length === 1 ? event.key : (SPECIAL_KEY_TEXT[event.key] || '');
+            const text = event.key.length === 1 ? event.key : SPECIAL_KEY_TEXT[event.key] || '';
 
             send('Input.dispatchKeyEvent', {
               type: text ? 'keyDown' : 'rawKeyDown',
