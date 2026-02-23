@@ -121,6 +121,7 @@ export class BrowserSessionService implements OnModuleInit {
     height?: number,
     reuseExisting = false,
     userAgent?: string,
+    timezone?: string,
   ) {
     await this.assertBrowserMinutesRemaining(userId);
 
@@ -171,6 +172,7 @@ export class BrowserSessionService implements OnModuleInit {
         height,
         contextId: contextId ?? undefined,
         userAgent,
+        timezone,
       });
 
       createdSessionId = session.id;

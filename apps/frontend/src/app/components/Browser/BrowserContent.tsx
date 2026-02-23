@@ -254,7 +254,7 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
                           }
                           width="100%"
                           height="100%"
-                          style={{ border: 'none', colorScheme: 'light' }}
+                          style={{ border: 'none', outline: 'none', colorScheme: 'light' }}
                           onLoad={() => handleScreencastConnected(page.id)}
                         />
                       </Box>
@@ -343,7 +343,7 @@ export const BrowserContent = forwardRef<BrowserContentRef, BrowserContentProps>
                     {...({
                       src: 'https://www.google.com/search?igu=1',
                       title: 'Google Preview',
-                      style: { colorScheme: 'light' },
+                      style: { outline: 'none', colorScheme: 'light' },
                     } as any)}
                   />
                 )}

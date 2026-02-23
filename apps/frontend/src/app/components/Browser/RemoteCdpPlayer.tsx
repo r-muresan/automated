@@ -194,9 +194,12 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
     const lastClickRef = useRef<LastClickInfo | null>(null);
     const activeClickRef = useRef<{ button: number; count: number } | null>(null);
     const currentUrlRef = useRef<string>('');
+    const activeRef = useRef(active);
+    const screencastRunningRef = useRef(false);
     const pendingResponseHandlersRef = useRef<Map<number, (message: CdpMessage) => void>>(
       new Map(),
     );
+    activeRef.current = active;
 
     const send = useCallback((method: string, params?: Record<string, unknown>) => {
       const socket = socketRef.current;
@@ -242,9 +245,22 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
       [pageId, send],
     );
 
-    const startScreencast = useCallback(() => {
-      send('Page.startScreencast', SCREENCAST_OPTIONS as unknown as Record<string, unknown>);
+    const startScreencast = useCallback((force = false) => {
+      if (!activeRef.current) return;
+      if (!force && screencastRunningRef.current) return;
+      const requestId = send(
+        'Page.startScreencast',
+        SCREENCAST_OPTIONS as unknown as Record<string, unknown>,
+      );
+      if (requestId === null) return;
+      screencastRunningRef.current = true;
       lastFrameTimeRef.current = Date.now();
+    }, [send]);
+
+    const stopScreencast = useCallback(() => {
+      if (!screencastRunningRef.current) return;
+      send('Page.stopScreencast');
+      screencastRunningRef.current = false;
     }, [send]);
 
     const emitMessage = useCallback((payload: Record<string, unknown>) => {
@@ -258,6 +274,14 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
       }
     }, []);
 
+    const focusOverlay = useCallback(() => {
+      const overlay = overlayRef.current;
+      if (!overlay) return;
+      window.requestAnimationFrame(() => {
+        overlay.focus();
+      });
+    }, []);
+
     const startHeartbeat = useCallback(() => {
       clearHeartbeat();
 
@@ -268,7 +292,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
         if (!socket || socket.readyState !== WebSocket.OPEN) return;
 
         if (Date.now() - lastFrameTimeRef.current > 3000) {
-          startScreencast();
+          startScreencast(true);
         }
       }, 2000);
     }, [clearHeartbeat, startScreencast, watchOnly]);
@@ -329,14 +353,14 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
         send('Page.addScriptToEvaluateOnNewDocument', { source: EVENT_TRACKING_SCRIPT });
         send('Runtime.evaluate', { expression: EVENT_TRACKING_SCRIPT });
 
-        startScreencast();
-        if (active) {
+        if (activeRef.current) {
           send('Page.bringToFront');
+          startScreencast(true);
+          startHeartbeat();
         }
-        startHeartbeat();
 
-        if (!watchOnly) {
-          overlayRef.current?.focus();
+        if (!watchOnly && activeRef.current) {
+          focusOverlay();
         }
 
         // Populate URL early in case navigation happened before this listener attached.
@@ -448,6 +472,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
 
       socket.onclose = () => {
         clearHeartbeat();
+        screencastRunningRef.current = false;
         pendingResponseHandlersRef.current.clear();
 
         if (destroyedRef.current) return;
@@ -460,7 +485,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
       socket.onerror = () => {
         // Error details are surfaced via the close/reconnect flow.
       };
-    }, [active, clearHeartbeat, emitMessage, onFirstFrame, pageId, requestCurrentUrl, send, startHeartbeat, startScreencast, watchOnly, wsUrl]);
+    }, [clearHeartbeat, emitMessage, focusOverlay, onFirstFrame, pageId, requestCurrentUrl, send, startHeartbeat, startScreencast, watchOnly, wsUrl]);
 
     useEffect(() => {
       destroyedRef.current = false;
@@ -469,6 +494,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
       return () => {
         destroyedRef.current = true;
         clearHeartbeat();
+        stopScreencast();
 
         if (reconnectTimeoutRef.current) {
           window.clearTimeout(reconnectTimeoutRef.current);
@@ -481,13 +507,25 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
           socketRef.current = null;
         }
       };
-    }, [clearHeartbeat, connect]);
+    }, [clearHeartbeat, connect, stopScreencast]);
 
     useEffect(() => {
-      if (!active) return;
-      send('Page.bringToFront');
-      startScreencast();
-    }, [active, send, startScreencast]);
+      if (active) {
+        send('Page.bringToFront');
+        startScreencast(true);
+        startHeartbeat();
+        if (!watchOnly) {
+          focusOverlay();
+        }
+        return;
+      }
+
+      if (overlayRef.current === document.activeElement) {
+        overlayRef.current?.blur();
+      }
+      clearHeartbeat();
+      stopScreencast();
+    }, [active, clearHeartbeat, focusOverlay, send, startHeartbeat, startScreencast, stopScreencast, watchOnly]);
 
     useImperativeHandle(
       ref,
@@ -546,7 +584,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
       [active, pageId, watchOnly, wsUrl],
     );
 
-    const inputDisabled = useMemo(() => watchOnly, [watchOnly]);
+    const inputDisabled = useMemo(() => watchOnly || !active, [active, watchOnly]);
 
     const sendMouseEvent = useCallback(
       (
@@ -564,6 +602,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
         },
         clickCountOverride?: number,
       ) => {
+        if (!active) return;
         const coords = toDeviceCoords(event.clientX, event.clientY);
         if (!coords) return;
 
@@ -586,7 +625,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
 
         send('Input.dispatchMouseEvent', params);
       },
-      [getButtonMask, getButtonName, getModifiers, send, toDeviceCoords],
+      [active, getButtonMask, getButtonName, getModifiers, send, toDeviceCoords],
     );
 
     return (
@@ -610,6 +649,9 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
           tabIndex={inputDisabled ? -1 : 0}
           position="absolute"
           inset={0}
+          outline="none"
+          _focus={{ outline: 'none' }}
+          _focusVisible={{ outline: 'none' }}
           cursor={inputDisabled ? 'default' : 'default'}
           pointerEvents={inputDisabled ? 'none' : 'auto'}
           onMouseDown={(event) => {
@@ -674,6 +716,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
             sendMouseEvent('mouseWheel', event.nativeEvent);
           }}
           onKeyDown={(event) => {
+            if (!active) return;
             maybePreventDefault(event, 'onKeyDown', {
               key: event.key,
               code: event.code,
@@ -694,6 +737,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
             });
           }}
           onKeyUp={(event) => {
+            if (!active) return;
             maybePreventDefault(event, 'onKeyUp', {
               key: event.key,
               code: event.code,

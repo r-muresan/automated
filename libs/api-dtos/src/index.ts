@@ -17,6 +17,7 @@ export interface BrowserSessionCreateRequest {
   width?: number;
   height?: number;
   reuseExisting?: boolean;
+  timezone?: string;
 }
 
 export interface BrowserSessionCreateResponse {

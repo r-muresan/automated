@@ -44,7 +44,7 @@ export class BrowserSessionController {
     @Headers('user-agent') userAgent?: string,
   ): Promise<BrowserSessionCreateResponse> {
     const userId = user?.email;
-    const { colorScheme, width, height, reuseExisting = true } = body;
+    const { colorScheme, width, height, reuseExisting = true, timezone } = body;
 
     const session = await this.browserSessionService.createSession(
       userId,
@@ -53,6 +53,7 @@ export class BrowserSessionController {
       height,
       reuseExisting,
       userAgent,
+      timezone,
     );
     return {
       sessionId: session.id,
