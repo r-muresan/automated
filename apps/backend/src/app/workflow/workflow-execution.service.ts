@@ -4,6 +4,8 @@ import type { Prisma, WorkflowRunLog } from '@automated/prisma';
 import {
   OrchestratorAgent,
   type OrchestratorEvent,
+  type CredentialRequest,
+  type CredentialRequestResult,
   type Workflow,
   type Step,
 } from 'apps/cua-agent';
@@ -21,6 +23,21 @@ import type {
 } from '@automated/api-dtos';
 
 const LOG_LIMIT = 500;
+const ACTION_EVENT_TYPES = [
+  'step:start',
+  'step:end',
+  'loop:iteration:start',
+  'loop:iteration:end',
+  'credential:request',
+  'credential:continue',
+] as const;
+
+interface PendingCredentialRequest {
+  requestId: string;
+  workflowId: string;
+  runId: string;
+  resolve: (result: CredentialRequestResult) => void;
+}
 
 @Injectable()
 export class WorkflowExecutionService {
@@ -31,6 +48,8 @@ export class WorkflowExecutionService {
   private actionStreams: Map<string, Subject<WorkflowAction>> = new Map();
   /** Track local browser sessions created for workflows so we can clean them up */
   private workflowLocalSessions: Map<string, string> = new Map();
+  /** Pending credential requests by workflow run. */
+  private pendingCredentialRequests: Map<string, PendingCredentialRequest> = new Map();
 
   constructor(
     private prisma: PrismaService,
@@ -106,7 +125,7 @@ export class WorkflowExecutionService {
     const logs = await this.prisma.workflowRunLog.findMany({
       where: {
         runId,
-        eventType: { in: ['step:start', 'step:end', 'loop:iteration:start', 'loop:iteration:end'] },
+        eventType: { in: [...ACTION_EVENT_TYPES] },
       },
       orderBy: { timestamp: 'asc' },
     });
@@ -122,7 +141,7 @@ export class WorkflowExecutionService {
     const logs = await this.prisma.workflowRunLog.findMany({
       where: {
         runId,
-        eventType: { in: ['step:start', 'step:end', 'loop:iteration:start', 'loop:iteration:end'] },
+        eventType: { in: [...ACTION_EVENT_TYPES] },
         timestamp: { gt: since },
       },
       orderBy: { timestamp: 'asc' },
@@ -292,6 +311,7 @@ export class WorkflowExecutionService {
       localCdpUrl,
       localSessionId: localSessionId ?? undefined,
       onEvent: (event) => this.handleOrchestratorEvent(workflowId, event),
+      onCredentialRequest: (request) => this.handleCredentialRequest(workflowId, request),
     });
     this.orchestrators.set(workflowId, orchestrator);
 
@@ -348,6 +368,10 @@ export class WorkflowExecutionService {
         });
       })
       .finally(() => {
+        this.resolvePendingCredentialRequest(workflowId, {
+          continued: false,
+          message: 'Workflow execution ended before credential handoff was continued.',
+        });
         this.orchestrators.delete(workflowId);
         // Clean up local browser session
         const localSessionId = this.workflowLocalSessions.get(workflowId);
@@ -388,6 +412,10 @@ export class WorkflowExecutionService {
       level: 'warn',
       message: 'Workflow stopped',
     });
+    this.resolvePendingCredentialRequest(workflowId, {
+      continued: false,
+      message: 'Workflow stopped while waiting for user credentials.',
+    });
 
     const orchestrator = this.orchestrators.get(workflowId);
     const sessionId = currentState.sessionId ?? orchestrator?.getSessionId() ?? undefined;
@@ -414,6 +442,31 @@ export class WorkflowExecutionService {
 
     this.closeActionStream(currentState.runId);
     return { success: true, message: 'Workflow stopped' };
+  }
+
+  async continueWorkflow(
+    workflowId: string,
+    runId: string,
+    requestId?: string,
+  ): Promise<WorkflowExecutionCommandResponse> {
+    await this.assertRunExists(workflowId, runId);
+
+    const pending = this.pendingCredentialRequests.get(runId);
+    if (!pending || pending.workflowId !== workflowId) {
+      return { success: false, message: 'No pending credential request for this run' };
+    }
+    if (requestId && pending.requestId !== requestId) {
+      return { success: false, message: 'Credential request mismatch' };
+    }
+
+    pending.resolve({
+      continued: true,
+      message: 'Execution resumed after user credential input.',
+      requestId: pending.requestId,
+    });
+    this.pendingCredentialRequests.delete(runId);
+
+    return { success: true, message: 'Workflow execution resumed' };
   }
 
   private substituteInputValues(steps: Step[], inputValues: Record<string, string>): Step[] {
@@ -542,6 +595,97 @@ export class WorkflowExecutionService {
     }
   }
 
+  private async handleCredentialRequest(
+    workflowId: string,
+    request: CredentialRequest,
+  ): Promise<CredentialRequestResult> {
+    const state = this.executionStates.get(workflowId);
+    const runId = state?.runId;
+    if (!state || state.status !== 'running' || !runId) {
+      throw new Error('Workflow is not currently running.');
+    }
+
+    const existingPending = this.pendingCredentialRequests.get(runId);
+    if (existingPending) {
+      throw new Error('A credential request is already pending for this workflow run.');
+    }
+
+    const requestId = randomUUID();
+    const createdAt = new Date();
+    this.addLog(workflowId, {
+      timestamp: createdAt.toISOString(),
+      level: 'warn',
+      message: 'User action required: credentials needed',
+      eventType: 'credential:request',
+      data: {
+        requestId,
+        reason: request.reason,
+        stepIndex: request.stepIndex,
+        stepType: request.stepType,
+        instruction: request.instruction,
+        buttonLabel: 'Continue Execution',
+      },
+    });
+
+    const result = await new Promise<CredentialRequestResult>((resolve) => {
+      this.pendingCredentialRequests.set(runId, {
+        requestId,
+        workflowId,
+        runId,
+        resolve,
+      });
+    });
+
+    this.pendingCredentialRequests.delete(runId);
+    this.addLog(workflowId, {
+      timestamp: new Date().toISOString(),
+      level: result.continued ? 'info' : 'warn',
+      message: result.continued
+        ? 'User resumed execution'
+        : (result.message ?? 'Credential handoff ended without continuation'),
+      eventType: 'credential:continue',
+      data: {
+        requestId,
+        stepIndex: request.stepIndex,
+        stepType: request.stepType,
+        instruction: request.instruction,
+        continued: result.continued,
+      },
+    });
+
+    return {
+      ...result,
+      requestId: result.requestId ?? requestId,
+    };
+  }
+
+  private resolvePendingCredentialRequest(
+    workflowId: string,
+    result: CredentialRequestResult,
+    runId?: string,
+  ): void {
+    if (runId) {
+      const pending = this.pendingCredentialRequests.get(runId);
+      if (pending && pending.workflowId === workflowId) {
+        pending.resolve({
+          ...result,
+          requestId: result.requestId ?? pending.requestId,
+        });
+        this.pendingCredentialRequests.delete(runId);
+      }
+      return;
+    }
+
+    for (const [pendingRunId, pending] of this.pendingCredentialRequests.entries()) {
+      if (pending.workflowId !== workflowId) continue;
+      pending.resolve({
+        ...result,
+        requestId: result.requestId ?? pending.requestId,
+      });
+      this.pendingCredentialRequests.delete(pendingRunId);
+    }
+  }
+
   private handleOrchestratorEvent(workflowId: string, event: OrchestratorEvent) {
     const stoppedState = this.executionStates.get(workflowId);
     if (stoppedState?.status === 'stopped') {
@@ -635,7 +779,7 @@ export class WorkflowExecutionService {
         this.addLog(workflowId, {
           timestamp: new Date().toISOString(),
           level: 'info',
-          message: `Loop iteration ${event.iteration} of ${event.totalItems}`,
+          message: `Loop iteration ${event.iteration}`,
           eventType: 'loop:iteration:start',
           data: {
             stepIndex: event.index,
@@ -680,6 +824,10 @@ export class WorkflowExecutionService {
           message: 'Workflow error',
           data: { error: event.error },
         });
+        this.resolvePendingCredentialRequest(workflowId, {
+          continued: false,
+          message: event.error || 'Workflow failed while waiting for credentials.',
+        });
         this.closeActionStream(state?.runId);
         break;
       }
@@ -698,6 +846,10 @@ export class WorkflowExecutionService {
           timestamp: new Date().toISOString(),
           level: event.result.success ? 'info' : 'error',
           message: event.result.success ? 'Workflow completed' : 'Workflow failed',
+        });
+        this.resolvePendingCredentialRequest(workflowId, {
+          continued: false,
+          message: 'Workflow completed before credential handoff resumed.',
         });
         this.closeActionStream(state?.runId);
         break;

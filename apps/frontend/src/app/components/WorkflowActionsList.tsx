@@ -8,6 +8,8 @@ import { downloadWorkflowOutput, sanitizeFileName } from '../utils/workflowOutpu
 interface WorkflowActionsListProps {
   actions: WorkflowAction[];
   workflowTitle?: string;
+  onContinueExecution?: (request: PendingCredentialRequestView) => void;
+  continuingRequestId?: string | null;
 }
 
 type StepStatus = 'running' | 'success' | 'failed';
@@ -17,6 +19,12 @@ interface SaveOutputView {
   outputExtension: string;
   savedFileIndex?: number;
   fallback?: boolean;
+}
+
+export interface PendingCredentialRequestView {
+  requestId: string;
+  reason: string;
+  buttonLabel: string;
 }
 
 interface SubStepView {
@@ -51,6 +59,7 @@ interface StepActionView {
   loopDescription?: string;
   iterations?: IterationView[];
   saveOutput?: SaveOutputView;
+  pendingCredentialRequest?: PendingCredentialRequestView;
 }
 
 const buildActionViews = (actions: WorkflowAction[]): StepActionView[] => {
@@ -80,6 +89,15 @@ const buildActionViews = (actions: WorkflowAction[]): StepActionView[] => {
   // Only depth-0 events become visible sub-steps; deeper events (e.g. steps inside a conditional's
   // true branch) are hidden and their completion updates the parent sub-step.
   const loopNestingDepth = new Map<number, number>();
+  const findStepSlotKey = (targetStepIndex: number, preferRunning = false): number | undefined => {
+    let selected: number | undefined;
+    for (const [key, view] of byIndex.entries()) {
+      if (view.stepIndex !== targetStepIndex) continue;
+      if (preferRunning && view.status !== 'running') continue;
+      if (selected === undefined || key > selected) selected = key;
+    }
+    return selected;
+  };
 
   for (const action of sorted) {
     const stepIndex = action.data?.stepIndex;
@@ -131,6 +149,53 @@ const buildActionViews = (actions: WorkflowAction[]): StepActionView[] => {
       }
       currentIteration.delete(stepIndex);
       loopNestingDepth.delete(stepIndex);
+      continue;
+    }
+
+    if (action.eventType === 'credential:request' && typeof stepIndex === 'number') {
+      const slotKey =
+        findStepSlotKey(stepIndex, true) ?? findStepSlotKey(stepIndex) ?? stepIndex;
+      const existing =
+        byIndex.get(slotKey) ??
+        ({
+          key: `step-${slotKey}`,
+          stepIndex,
+          status: 'running',
+        } satisfies StepActionView);
+
+      existing.stepType = existing.stepType ?? stepType;
+      existing.instruction = existing.instruction ?? instruction;
+      existing.message = existing.message ?? action.message;
+      existing.pendingCredentialRequest = {
+        requestId: String(action.data?.requestId ?? action.id),
+        reason:
+          typeof action.data?.reason === 'string'
+            ? action.data.reason
+            : 'Complete the required credential step in the browser, then continue execution.',
+        buttonLabel:
+          typeof action.data?.buttonLabel === 'string'
+            ? action.data.buttonLabel
+            : 'Continue Execution',
+      };
+      byIndex.set(slotKey, existing);
+      continue;
+    }
+
+    if (action.eventType === 'credential:continue' && typeof stepIndex === 'number') {
+      const targetRequestId =
+        typeof action.data?.requestId === 'string' ? action.data.requestId : undefined;
+      const slotKey =
+        findStepSlotKey(stepIndex, true) ?? findStepSlotKey(stepIndex);
+      if (slotKey !== undefined) {
+        const existing = byIndex.get(slotKey);
+        if (
+          existing?.pendingCredentialRequest &&
+          (!targetRequestId || existing.pendingCredentialRequest.requestId === targetRequestId)
+        ) {
+          existing.pendingCredentialRequest = undefined;
+          byIndex.set(slotKey, existing);
+        }
+      }
       continue;
     }
 
@@ -244,6 +309,7 @@ const buildActionViews = (actions: WorkflowAction[]): StepActionView[] => {
         existing.status = success === false ? 'failed' : 'success';
         existing.finishedAt = action.timestamp;
         existing.error = error;
+        existing.pendingCredentialRequest = undefined;
         if (typeof output === 'string' && typeof outputExtension === 'string') {
           existing.saveOutput = {
             output,
@@ -303,7 +369,12 @@ const StatusIcon = ({ status }: { status: StepStatus }) => {
   return <Icon as={LuCheck} color="green.400" boxSize={3} />;
 };
 
-export const WorkflowActionsList = ({ actions, workflowTitle }: WorkflowActionsListProps) => {
+export const WorkflowActionsList = ({
+  actions,
+  workflowTitle,
+  onContinueExecution,
+  continuingRequestId,
+}: WorkflowActionsListProps) => {
   const views = buildActionViews(actions);
   const [downloadingStepKey, setDownloadingStepKey] = useState<string | null>(null);
 
@@ -342,6 +413,11 @@ export const WorkflowActionsList = ({ actions, workflowTitle }: WorkflowActionsL
         views.map((view, viewIndex) => {
           const stepNumber = typeof view.stepIndex === 'number' ? viewIndex + 1 : null;
           const saveOutput = view.saveOutput;
+          const pendingCredentialRequest = view.pendingCredentialRequest;
+          const isContinuing =
+            !!pendingCredentialRequest &&
+            !!continuingRequestId &&
+            continuingRequestId === pendingCredentialRequest.requestId;
 
           // Loop step with iterations
           if (view.isLoop && view.iterations && view.iterations.length > 0) {
@@ -389,7 +465,7 @@ export const WorkflowActionsList = ({ actions, workflowTitle }: WorkflowActionsL
                       <Flex align="center" gap={2} mb={iter.subSteps.length > 0 ? 1.5 : 0}>
                         <Icon as={LuRepeat} color="orange.500" boxSize={3} />
                         <Text fontSize="12px" fontWeight="600" color="gray.700">
-                          Iteration {iter.iteration} of {iter.totalItems}
+                          Iteration {iter.iteration}
                         </Text>
                         <StatusIcon status={iter.status} />
                       </Flex>
@@ -499,6 +575,26 @@ export const WorkflowActionsList = ({ actions, workflowTitle }: WorkflowActionsL
                 <Text fontSize="11px" color="gray.500" ml={5}>
                   {view.message}
                 </Text>
+              )}
+              {pendingCredentialRequest && (
+                <Box ml={5} mt={2}>
+                  <Text fontSize="11px" color="orange.700">
+                    {pendingCredentialRequest.reason}
+                  </Text>
+                  {onContinueExecution && (
+                    <Button
+                      size="xs"
+                      mt={1.5}
+                      onClick={() => onContinueExecution(pendingCredentialRequest)}
+                      loading={isContinuing}
+                      bg="orange.500"
+                      color="white"
+                      _hover={{ bg: 'orange.600' }}
+                    >
+                      {pendingCredentialRequest.buttonLabel}
+                    </Button>
+                  )}
+                </Box>
               )}
               {view.stepType === 'save' && view.status === 'success' && saveOutput && (
                 <Button

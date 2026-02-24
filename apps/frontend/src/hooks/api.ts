@@ -11,6 +11,7 @@ import type {
   BrowserSessionPingResponse,
   BrowserSessionRecordingResponse,
   BrowserSessionStopResponse,
+  BrowserSessionUploadResponse,
   CreateWorkflowRequest,
   DeepgramTokenResponse,
   GenerateWorkflowFromInteractionsRequest,
@@ -198,6 +199,25 @@ export function useStopRecordingKeepalive() {
       const response = await axios.post<BrowserSessionRecordingResponse>(
         `${API_BASE}/browser-session/${sessionId}/recording/stop`,
         {},
+        { headers },
+      );
+      return response.data;
+    },
+  });
+}
+
+export function useUploadSessionFile() {
+  const getHeaders = useGetHeaders();
+
+  return useMutation({
+    mutationFn: async ({ sessionId, file }: { sessionId: string; file: File }) => {
+      const headers = await getHeaders();
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await axios.post<BrowserSessionUploadResponse>(
+        `${API_BASE}/browser-session/${sessionId}/upload`,
+        formData,
         { headers },
       );
       return response.data;
@@ -556,6 +576,36 @@ export function useStopWorkflowExecution() {
     },
     onSuccess: (_, workflowId) => {
       queryClient.invalidateQueries({ queryKey: ['workflow-execution-status', workflowId] });
+      queryClient.invalidateQueries({ queryKey: ['workflow-execution-statuses'] });
+    },
+  });
+}
+
+export function useContinueWorkflowExecution() {
+  const queryClient = useQueryClient();
+  const getHeaders = useGetHeaders();
+
+  return useMutation({
+    mutationFn: async ({
+      workflowId,
+      runId,
+      requestId,
+    }: {
+      workflowId: string;
+      runId: string;
+      requestId?: string;
+    }) => {
+      const headers = await getHeaders();
+      const response = await axios.post<WorkflowExecutionCommandResponse>(
+        `${API_BASE}/workflows/${workflowId}/execution/continue`,
+        { runId, requestId },
+        { headers },
+      );
+      return response.data;
+    },
+    onSuccess: (_, { workflowId, runId }) => {
+      queryClient.invalidateQueries({ queryKey: ['workflow-execution-status', workflowId] });
+      queryClient.invalidateQueries({ queryKey: ['workflow-execution-actions', workflowId, runId] });
       queryClient.invalidateQueries({ queryKey: ['workflow-execution-statuses'] });
     },
   });

@@ -1,7 +1,6 @@
 import * as dotenv from 'dotenv';
 import OpenAI from 'openai';
-import { Stagehand, type AgentTools } from '@browserbasehq/stagehand';
-import { tool } from 'ai';
+import { Stagehand } from '@browserbasehq/stagehand';
 import { z } from 'zod';
 import type {
   Workflow,
@@ -20,13 +19,16 @@ import type {
   TabState,
   OrchestratorOptions,
   OrchestratorEvent,
+  CredentialRequestResult,
 } from '../types';
 
 import { AGENT_TIMEOUT_MS } from './constants';
-import { withTimeout, waitForUserInput, DEFAULT_PROVIDER_ORDER } from './utils';
-import { LOADING_SELECTORS, getDomStabilityJs } from './page-scripts';
+import { withTimeout, DEFAULT_PROVIDER_ORDER } from './utils';
+import { waitForPageReady } from './page-ready';
 import { buildSystemPrompt } from './system-prompt';
+import { createBrowserTabTools, type CredentialHandoffRequest } from './agent-tools';
 import { extractWithLlm, normalizeLoopItems, parseSchemaMap } from './extraction';
+import { executeLoopStep, type LoopDeps } from './loop';
 import {
   acquireBrowserbaseSessionCreateLease,
   releaseBrowserbaseSession,
@@ -228,7 +230,7 @@ export class OrchestratorAgent {
     try {
       this.stagehand = new Stagehand({
         env: 'BROWSERBASE',
-        verbose: 2,
+        verbose: 1,
         model: {
           modelName: models.extract,
           apiKey: process.env.OPENROUTER_API_KEY,
@@ -300,179 +302,6 @@ export class OrchestratorAgent {
    * 2. Network idle (no pending requests)
    * 3. DOM stability (no significant mutations)
    */
-  private async waitForPageReady(options?: {
-    networkIdleTimeoutMs?: number;
-    loadingIndicatorTimeoutMs?: number;
-    domStableMs?: number;
-    domStabilityTimeoutMs?: number;
-  }): Promise<void> {
-    if (!this.stagehand) return;
-
-    this.assertNotAborted();
-    const {
-      networkIdleTimeoutMs = 3000,
-      loadingIndicatorTimeoutMs = 5000,
-      domStableMs = 300,
-      domStabilityTimeoutMs = 3000,
-    } = options ?? {};
-
-    const totalStartTime = Date.now();
-    const page = this.stagehand.context.activePage();
-    if (!page) return;
-
-    // 1. Wait for loading indicators to disappear
-    let loadingIndicatorResult = 'success';
-    const loadingStart = Date.now();
-    try {
-      await this.waitForLoadingIndicatorsGone(page, loadingIndicatorTimeoutMs);
-    } catch (error: any) {
-      if (error.message?.includes('timeout') || error.name === 'TimeoutError') {
-        loadingIndicatorResult = 'timeout';
-        console.log('[PAGE_READY] Loading indicator timeout - proceeding');
-      } else {
-        loadingIndicatorResult = 'error';
-        console.log('[PAGE_READY] Loading indicator check failed - proceeding');
-      }
-    }
-    const loadingDuration = Date.now() - loadingStart;
-
-    // 2. Wait for network idle
-    // let networkIdleResult = 'success';
-    // const networkStart = Date.now();
-    // try {
-    //   await page.waitForLoadState('networkidle', networkIdleTimeoutMs);
-    // } catch (error: any) {
-    //   if (error.message?.includes('timeout') || error.name === 'TimeoutError') {
-    //     networkIdleResult = 'timeout';
-    //     console.log('[PAGE_READY] Network idle timeout - proceeding');
-    //   } else {
-    //     networkIdleResult = 'error';
-    //   }
-    // }
-    // const networkDuration = Date.now() - networkStart;
-
-    // 3. Wait for DOM to stabilize
-    let domStabilityResult = 'success';
-    const domStart = Date.now();
-    try {
-      await this.waitForDomStable(page, domStableMs, domStabilityTimeoutMs);
-    } catch (error: any) {
-      if (error.message?.includes('timeout') || error.name === 'TimeoutError') {
-        domStabilityResult = 'timeout';
-        console.log('[PAGE_READY] DOM stability timeout - proceeding');
-      } else {
-        domStabilityResult = 'error';
-        console.log('[PAGE_READY] DOM stability check failed - proceeding');
-      }
-    }
-    const domDuration = Date.now() - domStart;
-
-    const totalDuration = Date.now() - totalStartTime;
-    console.log(
-      `[PAGE_READY] Complete in ${totalDuration}ms (loading: ${loadingDuration}ms/${loadingIndicatorResult}, dom: ${domDuration}ms/${domStabilityResult})`,
-    );
-  }
-
-  private async waitForLoadingIndicatorsGone(page: any, timeoutMs: number): Promise<void> {
-    const startTime = Date.now();
-
-    // ARIA selectors are trustworthy and don't need animation check
-    const ariaSelectors = new Set([
-      '[role="progressbar"]',
-      '[role="status"][aria-busy="true"]',
-      '[aria-busy="true"]',
-      '[aria-live="polite"][aria-busy="true"]',
-    ]);
-
-    while (Date.now() - startTime < timeoutMs) {
-      let foundSelector: string | null = null;
-      let foundInfo = '';
-
-      for (const selector of LOADING_SELECTORS) {
-        const requireAnimation = !ariaSelectors.has(selector);
-        try {
-          // Use Playwright's native locator for proper visibility detection
-          // (checks ancestor visibility, clip-path, overflow, etc.)
-          const locator = page.locator(selector);
-          const count = await locator.count();
-
-          for (let i = 0; i < count; i++) {
-            const el = locator.nth(i);
-            const visible = await el.isVisible().catch(() => false);
-            if (!visible) continue;
-
-            // Get element info via elementHandle.evaluate (returns values properly)
-            const info = await el
-              .evaluate((node: Element) => {
-                const style = window.getComputedStyle(node);
-                const rect = node.getBoundingClientRect();
-                const cn = node.className;
-                const className = typeof cn === 'string' ? cn : '';
-                return {
-                  tag: node.tagName.toLowerCase(),
-                  className,
-                  id: node.id || '',
-                  width: Math.round(rect.width),
-                  height: Math.round(rect.height),
-                  animationName: style.animationName,
-                  opacity: style.opacity,
-                };
-              })
-              .catch(() => null);
-
-            if (!info) continue;
-
-            // Skip tiny elements
-            if (info.width < 4 && info.height < 4) continue;
-
-            // Skip completed/inactive states
-            const lcClass = info.className.toLowerCase();
-            if (
-              lcClass.includes('complete') ||
-              lcClass.includes('done') ||
-              lcClass.includes('finished') ||
-              lcClass.includes('hidden') ||
-              lcClass.includes('inactive') ||
-              lcClass.includes('stopped')
-            )
-              continue;
-
-            // For class-based selectors, require CSS animation
-            if (requireAnimation) {
-              const hasAnimation = info.animationName !== 'none' && info.animationName !== '';
-              if (!hasAnimation) continue;
-            }
-
-            foundSelector = selector;
-            foundInfo = `tag=${info.tag} class="${info.className}" id="${info.id}" size=${info.width}x${info.height} animation=${info.animationName}`;
-            break;
-          }
-        } catch {
-          // selector not supported or page navigated
-        }
-        if (foundSelector) break;
-      }
-
-      if (!foundSelector) {
-        return;
-      }
-
-      console.log(`[loading-indicator] Waiting for: "${foundSelector}" — ${foundInfo}`);
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    throw new Error('Loading indicator timeout');
-  }
-
-  private async waitForDomStable(page: any, stableMs: number, timeoutMs: number): Promise<void> {
-    const js = getDomStabilityJs(stableMs);
-    await Promise.race([
-      page.evaluate(js),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('DOM stability timeout')), timeoutMs),
-      ),
-    ]);
-  }
-
   private describeStepInstruction(step: Step): string {
     switch (step.type) {
       case 'step':
@@ -510,7 +339,7 @@ export class OrchestratorAgent {
       if (step.type === 'step') {
         await this.executeSingleStep(step.description, context, index, step);
       } else if (step.type === 'loop') {
-        await this.executeLoopStep(step, index);
+        await executeLoopStep(this.buildLoopDeps(step, index), step, index);
       } else if (step.type === 'conditional') {
         await this.executeConditionalStep(step, context, index);
       } else if (step.type === 'extract') {
@@ -525,6 +354,33 @@ export class OrchestratorAgent {
 
       this.assertNotAborted();
     }
+  }
+
+  private async requestCredentialHandoff(
+    request: CredentialHandoffRequest,
+    step: Step,
+    index: number,
+    instruction: string,
+  ): Promise<CredentialRequestResult> {
+    const handler = this.options.onCredentialRequest;
+    if (!handler) {
+      throw new Error('Credential handoff is unavailable in this environment.');
+    }
+
+    this.assertNotAborted();
+    const result = await handler({
+      reason: request.reason,
+      stepIndex: index,
+      stepType: step.type,
+      instruction,
+    });
+    this.assertNotAborted();
+
+    if (!result?.continued) {
+      throw new Error(result?.message ?? 'Credential handoff was not continued.');
+    }
+
+    return result;
   }
 
   private async executeNavigateStep(step: NavigateStep, index: number): Promise<void> {
@@ -623,7 +479,7 @@ export class OrchestratorAgent {
         ? `Context item: ${JSON.stringify(context.item)}\nInstruction: ${step.description}`
         : step.description;
 
-    await this.waitForPageReady();
+    await waitForPageReady(this.stagehand, undefined, this.assertNotAborted.bind(this));
 
     try {
       this.assertNotAborted();
@@ -820,38 +676,14 @@ export class OrchestratorAgent {
 
     let stepOutput: string | undefined;
 
-    const sessionId = this.stagehand.browserbaseSessionID ?? this.activeSessionId;
-    const liveViewUrl =
-      !this.options.localCdpUrl && sessionId ? `https://browserbase.com/sessions/${sessionId}` : '';
-
-    const tools = {
-      // request_login: tool({
-      //   description:
-      //     'Request manual login from the user. Use this when you encounter a login page or need authentication credentials. The user will manually log in via the browser session.',
-      //   execute: async ({ site, reason }) => {
-      //     console.log('\n' + '='.repeat(60));
-      //     console.log(`[LOGIN REQUIRED] ${site}`);
-      //     if (reason) console.log(`Reason: ${reason}`);
-      //     console.log(`\nPlease log in manually using the live browser view:`);
-      //     console.log(`${liveViewUrl}`);
-      //     console.log('='.repeat(60) + '\n');
-      //     await waitForUserInput('Press ENTER when you have completed the login...');
-      //     console.log('[ORCHESTRATOR] User confirmed login complete. Resuming workflow...\n');
-      //     return {
-      //       success: true,
-      //       message: 'User has completed manual login. You may now continue with the workflow.',
-      //     };
-      //   },
-      //   inputSchema: z.object({
-      //     site: z.string().describe('The name of the site or service that requires login'),
-      //     reason: z.string().optional().describe('Optional reason why login is needed'),
-      //   }),
-      // }),
-    };
+    const tools = createBrowserTabTools(this.stagehand, {
+      onRequestCredentials: (request) =>
+        this.requestCredentialHandoff(request, step, index, instruction),
+    });
 
     const agent = this.stagehand.agent({
       systemPrompt: buildSystemPrompt(this.extractedVariables, context),
-      tools: tools as AgentTools,
+      tools,
       stream: false,
       model: {
         modelName: this.resolveModels().agent,
@@ -868,7 +700,7 @@ export class OrchestratorAgent {
     try {
       const result = await agent.execute({
         instruction: instruction,
-        maxSteps: 30,
+        maxSteps: 50,
       });
 
       this.stepResults.push({
@@ -907,126 +739,25 @@ export class OrchestratorAgent {
     }
   }
 
-  private async extractLoopItems(step: LoopStep): Promise<any[]> {
-    if (!this.stagehand) throw new Error('Browser session not initialized');
-    if (!this.openai) throw new Error('LLM client not initialized');
-
-    const page = this.stagehand.context.activePage() || this.stagehand.context.pages()[0];
-    const goal = `List of ${step.description}`;
-
-    const result = await extractWithLlm({
-      llmClient: this.openai,
-      model: this.resolveModels().extract,
-      page,
-      dataExtractionGoal: goal,
-      skipValidation: true,
-      extractedVariables: this.extractedVariables,
-    });
-
-    const data = result.scraped_data;
-
-    // If already an array, return it
-    if (Array.isArray(data)) {
-      return data;
-    }
-
-    // If it's an object, find the first property that's an array
-    if (data && typeof data === 'object') {
-      const arrayValue = Object.values(data).find((val) => Array.isArray(val));
-      if (arrayValue) {
-        return arrayValue as any[];
-      }
-    }
-
-    return [];
-  }
-
-  private async executeLoopStep(step: LoopStep, index: number): Promise<void> {
-    if (!this.stagehand) throw new Error('Browser session not initialized');
-    if (!this.openai) throw new Error('LLM client not initialized');
-
-    console.log(`[ORCHESTRATOR] Starting loop: ${step.description}`);
-
-    this.assertNotAborted();
-
-    let totalProcessed = 0;
-    const maxIterations = 100;
-
-    // SAVE browser state at start
-    // const savedBrowserState = await this.captureBrowserState();
-
-    await this.waitForPageReady();
-
-    const items = await this.extractLoopItems(step);
-
-    console.log(items);
-    console.log(
-      `[ORCHESTRATOR] Found ${items.length} items on current page. Total processed: ${totalProcessed}`,
-    );
-
-    let loopSuccess = true;
-    let loopError: string | undefined;
-    try {
-      for (let i = 0; i < items.length && totalProcessed < maxIterations; i++) {
-        this.assertNotAborted();
-        const item = items[i];
-        console.log(`[ORCHESTRATOR] Processing item ${totalProcessed + 1}`);
-
-        this.emit({
-          type: 'loop:iteration:start',
-          step,
-          index,
-          iteration: i + 1,
-          totalItems: items.length,
-          item,
-        });
-
-        let iterationSuccess = true;
-        let iterationError: string | undefined;
-        try {
-          await this.executeSteps(step.steps, {
-            item,
-            itemIndex: i + 1,
-          });
-        } catch (error: any) {
-          iterationSuccess = false;
-          iterationError = error?.message ?? 'Iteration failed';
-        }
-        totalProcessed++;
-
-        this.emit({
-          type: 'loop:iteration:end',
-          step,
-          index,
-          iteration: i + 1,
-          totalItems: items.length,
-          success: iterationSuccess,
-          error: iterationError,
-        });
-
-        if (!iterationSuccess) {
-          throw new Error(iterationError);
-        }
-
-        // await this.restoreBrowserState(savedBrowserState);
-      }
-    } catch (error: any) {
-      loopSuccess = false;
-      loopError = error?.message ?? 'Loop failed';
-      console.log(error);
-      // await this.restoreBrowserState(savedBrowserState);
-    }
-
-    console.log(
-      `[ORCHESTRATOR] Loop complete: ${step.description}. Total items processed: ${totalProcessed}`,
-    );
-    this.emit({
-      type: 'step:end',
-      step,
-      index,
-      success: loopSuccess,
-      error: loopError,
-    });
+  private buildLoopDeps(loopStep: LoopStep, loopIndex: number): LoopDeps {
+    return {
+      stagehand: this.stagehand!,
+      openai: this.openai!,
+      models: this.resolveModels(),
+      openrouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
+      openrouterBaseUrl: OPENROUTER_BASE_URL,
+      providerOrder: DEFAULT_PROVIDER_ORDER,
+      emit: this.emit.bind(this),
+      assertNotAborted: this.assertNotAborted.bind(this),
+      executeSteps: this.executeSteps.bind(this),
+      requestCredentialHandoff: (request) =>
+        this.requestCredentialHandoff(
+          request,
+          loopStep,
+          loopIndex,
+          this.describeStepInstruction(loopStep),
+        ),
+    };
   }
 
   private formatLoopContext(context?: LoopContext): string {
@@ -1088,7 +819,10 @@ export class OrchestratorAgent {
     if (conditionMet === 'unsure') {
       const agent = this.stagehand.agent({
         systemPrompt: buildSystemPrompt(this.extractedVariables, context),
-        tools: {} as unknown as AgentTools,
+        tools: createBrowserTabTools(this.stagehand, {
+          onRequestCredentials: (request) =>
+            this.requestCredentialHandoff(request, step, index, this.describeStepInstruction(step)),
+        }),
         stream: false,
       });
 

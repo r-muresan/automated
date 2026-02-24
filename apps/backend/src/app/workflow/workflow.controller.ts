@@ -297,4 +297,16 @@ export class WorkflowController {
   async stopExecution(@Param('id') id: string): Promise<WorkflowExecutionCommandResponse> {
     return this.workflowExecutionService.stopWorkflow(id);
   }
+
+  @Post(':id/execution/continue')
+  @UseGuards(ClerkAuthGuard)
+  async continueExecution(
+    @Param('id') id: string,
+    @Body() body: { runId: string; requestId?: string },
+  ): Promise<WorkflowExecutionCommandResponse> {
+    if (!body?.runId) {
+      throw new BadRequestException('runId is required');
+    }
+    return this.workflowExecutionService.continueWorkflow(id, body.runId, body.requestId);
+  }
 }

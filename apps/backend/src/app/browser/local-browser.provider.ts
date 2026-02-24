@@ -13,6 +13,7 @@ import {
   BrowserSessionResult,
   InitSessionOptions,
   PageInfo,
+  SessionUploadFile,
 } from './browser-provider.interface';
 import { LocalStorageService } from '../storage/local-storage.service';
 
@@ -269,6 +270,10 @@ export class LocalBrowserProvider extends BrowserProvider {
   async connectForKeepalive(sessionId: string, _connectUrl?: string): Promise<BrowserHandle | null> {
     const session = this.sessions.get(sessionId);
     return session?.context.browser() ?? null;
+  }
+
+  async uploadSessionFile(_sessionId: string, _file: SessionUploadFile): Promise<void> {
+    throw new Error('File uploads are only supported for Browserbase sessions');
   }
 
   /** Get the debug port for a session (used by CDP proxy) */

@@ -1,7 +1,17 @@
 'use client';
 
 import { Box } from '@chakra-ui/react';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
+import {
+  ChangeEvent,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+} from 'react';
+import axios from 'axios';
+import { useUploadSessionFile } from '../../../hooks/api';
 
 const SCREENCAST_OPTIONS = {
   format: 'jpeg',
@@ -135,11 +145,17 @@ interface FrameNavigatedParams {
   };
 }
 
+interface FileChooserOpenedParams {
+  mode?: string;
+  backendNodeId?: number;
+}
+
 interface CdpMessage {
   id?: number;
   method?: string;
   params?: Record<string, unknown>;
   result?: Record<string, unknown>;
+  error?: { code?: number; message?: string };
 }
 
 export interface RemoteCdpPlayerRef {
@@ -148,6 +164,7 @@ export interface RemoteCdpPlayerRef {
 
 interface RemoteCdpPlayerProps {
   wsUrl: string;
+  sessionId: string | null;
   pageId: string;
   active: boolean;
   watchOnly?: boolean;
@@ -170,6 +187,14 @@ type PreventableEvent = {
 };
 
 type RenderMode = 'canvas' | 'offscreen';
+type FileChooserMode = 'single' | 'multiple';
+
+interface PendingFileChooser {
+  mode: FileChooserMode;
+  backendNodeId?: number;
+}
+
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 function decodeBase64Jpeg(data: string): Blob {
   const binary = window.atob(data);
@@ -215,9 +240,14 @@ function drawContainFrame(
 }
 
 export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerProps>(
-  ({ wsUrl, pageId, active, watchOnly = false, onFirstFrame }, ref) => {
+  ({ wsUrl, sessionId, pageId, active, watchOnly = false, onFirstFrame }, ref) => {
+    const uploadSessionFileMutation = useUploadSessionFile();
+
     const socketRef = useRef<WebSocket | null>(null);
     const overlayRef = useRef<HTMLDivElement | null>(null);
+    const uploadInputRef = useRef<HTMLInputElement | null>(null);
+    const pendingFileChooserRef = useRef<PendingFileChooser | null>(null);
+    const lastHandledChooserRef = useRef<{ backendNodeId: number; at: number } | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const canvasCtxRef = useRef<CanvasRenderingContext2D | null>(null);
     const offscreenCanvasRef = useRef<OffscreenCanvas | null>(null);
@@ -248,6 +278,22 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
     );
     activeRef.current = active;
 
+    const resetUploadInput = useCallback(() => {
+      const input = uploadInputRef.current;
+      if (!input) return;
+      input.value = '';
+    }, []);
+
+    const openLocalFilePicker = useCallback((chooser: PendingFileChooser) => {
+      const input = uploadInputRef.current;
+      if (!input) return;
+
+      pendingFileChooserRef.current = chooser;
+      input.multiple = chooser.mode === 'multiple';
+      input.value = '';
+      input.click();
+    }, []);
+
     const send = useCallback((method: string, params?: Record<string, unknown>) => {
       const socket = socketRef.current;
       if (!socket || socket.readyState !== WebSocket.OPEN) return null;
@@ -263,6 +309,105 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
       );
       return id;
     }, []);
+
+    const sendAndWait = useCallback(
+      async (method: string, params?: Record<string, unknown>) =>
+        new Promise<Record<string, unknown>>((resolve, reject) => {
+          const id = send(method, params);
+          if (id === null) {
+            reject(new Error(`CDP socket not connected for ${method}`));
+            return;
+          }
+
+          const timeoutId = window.setTimeout(() => {
+            pendingResponseHandlersRef.current.delete(id);
+            reject(new Error(`CDP command timed out: ${method}`));
+          }, 20000);
+
+          pendingResponseHandlersRef.current.set(id, (message) => {
+            window.clearTimeout(timeoutId);
+            if (message.error?.message) {
+              reject(new Error(message.error.message));
+              return;
+            }
+            resolve(message.result || {});
+          });
+        }),
+      [send],
+    );
+
+    const handleFileInputChange = useCallback(
+      async (event: ChangeEvent<HTMLInputElement>) => {
+        const input = event.currentTarget;
+        const files = input.files ? Array.from(input.files) : [];
+
+        if (!sessionId) {
+          console.error('[RemoteCdpPlayer] No active browser session for file upload');
+          resetUploadInput();
+          return;
+        }
+
+        if (!files.length) {
+          // User cancelled file picker.
+          pendingFileChooserRef.current = null;
+          resetUploadInput();
+          return;
+        }
+
+        const chooser = pendingFileChooserRef.current;
+        if (!chooser?.backendNodeId) {
+          console.error('[RemoteCdpPlayer] Missing backendNodeId for file chooser');
+          pendingFileChooserRef.current = null;
+          resetUploadInput();
+          return;
+        }
+
+        try {
+          for (const file of files) {
+            await uploadSessionFileMutation.mutateAsync({ sessionId, file });
+          }
+
+          // Browserbase stores uploaded files under /tmp/.uploads/<filename>.
+          const remoteFilePaths = files.map((file) => `/tmp/.uploads/${file.name}`);
+          await wait(250);
+          try {
+            await sendAndWait('DOM.setFileInputFiles', {
+              files: remoteFilePaths,
+              backendNodeId: chooser.backendNodeId,
+            });
+          } catch (bindError) {
+            const bindMessage =
+              bindError instanceof Error ? bindError.message : String(bindError || '');
+            if (/file not found/i.test(bindMessage)) {
+              // Remote upload propagation can be slightly delayed; retry once.
+              await wait(700);
+              await sendAndWait('DOM.setFileInputFiles', {
+                files: remoteFilePaths,
+                backendNodeId: chooser.backendNodeId,
+              });
+            } else {
+              throw bindError;
+            }
+          }
+
+          pendingFileChooserRef.current = null;
+          resetUploadInput();
+        } catch (error) {
+          const message = axios.isAxiosError(error)
+            ? (error.response?.data as { message?: string } | undefined)?.message ||
+              error.message ||
+              'Upload failed'
+            : error instanceof Error
+              ? error.message
+              : 'Upload failed';
+
+          console.error('[RemoteCdpPlayer] File upload failed:', message);
+          pendingFileChooserRef.current = null;
+          resetUploadInput();
+        }
+      },
+      [resetUploadInput, sendAndWait, sessionId, uploadSessionFileMutation],
+    );
 
     const requestCurrentUrl = useCallback(
       (reason: string) => {
@@ -591,6 +736,9 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
         send('Runtime.addBinding', { name: '__cdpEvent' });
         send('Page.addScriptToEvaluateOnNewDocument', { source: EVENT_TRACKING_SCRIPT });
         send('Runtime.evaluate', { expression: EVENT_TRACKING_SCRIPT });
+        if (!watchOnly) {
+          send('Page.setInterceptFileChooserDialog', { enabled: true });
+        }
 
         if (watchOnly) {
           startScreencast(true);
@@ -673,6 +821,36 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
           return;
         }
 
+        if (message.method === 'Page.fileChooserOpened' && !watchOnly) {
+          const params = (message.params || {}) as unknown as FileChooserOpenedParams;
+          if (!params.backendNodeId) {
+            // Ignore chooser events not tied to a concrete <input type="file"> node.
+            return;
+          }
+          if (pendingFileChooserRef.current) {
+            // Ignore duplicate chooser events while a picker is already open.
+            return;
+          }
+          const lastHandled = lastHandledChooserRef.current;
+          const now = Date.now();
+          if (
+            lastHandled &&
+            lastHandled.backendNodeId === params.backendNodeId &&
+            now - lastHandled.at < 1500
+          ) {
+            return;
+          }
+
+          const mode: FileChooserMode =
+            params.mode === 'selectMultiple' ? 'multiple' : 'single';
+          openLocalFilePicker({
+            mode,
+            backendNodeId: params.backendNodeId,
+          });
+          lastHandledChooserRef.current = { backendNodeId: params.backendNodeId, at: now };
+          return;
+        }
+
         if (message.method === 'Page.frameNavigated') {
           const params = (message.params || {}) as unknown as FrameNavigatedParams;
           const frame = params.frame;
@@ -741,6 +919,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
       wsUrl,
       setLatestScreencastFrame,
       focusOverlay,
+      openLocalFilePicker,
     ]);
 
     useEffect(() => {
@@ -751,6 +930,8 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
         destroyedRef.current = true;
         clearHeartbeat();
         stopScreencast();
+        pendingFileChooserRef.current = null;
+        resetUploadInput();
 
         if (reconnectTimeoutRef.current) {
           window.clearTimeout(reconnectTimeoutRef.current);
@@ -767,7 +948,7 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
         decodeInFlightRef.current = false;
         setLatestScreencastFrame(null);
       };
-    }, [clearHeartbeat, connect, stopScreencast, setLatestScreencastFrame]);
+    }, [clearHeartbeat, connect, stopScreencast, setLatestScreencastFrame, resetUploadInput]);
 
     useEffect(() => {
       if (watchOnly) {
@@ -901,6 +1082,12 @@ export const RemoteCdpPlayer = forwardRef<RemoteCdpPlayerRef, RemoteCdpPlayerPro
 
     return (
       <Box position="absolute" inset={0} bg="white" overflow="hidden">
+        <input
+          ref={uploadInputRef}
+          type="file"
+          style={{ display: 'none' }}
+          onChange={handleFileInputChange}
+        />
         <canvas
           ref={canvasRef}
           id="screencast"

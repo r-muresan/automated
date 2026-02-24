@@ -1,13 +1,154 @@
-import type { ZodTypeAny } from 'zod';
+import { z, type ZodTypeAny } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { LoopContext } from '../types';
 import OpenAI from 'openai';
+import { zodResponseFormat } from 'openai/helpers/zod';
 import {
   buildExtractInformationPrompt,
   ExtractInformationParams,
 } from './prompts/extract-information';
 
 const DEFAULT_MAX_TOKENS = 20000;
+
+// ---------------------------------------------------------------------------
+// Vision-only loop item discovery (no DOM, no page.evaluate)
+// ---------------------------------------------------------------------------
+
+export interface VisionItem {
+  /** Stable dedup key: JSON.stringify of the raw item object returned by the model */
+  fingerprint: string;
+  /** Structured properties extracted from the screenshot */
+  data: Record<string, any>;
+}
+
+export interface PaginationCheck {
+  hasMore: boolean;
+  /** What the CUA agent should do to expose the next batch */
+  action: 'scroll_down' | 'click_next' | 'click_load_more' | 'none';
+  /** Human-readable hint about which element to interact with */
+  selectorHint: string;
+}
+
+/**
+ * Pure vision-based item identification.
+ * Takes a base64 screenshot, asks the LLM to list all matching items
+ * currently visible. Returns each item with a stable fingerprint for dedup.
+ * No DOM access whatsoever.
+ */
+export async function identifyItemsFromVision(params: {
+  llmClient: OpenAI;
+  model: string;
+  screenshotDataUrl: string;
+  description: string;
+  knownFingerprints: Set<string>;
+}): Promise<VisionItem[]> {
+  const { llmClient, model, screenshotDataUrl, description, knownFingerprints } = params;
+
+  const itemsSchema = z.object({ items: z.array(z.record(z.string(), z.unknown())) });
+
+  const prompt = `You are analyzing a screenshot of a web page to find a list of items.
+
+Find ALL items matching this description: "${description}"
+
+Return a JSON object with an "items" array where each element is an object with the extracted properties.`;
+
+  const response = await llmClient.chat.completions.parse({
+    model,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: screenshotDataUrl, detail: 'high' } },
+        ],
+      },
+    ],
+    response_format: zodResponseFormat(itemsSchema, 'items_response'),
+  });
+
+  const parsed = response.choices[0]?.message?.parsed;
+
+  console.log({ parsed });
+
+  if (!parsed) {
+    console.warn('[VISION_LOOP] Empty parsed response from model');
+    return [];
+  }
+
+  const items: VisionItem[] = [];
+  for (const item of parsed.items) {
+    if (!item || typeof item !== 'object') continue;
+    const fingerprint = JSON.stringify(item);
+    if (knownFingerprints.has(fingerprint)) continue;
+    items.push({ fingerprint, data: item });
+  }
+
+  return items;
+}
+
+/**
+ * Pure vision-based pagination check.
+ * Looks at a screenshot and determines if more items are accessible
+ * via scrolling, "Next" button, or "Load More". No DOM access.
+ */
+export async function checkForMoreItemsFromVision(params: {
+  llmClient: OpenAI;
+  model: string;
+  screenshotDataUrl: string;
+  description: string;
+  totalProcessed: number;
+}): Promise<PaginationCheck> {
+  const { llmClient, model, screenshotDataUrl, description, totalProcessed } = params;
+
+  const prompt = `You are analyzing a screenshot of a web page.
+
+I am iterating through a list of: "${description}"
+I have processed ${totalProcessed} items so far.
+
+Determine if there are MORE items I haven't processed yet.
+
+Look for:
+1. A "Next" button, "Next Page", or numbered pagination (e.g. "2", "3", "›")
+2. A "Load More", "Show More", or "View More" button
+3. A scroll indicator showing content below the fold (scrollbar position, "↓ more results")
+4. Lazy-loaded content that appears when scrolling down
+
+Return ONLY a JSON object:
+{
+  "hasMore": boolean,
+  "action": "scroll_down" | "click_next" | "click_load_more" | "none",
+  "selectorHint": "brief description of the element to interact with, or empty string"
+}
+
+If hasMore is false, set action to "none" and selectorHint to "".`;
+
+  const response = await llmClient.chat.completions.create({
+    model,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: screenshotDataUrl, detail: 'high' } },
+        ],
+      },
+    ],
+    max_tokens: 300,
+  });
+
+  const raw = response.choices[0]?.message?.content ?? '';
+  try {
+    const parsed = parseJsonFromText(raw);
+    return {
+      hasMore: Boolean(parsed?.hasMore),
+      action: parsed?.action ?? 'none',
+      selectorHint: parsed?.selectorHint ?? '',
+    };
+  } catch {
+    console.warn('[VISION_LOOP] Failed to parse pagination check response:', raw.slice(0, 200));
+    return { hasMore: false, action: 'none', selectorHint: '' };
+  }
+}
 
 type SchemaMap = Record<string, string>;
 

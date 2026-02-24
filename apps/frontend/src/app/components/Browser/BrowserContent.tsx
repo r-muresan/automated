@@ -37,6 +37,7 @@ export interface BrowserContentRef {
 }
 
 interface BrowserContentProps {
+  sessionId: string | null;
   pages: Page[];
   activePageIndex: number;
   contentRef: RefObject<HTMLDivElement | null>;
@@ -51,6 +52,7 @@ interface BrowserContentProps {
 const BrowserContentComponent = forwardRef<BrowserContentRef, BrowserContentProps>(
   (
     {
+      sessionId,
       pages,
       activePageIndex,
       contentRef,
@@ -271,6 +273,7 @@ const BrowserContentComponent = forwardRef<BrowserContentRef, BrowserContentProp
                         <RemoteCdpPlayer
                           ref={(el) => setRemotePlayerRef(page.id, el)}
                           wsUrl={browserbaseWssParam}
+                          sessionId={sessionId}
                           pageId={page.id}
                           active={isPageActive}
                           watchOnly={readOnly}

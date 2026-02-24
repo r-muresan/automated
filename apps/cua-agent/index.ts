@@ -6,7 +6,13 @@ export {
   releaseBrowserbaseSession,
 } from './browserbase-session-limiter';
 export type { BrowserbaseSessionCreateLease } from './browserbase-session-limiter';
-export type { OrchestratorEvent, OrchestratorOptions, OrchestratorModels } from './types';
+export type {
+  OrchestratorEvent,
+  OrchestratorOptions,
+  OrchestratorModels,
+  CredentialRequest,
+  CredentialRequestResult,
+} from './types';
 export type {
   Workflow,
   Step,

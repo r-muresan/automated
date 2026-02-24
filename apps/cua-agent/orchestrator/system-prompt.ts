@@ -12,6 +12,9 @@ export function buildSystemPrompt(
   sections.push(
     `You are a helpful assistant that can use a web browser. Do not ask follow up questions, the user will trust your judgement.`,
   );
+  sections.push(
+    `If you hit a login, 2FA, CAPTCHA, passkey, or any credential gate that requires the user's secrets, call the tool "request_user_credentials" with a concise reason and wait.`,
+  );
 
   if (Object.keys(extractedVariables).length > 0) {
     sections.push('');
