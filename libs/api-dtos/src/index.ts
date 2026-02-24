@@ -45,6 +45,11 @@ export interface BrowserSessionRecordingResponse {
   error?: string;
 }
 
+export interface BrowserSessionUploadResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface InteractionPayload {
   id: string;
   type: string;

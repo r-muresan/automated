@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import axios from 'axios';
 import { chromium } from 'playwright-core';
+import { Browserbase, toFile } from '@browserbasehq/sdk';
 import {
   BrowserProvider,
   BrowserHandle,
@@ -8,6 +9,7 @@ import {
   BrowserSessionResult,
   InitSessionOptions,
   PageInfo,
+  SessionUploadFile,
 } from './browser-provider.interface';
 
 type BrowserbaseRegion = 'us-west-2' | 'us-east-1' | 'eu-central-1' | 'ap-southeast-1';
@@ -93,6 +95,7 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
   private readonly apiKey = process.env.BROWSERBASE_API_KEY;
   private readonly projectId = process.env.BROWSERBASE_PROJECT_ID;
   private readonly apiUrl = 'https://api.browserbase.com/v1';
+  private readonly client = this.apiKey ? new Browserbase({ apiKey: this.apiKey }) : null;
 
   async createSession(options: CreateBrowserSessionOptions): Promise<BrowserSessionResult> {
     const { colorScheme, width, height, contextId, timezone } = options;
@@ -236,6 +239,22 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
       );
       return null;
     }
+  }
+
+  async uploadSessionFile(sessionId: string, file: SessionUploadFile): Promise<void> {
+    if (!this.client) {
+      throw new Error('Browserbase API key is not configured');
+    }
+    if (!file?.buffer?.length) {
+      throw new Error('Uploaded file is empty');
+    }
+
+    const uploadFile = await toFile(file.buffer, file.originalname || 'upload.bin', {
+      type: file.mimetype || 'application/octet-stream',
+      lastModified: Date.now(),
+    });
+
+    await this.client.sessions.uploads.create(sessionId, { file: uploadFile });
   }
 
   async createContext(): Promise<string> {

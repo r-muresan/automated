@@ -11,6 +11,7 @@ import type {
   BrowserSessionPingResponse,
   BrowserSessionRecordingResponse,
   BrowserSessionStopResponse,
+  BrowserSessionUploadResponse,
   CreateWorkflowRequest,
   DeepgramTokenResponse,
   GenerateWorkflowFromInteractionsRequest,
@@ -198,6 +199,25 @@ export function useStopRecordingKeepalive() {
       const response = await axios.post<BrowserSessionRecordingResponse>(
         `${API_BASE}/browser-session/${sessionId}/recording/stop`,
         {},
+        { headers },
+      );
+      return response.data;
+    },
+  });
+}
+
+export function useUploadSessionFile() {
+  const getHeaders = useGetHeaders();
+
+  return useMutation({
+    mutationFn: async ({ sessionId, file }: { sessionId: string; file: File }) => {
+      const headers = await getHeaders();
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await axios.post<BrowserSessionUploadResponse>(
+        `${API_BASE}/browser-session/${sessionId}/upload`,
+        formData,
         { headers },
       );
       return response.data;

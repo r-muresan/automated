@@ -305,6 +305,7 @@ const BrowserContainerComponent = forwardRef<BrowserContainerRef, BrowserContain
           <BrowserContent
             ref={browserContentRef}
             key="browser-content"
+            sessionId={sessionId}
             pages={pages}
             activePageIndex={activePageIndex}
             contentRef={contentRef}

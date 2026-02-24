@@ -1,6 +1,11 @@
-import { Injectable, ForbiddenException, OnModuleInit } from '@nestjs/common';
+import { Injectable, ForbiddenException, OnModuleInit, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { BrowserProvider, BrowserHandle, PageInfo } from '../browser/browser-provider.interface';
+import {
+  BrowserProvider,
+  BrowserHandle,
+  PageInfo,
+  SessionUploadFile,
+} from '../browser/browser-provider.interface';
 import { BrowserbaseBrowserProvider } from '../browser/browserbase-browser.provider';
 import {
   acquireBrowserbaseSessionCreateLease,
@@ -323,6 +328,23 @@ export class BrowserSessionService implements OnModuleInit {
 
   isRecordingKeepaliveActive(sessionId: string): boolean {
     return this.activeRecordingSessions.has(sessionId);
+  }
+
+  async uploadSessionFile(sessionId: string, file: SessionUploadFile) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('A file is required');
+    }
+
+    try {
+      await this.browserProvider.uploadSessionFile(sessionId, file);
+      await this.updateLastUsed(sessionId).catch((err) =>
+        console.error('Error updating lastUsedAt after upload:', err),
+      );
+      return { success: true, message: 'File uploaded to browser session' };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to upload file';
+      throw new BadRequestException(message);
+    }
   }
 
   private async pingActiveRecordingSessions() {

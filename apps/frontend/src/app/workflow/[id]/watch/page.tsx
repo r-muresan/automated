@@ -43,6 +43,11 @@ export default function WatchWorkflowPage() {
   const contentRef = useRef<HTMLDivElement>(null);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const actionsRef = useRef(executionActions);
+  const pagesRef = useRef<BrowserbasePage[]>([]);
+  const activePageIndexRef = useRef(activePageIndex);
+  const frameCountsRef = useRef<Map<string, number>>(new Map());
+  const explicitActiveSignalRef = useRef(false);
+  const lastExplicitActiveAtRef = useRef(0);
 
   const sessionId = executionStatus?.sessionId || null;
   const pages: BrowserbasePage[] = debugInfo?.pages || [];
@@ -51,6 +56,14 @@ export default function WatchWorkflowPage() {
     executionStatus?.status === 'completed' ||
     executionStatus?.status === 'failed' ||
     executionStatus?.status === 'stopped';
+
+  useEffect(() => {
+    pagesRef.current = pages;
+  }, [pages]);
+
+  useEffect(() => {
+    activePageIndexRef.current = activePageIndex;
+  }, [activePageIndex]);
 
   // Reset active page index when pages change
   useEffect(() => {
@@ -74,26 +87,77 @@ export default function WatchWorkflowPage() {
     return () => clearInterval(interval);
   }, [sessionId, isRunning, refreshPagesMutation]);
 
-  // Auto-switch to the active tab by listening for screencast frame events.
-  // Chrome only sends frequent screencast frames to the foreground page, so
-  // when the agent switches tabs the new active page starts emitting frames.
+  // Follow the active browser tab signaled by the screencast player.
+  // Fallback to frame cadence if no explicit active-tab signal is available.
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isRunning) {
+      explicitActiveSignalRef.current = false;
+      lastExplicitActiveAtRef.current = 0;
+      frameCountsRef.current.clear();
+      return;
+    }
 
     const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type !== 'screencast:frame-received') return;
-      const framePageId = event.data.pageId;
-      if (!framePageId) return;
+      const payload = event.data as { type?: string; pageId?: string } | null;
+      if (!payload || typeof payload !== 'object') return;
 
-      const idx = pages.findIndex((p) => p.id === framePageId);
-      if (idx !== -1 && idx !== activePageIndex) {
-        setActivePageIndex(idx);
+      const pageId = payload.pageId;
+      if (!pageId) return;
+
+      if (payload.type === 'screencast:active-page') {
+        explicitActiveSignalRef.current = true;
+        lastExplicitActiveAtRef.current = Date.now();
+        const idx = pagesRef.current.findIndex((p) => p.id === pageId);
+        if (idx !== -1) {
+          setActivePageIndex((prev) => (prev === idx ? prev : idx));
+        }
+        return;
+      }
+
+      if (payload.type === 'screencast:frame-received' && !explicitActiveSignalRef.current) {
+        const counts = frameCountsRef.current;
+        counts.set(pageId, (counts.get(pageId) ?? 0) + 1);
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [isRunning, pages, activePageIndex, setActivePageIndex]);
+  }, [isRunning]);
+
+  useEffect(() => {
+    if (!isRunning) return;
+
+    const interval = window.setInterval(() => {
+      const explicitSignalFresh =
+        explicitActiveSignalRef.current && Date.now() - lastExplicitActiveAtRef.current < 5000;
+      if (explicitSignalFresh) return;
+
+      explicitActiveSignalRef.current = false;
+
+      const counts = frameCountsRef.current;
+      if (counts.size === 0) return;
+
+      const currentPageId = pagesRef.current[activePageIndexRef.current]?.id;
+      let selectedPageId = currentPageId ?? '';
+      let highestCount = currentPageId ? counts.get(currentPageId) ?? 0 : 0;
+
+      counts.forEach((count, pageId) => {
+        if (count > highestCount) {
+          highestCount = count;
+          selectedPageId = pageId;
+        }
+      });
+      counts.clear();
+
+      if (!selectedPageId) return;
+      const idx = pagesRef.current.findIndex((p) => p.id === selectedPageId);
+      if (idx !== -1) {
+        setActivePageIndex((prev) => (prev === idx ? prev : idx));
+      }
+    }, 1200);
+
+    return () => window.clearInterval(interval);
+  }, [isRunning]);
 
   const handleStopClick = () => {
     stopExecution.mutate(workflowId);

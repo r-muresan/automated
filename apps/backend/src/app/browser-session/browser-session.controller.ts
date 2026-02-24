@@ -1,8 +1,20 @@
-import { Body, Controller, Delete, Get, Headers, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  Param,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { BrowserSessionService } from './browser-session.service';
 import { PrismaService } from '../prisma.service';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type {
   BrowserSessionCreateRequest,
   BrowserSessionCreateResponse,
@@ -10,6 +22,7 @@ import type {
   BrowserSessionPingResponse,
   BrowserSessionRecordingResponse,
   BrowserSessionStopResponse,
+  BrowserSessionUploadResponse,
 } from '@automated/api-dtos';
 
 @Controller('browser-session')
@@ -98,6 +111,16 @@ export class BrowserSessionController {
   ): Promise<BrowserSessionRecordingResponse> {
     console.log(`[CONTROLLER] Stopping recording keepalive for session: ${sessionId}`);
     return this.browserSessionService.stopRecordingKeepalive(sessionId);
+  }
+
+  @Post(':sessionId/upload')
+  @UseGuards(ClerkAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadSessionFile(
+    @Param('sessionId') sessionId: string,
+    @UploadedFile() file: { buffer: Buffer; originalname: string; mimetype?: string; size?: number },
+  ): Promise<BrowserSessionUploadResponse> {
+    return this.browserSessionService.uploadSessionFile(sessionId, file);
   }
 
   @Post(':sessionId/stop')

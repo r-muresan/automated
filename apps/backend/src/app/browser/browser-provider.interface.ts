@@ -36,6 +36,13 @@ export interface InitSessionOptions {
   connectUrl?: string;
 }
 
+export interface SessionUploadFile {
+  buffer: Buffer;
+  originalname: string;
+  mimetype?: string;
+  size?: number;
+}
+
 export abstract class BrowserProvider {
   abstract createSession(options: CreateBrowserSessionOptions): Promise<BrowserSessionResult>;
   abstract stopSession(sessionId: string): Promise<boolean>;
@@ -43,4 +50,5 @@ export abstract class BrowserProvider {
   abstract getDebugInfo(sessionId: string): Promise<any>;
   abstract initializeSession(sessionId: string, options?: InitSessionOptions): Promise<PageInfo[]>;
   abstract connectForKeepalive(sessionId: string, connectUrl?: string): Promise<BrowserHandle | null>;
+  abstract uploadSessionFile(sessionId: string, file: SessionUploadFile): Promise<void>;
 }
