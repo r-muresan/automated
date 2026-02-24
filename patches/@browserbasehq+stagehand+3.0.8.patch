@@ -74,7 +74,7 @@ index a0120e7..42a1939 100644
 +      { type: "function", function: { name: "click", description: "Click at (x, y) on the screen. Use for buttons, links, inputs.", parameters: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, button: { type: "string", enum: ["left", "right", "middle"] } }, required: ["x", "y"] } } },
 +      { type: "function", function: { name: "double_click", description: "Double-click at (x, y).", parameters: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } }, required: ["x", "y"] } } },
 +      { type: "function", function: { name: "type", description: "Type text into the focused element.", parameters: { type: "object", properties: { text: { type: "string" } }, required: ["text"] } } },
-+      { type: "function", function: { name: "keypress", description: "Press keyboard key(s). E.g. ['Enter'], ['Control','a'], ['Tab'].", parameters: { type: "object", properties: { keys: { type: "array", items: { type: "string" } } }, required: ["keys"] } } },
++      { type: "function", function: { name: "keypress", description: "Press one keyboard key/chord. E.g. 'Enter', 'Control+C', 'Tab'.", parameters: { type: "object", properties: { key: { type: "string" } }, required: ["key"] } } },
 +      { type: "function", function: { name: "scroll", description: "Scroll at position (x,y). scroll_y positive = down, negative = up.", parameters: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, scroll_x: { type: "number" }, scroll_y: { type: "number" } }, required: ["x", "y", "scroll_y"] } } },
 +      { type: "function", function: { name: "move", description: "Move mouse to (x, y) to hover.", parameters: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } }, required: ["x", "y"] } } },
 +      { type: "function", function: { name: "goto", description: "Navigate browser to a URL.", parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } } },
@@ -155,7 +155,7 @@ index a0120e7..42a1939 100644
 +            if (toolName === "click") { const c = this.normalizeCoordinates(args.x, args.y); action = { type: "click", x: c.x, y: c.y, button: args.button || "left" }; }
 +            else if (toolName === "double_click") { const c = this.normalizeCoordinates(args.x, args.y); action = { type: "click", x: c.x, y: c.y, button: "left", clickCount: 2 }; }
 +            else if (toolName === "type") action = { type: "type", text: args.text };
-+            else if (toolName === "keypress") action = { type: "keypress", keys: args.keys };
++            else if (toolName === "keypress") action = { type: "keypress", keys: args.key };
 +            else if (toolName === "scroll") { const c = this.normalizeCoordinates(args.x, args.y); action = { type: "scroll", x: c.x, y: c.y, scroll_x: args.scroll_x || 0, scroll_y: args.scroll_y }; }
 +            else if (toolName === "move") { const c = this.normalizeCoordinates(args.x, args.y); action = { type: "move", x: c.x, y: c.y }; }
 +            else if (toolName === "goto") action = { type: "goto", url: args.url };
