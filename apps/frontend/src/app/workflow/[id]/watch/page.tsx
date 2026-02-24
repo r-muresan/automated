@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useOptionalAuth, clerkEnabled } from '../../../../providers/auth-provider';
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   API_BASE,
@@ -10,14 +10,72 @@ import {
   useWorkflowExecutionActions,
   useSessionDebug,
   useStopWorkflowExecution,
+  useContinueWorkflowExecution,
   useRefreshPages,
   useWorkflow,
 } from '../../../../hooks/api';
 import { Navbar } from '../../../components/Navbar';
 import { BrowserContainer } from '../../../components/Browser/BrowserContainer';
-import { WorkflowActionsList } from '../../../components/WorkflowActionsList';
+import {
+  WorkflowActionsList,
+  type PendingCredentialRequestView,
+} from '../../../components/WorkflowActionsList';
 import { Box, VStack, HStack, Heading, Text, Spinner, Button } from '@chakra-ui/react';
-import type { BrowserbasePage } from '@automated/api-dtos';
+import type { BrowserbasePage, WorkflowAction } from '@automated/api-dtos';
+
+interface PendingCredentialRequestState {
+  requestId: string;
+  stepIndex?: number;
+}
+
+const getPendingCredentialRequest = (
+  actions: WorkflowAction[],
+): PendingCredentialRequestState | null => {
+  const sortedActions = actions
+    .map((action, index) => ({ action, index }))
+    .sort(
+      (left, right) =>
+        new Date(left.action.timestamp).getTime() - new Date(right.action.timestamp).getTime() ||
+        left.index - right.index,
+    )
+    .map(({ action }) => action);
+
+  let pending: PendingCredentialRequestState | null = null;
+
+  for (const action of sortedActions) {
+    const stepIndex =
+      typeof action.data?.stepIndex === 'number' ? action.data.stepIndex : undefined;
+
+    if (action.eventType === 'credential:request') {
+      pending = {
+        requestId: String(action.data?.requestId ?? action.id),
+        stepIndex,
+      };
+      continue;
+    }
+
+    if (action.eventType === 'credential:continue') {
+      if (!pending) continue;
+      const requestId =
+        typeof action.data?.requestId === 'string' ? action.data.requestId : undefined;
+      if (!requestId || requestId === pending.requestId) {
+        pending = null;
+      }
+      continue;
+    }
+
+    if (
+      action.eventType === 'step:end' &&
+      pending &&
+      typeof stepIndex === 'number' &&
+      pending.stepIndex === stepIndex
+    ) {
+      pending = null;
+    }
+  }
+
+  return pending;
+};
 
 export default function WatchWorkflowPage() {
   const params = useParams();
@@ -36,6 +94,7 @@ export default function WatchWorkflowPage() {
   const actionsReady = !actionsLoading;
   const { data: debugInfo } = useSessionDebug(executionStatus?.sessionId || null);
   const stopExecution = useStopWorkflowExecution();
+  const continueExecution = useContinueWorkflowExecution();
   const refreshPagesMutation = useRefreshPages();
   const { data: workflow } = useWorkflow(workflowId);
 
@@ -52,6 +111,11 @@ export default function WatchWorkflowPage() {
   const sessionId = executionStatus?.sessionId || null;
   const pages: BrowserbasePage[] = debugInfo?.pages || [];
   const isRunning = executionStatus?.status === 'running';
+  const pendingCredentialRequest = useMemo(
+    () => getPendingCredentialRequest(executionActions),
+    [executionActions],
+  );
+  const canUserControlBrowser = isRunning && !!pendingCredentialRequest;
   const isFinished =
     executionStatus?.status === 'completed' ||
     executionStatus?.status === 'failed' ||
@@ -162,6 +226,18 @@ export default function WatchWorkflowPage() {
   const handleStopClick = () => {
     stopExecution.mutate(workflowId);
   };
+
+  const handleContinueExecution = useCallback(
+    (request: PendingCredentialRequestView) => {
+      if (!runId) return;
+      continueExecution.mutate({
+        workflowId,
+        runId,
+        requestId: request.requestId,
+      });
+    },
+    [continueExecution, runId, workflowId],
+  );
 
   const handleRefreshPages = useCallback(
     (sid: string) => {
@@ -323,7 +399,7 @@ export default function WatchWorkflowPage() {
               handleCloseTab={handleCloseTab}
               emptyState="skeleton"
               showLoadSkeleton={false}
-              readOnly={true}
+              readOnly={!canUserControlBrowser}
               freeze={isFinished}
               cdpWsUrlTemplate={debugInfo?.cdpWsUrlTemplate as string | undefined}
             />
@@ -334,7 +410,16 @@ export default function WatchWorkflowPage() {
                 Loading actions...
               </Text>
             ) : (
-              <WorkflowActionsList actions={executionActions} workflowTitle={workflow?.title} />
+              <WorkflowActionsList
+                actions={executionActions}
+                workflowTitle={workflow?.title}
+                onContinueExecution={handleContinueExecution}
+                continuingRequestId={
+                  continueExecution.variables?.requestId && continueExecution.isPending
+                    ? continueExecution.variables.requestId
+                    : null
+                }
+              />
             )}
           </Box>
         </HStack>

@@ -6,6 +6,11 @@ import {
   checkForMoreItemsFromVision,
   type VisionItem,
 } from './extraction';
+import {
+  createBrowserTabTools,
+  type CredentialHandoffRequest,
+  type CredentialHandoffResult,
+} from './agent-tools';
 
 // ---------------------------------------------------------------------------
 // Dependency contract — everything the loop needs from the orchestrator
@@ -21,6 +26,11 @@ export interface LoopDeps {
   emit: (event: OrchestratorEvent) => void;
   assertNotAborted: () => void;
   executeSteps: (steps: Step[], context?: LoopContext) => Promise<void>;
+  requestCredentialHandoff?: (
+    request: CredentialHandoffRequest,
+    step: LoopStep,
+    index: number,
+  ) => Promise<CredentialHandoffResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +74,8 @@ export async function waitForPageSettled(
 
 async function navigateToNextBatch(
   deps: LoopDeps,
+  loopStep: LoopStep,
+  loopIndex: number,
   action: string,
   selectorHint: string,
   description: string,
@@ -79,11 +91,20 @@ async function navigateToNextBatch(
     `Navigate to see more "${description}" items.${selectorHint ? ` Look for: ${selectorHint}` : ''}`;
 
   console.log(`[VISION_LOOP] Navigating to next batch: ${instruction}`);
+  const requestCredentialHandoff = deps.requestCredentialHandoff;
 
   const agent = deps.stagehand.agent({
     systemPrompt: `You are navigating a web page to reveal more list items.
 Perform exactly the action described. Do not do anything else.`,
-    tools: {} as any,
+    tools: createBrowserTabTools(
+      deps.stagehand,
+      requestCredentialHandoff
+        ? {
+            onRequestCredentials: (request) =>
+              requestCredentialHandoff(request, loopStep, loopIndex),
+          }
+        : undefined,
+    ),
     stream: false,
     model: {
       modelName: deps.models.agent,
@@ -239,6 +260,8 @@ export async function executeLoopStep(
       // ── 5. Navigate to next batch via CUA agent (vision + tools) ────────
       await navigateToNextBatch(
         deps,
+        step,
+        index,
         pagination.action,
         pagination.selectorHint,
         step.description,

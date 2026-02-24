@@ -215,7 +215,13 @@ export type WorkflowExecutionStatusesResponse = Record<string, WorkflowExecution
 
 export type WorkflowRunsResponse = Record<string, WorkflowRunSummary | null>;
 
-export type WorkflowActionEventType = 'step:start' | 'step:end' | 'loop:iteration:start' | 'loop:iteration:end';
+export type WorkflowActionEventType =
+  | 'step:start'
+  | 'step:end'
+  | 'loop:iteration:start'
+  | 'loop:iteration:end'
+  | 'credential:request'
+  | 'credential:continue';
 
 export interface WorkflowActionData {
   stepIndex?: number;
@@ -230,6 +236,10 @@ export interface WorkflowActionData {
   outputExtension?: string;
   savedFileIndex?: number;
   fallback?: boolean;
+  requestId?: string;
+  reason?: string;
+  buttonLabel?: string;
+  continued?: boolean;
   [key: string]: any;
 }
 

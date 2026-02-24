@@ -116,6 +116,19 @@ export interface BrowserState {
   activeTabIndex: number;
 }
 
+export interface CredentialRequest {
+  reason: string;
+  stepIndex?: number;
+  stepType?: Step['type'];
+  instruction?: string;
+}
+
+export interface CredentialRequestResult {
+  continued: boolean;
+  message?: string;
+  requestId?: string;
+}
+
 // --- Orchestrator Events ---
 
 export type OrchestratorEvent =
@@ -149,6 +162,7 @@ export interface OrchestratorModels {
 
 export interface OrchestratorOptions {
   onEvent?: (event: OrchestratorEvent) => void;
+  onCredentialRequest?: (request: CredentialRequest) => Promise<CredentialRequestResult>;
   models?: OrchestratorModels;
   browserbaseProjectId?: string;
   browserbaseContextId?: string;

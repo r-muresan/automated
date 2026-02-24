@@ -1,7 +1,6 @@
 import * as dotenv from 'dotenv';
 import OpenAI from 'openai';
-import { Stagehand, type AgentTools } from '@browserbasehq/stagehand';
-import { tool } from 'ai';
+import { Stagehand } from '@browserbasehq/stagehand';
 import { z } from 'zod';
 import type {
   Workflow,
@@ -20,12 +19,14 @@ import type {
   TabState,
   OrchestratorOptions,
   OrchestratorEvent,
+  CredentialRequestResult,
 } from '../types';
 
 import { AGENT_TIMEOUT_MS } from './constants';
-import { withTimeout, waitForUserInput, DEFAULT_PROVIDER_ORDER } from './utils';
+import { withTimeout, DEFAULT_PROVIDER_ORDER } from './utils';
 import { LOADING_SELECTORS, getDomStabilityJs } from './page-scripts';
 import { buildSystemPrompt } from './system-prompt';
+import { createBrowserTabTools, type CredentialHandoffRequest } from './agent-tools';
 import { extractWithLlm, normalizeLoopItems, parseSchemaMap } from './extraction';
 import { executeLoopStep, type LoopDeps } from './loop';
 import {
@@ -511,7 +512,7 @@ export class OrchestratorAgent {
       if (step.type === 'step') {
         await this.executeSingleStep(step.description, context, index, step);
       } else if (step.type === 'loop') {
-        await executeLoopStep(this.buildLoopDeps(), step, index);
+        await executeLoopStep(this.buildLoopDeps(step, index), step, index);
       } else if (step.type === 'conditional') {
         await this.executeConditionalStep(step, context, index);
       } else if (step.type === 'extract') {
@@ -526,6 +527,33 @@ export class OrchestratorAgent {
 
       this.assertNotAborted();
     }
+  }
+
+  private async requestCredentialHandoff(
+    request: CredentialHandoffRequest,
+    step: Step,
+    index: number,
+    instruction: string,
+  ): Promise<CredentialRequestResult> {
+    const handler = this.options.onCredentialRequest;
+    if (!handler) {
+      throw new Error('Credential handoff is unavailable in this environment.');
+    }
+
+    this.assertNotAborted();
+    const result = await handler({
+      reason: request.reason,
+      stepIndex: index,
+      stepType: step.type,
+      instruction,
+    });
+    this.assertNotAborted();
+
+    if (!result?.continued) {
+      throw new Error(result?.message ?? 'Credential handoff was not continued.');
+    }
+
+    return result;
   }
 
   private async executeNavigateStep(step: NavigateStep, index: number): Promise<void> {
@@ -821,38 +849,14 @@ export class OrchestratorAgent {
 
     let stepOutput: string | undefined;
 
-    const sessionId = this.stagehand.browserbaseSessionID ?? this.activeSessionId;
-    const liveViewUrl =
-      !this.options.localCdpUrl && sessionId ? `https://browserbase.com/sessions/${sessionId}` : '';
-
-    const tools = {
-      // request_login: tool({
-      //   description:
-      //     'Request manual login from the user. Use this when you encounter a login page or need authentication credentials. The user will manually log in via the browser session.',
-      //   execute: async ({ site, reason }) => {
-      //     console.log('\n' + '='.repeat(60));
-      //     console.log(`[LOGIN REQUIRED] ${site}`);
-      //     if (reason) console.log(`Reason: ${reason}`);
-      //     console.log(`\nPlease log in manually using the live browser view:`);
-      //     console.log(`${liveViewUrl}`);
-      //     console.log('='.repeat(60) + '\n');
-      //     await waitForUserInput('Press ENTER when you have completed the login...');
-      //     console.log('[ORCHESTRATOR] User confirmed login complete. Resuming workflow...\n');
-      //     return {
-      //       success: true,
-      //       message: 'User has completed manual login. You may now continue with the workflow.',
-      //     };
-      //   },
-      //   inputSchema: z.object({
-      //     site: z.string().describe('The name of the site or service that requires login'),
-      //     reason: z.string().optional().describe('Optional reason why login is needed'),
-      //   }),
-      // }),
-    };
+    const tools = createBrowserTabTools(this.stagehand, {
+      onRequestCredentials: (request) =>
+        this.requestCredentialHandoff(request, step, index, instruction),
+    });
 
     const agent = this.stagehand.agent({
       systemPrompt: buildSystemPrompt(this.extractedVariables, context),
-      tools: tools as AgentTools,
+      tools,
       stream: false,
       model: {
         modelName: this.resolveModels().agent,
@@ -869,7 +873,7 @@ export class OrchestratorAgent {
     try {
       const result = await agent.execute({
         instruction: instruction,
-        maxSteps: 30,
+        maxSteps: 50,
       });
 
       this.stepResults.push({
@@ -908,7 +912,7 @@ export class OrchestratorAgent {
     }
   }
 
-  private buildLoopDeps(): LoopDeps {
+  private buildLoopDeps(loopStep: LoopStep, loopIndex: number): LoopDeps {
     return {
       stagehand: this.stagehand!,
       openai: this.openai!,
@@ -919,6 +923,13 @@ export class OrchestratorAgent {
       emit: this.emit.bind(this),
       assertNotAborted: this.assertNotAborted.bind(this),
       executeSteps: this.executeSteps.bind(this),
+      requestCredentialHandoff: (request) =>
+        this.requestCredentialHandoff(
+          request,
+          loopStep,
+          loopIndex,
+          this.describeStepInstruction(loopStep),
+        ),
     };
   }
 
@@ -981,7 +992,15 @@ export class OrchestratorAgent {
     if (conditionMet === 'unsure') {
       const agent = this.stagehand.agent({
         systemPrompt: buildSystemPrompt(this.extractedVariables, context),
-        tools: {} as unknown as AgentTools,
+        tools: createBrowserTabTools(this.stagehand, {
+          onRequestCredentials: (request) =>
+            this.requestCredentialHandoff(
+              request,
+              step,
+              index,
+              this.describeStepInstruction(step),
+            ),
+        }),
         stream: false,
       });
 

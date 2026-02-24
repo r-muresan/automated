@@ -581,6 +581,36 @@ export function useStopWorkflowExecution() {
   });
 }
 
+export function useContinueWorkflowExecution() {
+  const queryClient = useQueryClient();
+  const getHeaders = useGetHeaders();
+
+  return useMutation({
+    mutationFn: async ({
+      workflowId,
+      runId,
+      requestId,
+    }: {
+      workflowId: string;
+      runId: string;
+      requestId?: string;
+    }) => {
+      const headers = await getHeaders();
+      const response = await axios.post<WorkflowExecutionCommandResponse>(
+        `${API_BASE}/workflows/${workflowId}/execution/continue`,
+        { runId, requestId },
+        { headers },
+      );
+      return response.data;
+    },
+    onSuccess: (_, { workflowId, runId }) => {
+      queryClient.invalidateQueries({ queryKey: ['workflow-execution-status', workflowId] });
+      queryClient.invalidateQueries({ queryKey: ['workflow-execution-actions', workflowId, runId] });
+      queryClient.invalidateQueries({ queryKey: ['workflow-execution-statuses'] });
+    },
+  });
+}
+
 // Settings Hooks
 
 export function useGetSettings() {
