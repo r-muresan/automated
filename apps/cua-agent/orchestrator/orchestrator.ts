@@ -24,7 +24,7 @@ import type {
 
 import { AGENT_TIMEOUT_MS } from './constants';
 import { withTimeout, DEFAULT_PROVIDER_ORDER } from './utils';
-import { LOADING_SELECTORS, getDomStabilityJs } from './page-scripts';
+import { waitForPageReady } from './page-ready';
 import { buildSystemPrompt } from './system-prompt';
 import { createBrowserTabTools, type CredentialHandoffRequest } from './agent-tools';
 import { extractWithLlm, normalizeLoopItems, parseSchemaMap } from './extraction';
@@ -230,7 +230,7 @@ export class OrchestratorAgent {
     try {
       this.stagehand = new Stagehand({
         env: 'BROWSERBASE',
-        verbose: 2,
+        verbose: 1,
         model: {
           modelName: models.extract,
           apiKey: process.env.OPENROUTER_API_KEY,
@@ -302,179 +302,6 @@ export class OrchestratorAgent {
    * 2. Network idle (no pending requests)
    * 3. DOM stability (no significant mutations)
    */
-  private async waitForPageReady(options?: {
-    networkIdleTimeoutMs?: number;
-    loadingIndicatorTimeoutMs?: number;
-    domStableMs?: number;
-    domStabilityTimeoutMs?: number;
-  }): Promise<void> {
-    if (!this.stagehand) return;
-
-    this.assertNotAborted();
-    const {
-      networkIdleTimeoutMs = 3000,
-      loadingIndicatorTimeoutMs = 5000,
-      domStableMs = 300,
-      domStabilityTimeoutMs = 3000,
-    } = options ?? {};
-
-    const totalStartTime = Date.now();
-    const page = this.stagehand.context.activePage();
-    if (!page) return;
-
-    // 1. Wait for loading indicators to disappear
-    let loadingIndicatorResult = 'success';
-    const loadingStart = Date.now();
-    try {
-      await this.waitForLoadingIndicatorsGone(page, loadingIndicatorTimeoutMs);
-    } catch (error: any) {
-      if (error.message?.includes('timeout') || error.name === 'TimeoutError') {
-        loadingIndicatorResult = 'timeout';
-        console.log('[PAGE_READY] Loading indicator timeout - proceeding');
-      } else {
-        loadingIndicatorResult = 'error';
-        console.log('[PAGE_READY] Loading indicator check failed - proceeding');
-      }
-    }
-    const loadingDuration = Date.now() - loadingStart;
-
-    // 2. Wait for network idle
-    // let networkIdleResult = 'success';
-    // const networkStart = Date.now();
-    // try {
-    //   await page.waitForLoadState('networkidle', networkIdleTimeoutMs);
-    // } catch (error: any) {
-    //   if (error.message?.includes('timeout') || error.name === 'TimeoutError') {
-    //     networkIdleResult = 'timeout';
-    //     console.log('[PAGE_READY] Network idle timeout - proceeding');
-    //   } else {
-    //     networkIdleResult = 'error';
-    //   }
-    // }
-    // const networkDuration = Date.now() - networkStart;
-
-    // 3. Wait for DOM to stabilize
-    let domStabilityResult = 'success';
-    const domStart = Date.now();
-    try {
-      await this.waitForDomStable(page, domStableMs, domStabilityTimeoutMs);
-    } catch (error: any) {
-      if (error.message?.includes('timeout') || error.name === 'TimeoutError') {
-        domStabilityResult = 'timeout';
-        console.log('[PAGE_READY] DOM stability timeout - proceeding');
-      } else {
-        domStabilityResult = 'error';
-        console.log('[PAGE_READY] DOM stability check failed - proceeding');
-      }
-    }
-    const domDuration = Date.now() - domStart;
-
-    const totalDuration = Date.now() - totalStartTime;
-    console.log(
-      `[PAGE_READY] Complete in ${totalDuration}ms (loading: ${loadingDuration}ms/${loadingIndicatorResult}, dom: ${domDuration}ms/${domStabilityResult})`,
-    );
-  }
-
-  private async waitForLoadingIndicatorsGone(page: any, timeoutMs: number): Promise<void> {
-    const startTime = Date.now();
-
-    // ARIA selectors are trustworthy and don't need animation check
-    const ariaSelectors = new Set([
-      '[role="progressbar"]',
-      '[role="status"][aria-busy="true"]',
-      '[aria-busy="true"]',
-      '[aria-live="polite"][aria-busy="true"]',
-    ]);
-
-    while (Date.now() - startTime < timeoutMs) {
-      let foundSelector: string | null = null;
-      let foundInfo = '';
-
-      for (const selector of LOADING_SELECTORS) {
-        const requireAnimation = !ariaSelectors.has(selector);
-        try {
-          // Use Playwright's native locator for proper visibility detection
-          // (checks ancestor visibility, clip-path, overflow, etc.)
-          const locator = page.locator(selector);
-          const count = await locator.count();
-
-          for (let i = 0; i < count; i++) {
-            const el = locator.nth(i);
-            const visible = await el.isVisible().catch(() => false);
-            if (!visible) continue;
-
-            // Get element info via elementHandle.evaluate (returns values properly)
-            const info = await el
-              .evaluate((node: Element) => {
-                const style = window.getComputedStyle(node);
-                const rect = node.getBoundingClientRect();
-                const cn = node.className;
-                const className = typeof cn === 'string' ? cn : '';
-                return {
-                  tag: node.tagName.toLowerCase(),
-                  className,
-                  id: node.id || '',
-                  width: Math.round(rect.width),
-                  height: Math.round(rect.height),
-                  animationName: style.animationName,
-                  opacity: style.opacity,
-                };
-              })
-              .catch(() => null);
-
-            if (!info) continue;
-
-            // Skip tiny elements
-            if (info.width < 4 && info.height < 4) continue;
-
-            // Skip completed/inactive states
-            const lcClass = info.className.toLowerCase();
-            if (
-              lcClass.includes('complete') ||
-              lcClass.includes('done') ||
-              lcClass.includes('finished') ||
-              lcClass.includes('hidden') ||
-              lcClass.includes('inactive') ||
-              lcClass.includes('stopped')
-            )
-              continue;
-
-            // For class-based selectors, require CSS animation
-            if (requireAnimation) {
-              const hasAnimation = info.animationName !== 'none' && info.animationName !== '';
-              if (!hasAnimation) continue;
-            }
-
-            foundSelector = selector;
-            foundInfo = `tag=${info.tag} class="${info.className}" id="${info.id}" size=${info.width}x${info.height} animation=${info.animationName}`;
-            break;
-          }
-        } catch {
-          // selector not supported or page navigated
-        }
-        if (foundSelector) break;
-      }
-
-      if (!foundSelector) {
-        return;
-      }
-
-      console.log(`[loading-indicator] Waiting for: "${foundSelector}" — ${foundInfo}`);
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    throw new Error('Loading indicator timeout');
-  }
-
-  private async waitForDomStable(page: any, stableMs: number, timeoutMs: number): Promise<void> {
-    const js = getDomStabilityJs(stableMs);
-    await Promise.race([
-      page.evaluate(js),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('DOM stability timeout')), timeoutMs),
-      ),
-    ]);
-  }
-
   private describeStepInstruction(step: Step): string {
     switch (step.type) {
       case 'step':
@@ -652,7 +479,7 @@ export class OrchestratorAgent {
         ? `Context item: ${JSON.stringify(context.item)}\nInstruction: ${step.description}`
         : step.description;
 
-    await this.waitForPageReady();
+    await waitForPageReady(this.stagehand, undefined, this.assertNotAborted.bind(this));
 
     try {
       this.assertNotAborted();
@@ -994,12 +821,7 @@ export class OrchestratorAgent {
         systemPrompt: buildSystemPrompt(this.extractedVariables, context),
         tools: createBrowserTabTools(this.stagehand, {
           onRequestCredentials: (request) =>
-            this.requestCredentialHandoff(
-              request,
-              step,
-              index,
-              this.describeStepInstruction(step),
-            ),
+            this.requestCredentialHandoff(request, step, index, this.describeStepInstruction(step)),
         }),
         stream: false,
       });

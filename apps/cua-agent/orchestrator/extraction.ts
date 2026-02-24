@@ -1,7 +1,8 @@
-import type { ZodTypeAny } from 'zod';
+import { z, type ZodTypeAny } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { LoopContext } from '../types';
 import OpenAI from 'openai';
+import { zodResponseFormat } from 'openai/helpers/zod';
 import {
   buildExtractInformationPrompt,
   ExtractInformationParams,
@@ -14,7 +15,7 @@ const DEFAULT_MAX_TOKENS = 20000;
 // ---------------------------------------------------------------------------
 
 export interface VisionItem {
-  /** Stable dedup key derived from the item's primary text (lowercase, max 80 chars) */
+  /** Stable dedup key: JSON.stringify of the raw item object returned by the model */
   fingerprint: string;
   /** Structured properties extracted from the screenshot */
   data: Record<string, any>;
@@ -43,32 +44,15 @@ export async function identifyItemsFromVision(params: {
 }): Promise<VisionItem[]> {
   const { llmClient, model, screenshotDataUrl, description, knownFingerprints } = params;
 
-  const knownList =
-    knownFingerprints.size > 0
-      ? `\n\nAlready processed fingerprints (DO NOT include these):\n${[...knownFingerprints].join('\n')}`
-      : '';
+  const itemsSchema = z.object({ items: z.array(z.record(z.string(), z.unknown())) });
 
-  const prompt = `You are analyzing a screenshot of a web page to find items for automated processing.
+  const prompt = `You are analyzing a screenshot of a web page to find a list of items.
 
 Find ALL items matching this description: "${description}"
 
-For each visible item return:
-- "fingerprint": a stable, unique identifier derived from the item's primary text/title. Rules:
-  • Use the main title, name, or heading of the item
-  • Lowercase, replace spaces with underscores
-  • Max 80 characters
-  • Must be IDENTICAL if you saw this same item again
-- "data": an object with all relevant properties (title, url, description, price, date, etc.)
+Return a JSON object with an "items" array where each element is an object with the extracted properties.`;
 
-IMPORTANT:
-- Only include items CURRENTLY VISIBLE on screen
-- If an item is only partially visible (cut off at bottom), still include it
-- Do NOT include items that are not visible${knownList}
-
-Return ONLY a JSON object: {"items": [...]}
-If no matching items are found, return: {"items": []}`;
-
-  const response = await llmClient.chat.completions.create({
+  const response = await llmClient.chat.completions.parse({
     model,
     messages: [
       {
@@ -79,26 +63,24 @@ If no matching items are found, return: {"items": []}`;
         ],
       },
     ],
-    max_tokens: 4000,
+    response_format: zodResponseFormat(itemsSchema, 'items_response'),
   });
 
-  const raw = response.choices[0]?.message?.content ?? '';
-  let parsed: any;
-  try {
-    parsed = parseJsonFromText(raw);
-  } catch {
-    console.warn('[VISION_LOOP] Failed to parse item identification response:', raw.slice(0, 200));
+  const parsed = response.choices[0]?.message?.parsed;
+
+  console.log({ parsed });
+
+  if (!parsed) {
+    console.warn('[VISION_LOOP] Empty parsed response from model');
     return [];
   }
 
   const items: VisionItem[] = [];
-  const rawItems: any[] = Array.isArray(parsed) ? parsed : (parsed?.items ?? []);
-  for (const item of rawItems) {
+  for (const item of parsed.items) {
     if (!item || typeof item !== 'object') continue;
-    const fingerprint = String(item.fingerprint ?? '').trim().slice(0, 80);
-    if (!fingerprint) continue;
+    const fingerprint = JSON.stringify(item);
     if (knownFingerprints.has(fingerprint)) continue;
-    items.push({ fingerprint, data: item.data ?? item });
+    items.push({ fingerprint, data: item });
   }
 
   return items;

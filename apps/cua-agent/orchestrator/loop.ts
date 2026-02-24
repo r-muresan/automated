@@ -11,6 +11,7 @@ import {
   type CredentialHandoffRequest,
   type CredentialHandoffResult,
 } from './agent-tools';
+import { waitForPageReady } from './page-ready';
 
 // ---------------------------------------------------------------------------
 // Dependency contract — everything the loop needs from the orchestrator
@@ -42,30 +43,6 @@ export async function capturePageScreenshot(stagehand: Stagehand): Promise<strin
   const page = stagehand.context.activePage() || stagehand.context.pages()[0];
   const screenshot = await page.screenshot({ fullPage: false });
   return `data:image/png;base64,${Buffer.from(screenshot).toString('base64')}`;
-}
-
-/**
- * Waits for the page to settle after an interaction.
- * Uses browser-native network-idle — no DOM access.
- */
-export async function waitForPageSettled(
-  stagehand: Stagehand,
-  timeoutMs = 4000,
-): Promise<void> {
-  const page = stagehand.context.activePage() || stagehand.context.pages()[0];
-  if (!page) return;
-
-  try {
-    await Promise.race([
-      page.waitForLoadState('networkidle'),
-      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
-    ]);
-  } catch {
-    // network idle is best-effort
-  }
-
-  // Grace period for CSS transitions / JS renders
-  await new Promise<void>((resolve) => setTimeout(resolve, 400));
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +96,7 @@ Perform exactly the action described. Do not do anything else.`,
   });
 
   try {
-    await agent.execute({ instruction, maxSteps: 5 });
+    await agent.execute({ instruction, maxSteps: 10 });
   } catch (error: any) {
     console.warn(`[VISION_LOOP] Navigation agent error (continuing): ${error.message}`);
   }
@@ -149,7 +126,7 @@ export async function executeLoopStep(
   let loopSuccess = true;
   let loopError: string | undefined;
 
-  await waitForPageSettled(deps.stagehand);
+  await waitForPageReady(deps.stagehand);
 
   try {
     while (totalProcessed < MAX_TOTAL_ITEMS && pageCount < MAX_PAGES) {
@@ -216,9 +193,7 @@ export async function executeLoopStep(
         } catch (error: any) {
           iterationSuccess = false;
           iterationError = error?.message ?? 'Iteration failed';
-          console.warn(
-            `[VISION_LOOP] Item "${visionItem.fingerprint}" failed: ${iterationError}`,
-          );
+          console.warn(`[VISION_LOOP] Item "${visionItem.fingerprint}" failed: ${iterationError}`);
         }
 
         totalProcessed++;
@@ -234,7 +209,7 @@ export async function executeLoopStep(
         });
 
         // Settle after each item in case the step navigated or opened dialogs
-        await waitForPageSettled(deps.stagehand);
+        await waitForPageReady(deps.stagehand);
       }
 
       // ── 4. Check for more items (vision, no DOM) ────────────────────────
@@ -267,7 +242,7 @@ export async function executeLoopStep(
         step.description,
       );
 
-      await waitForPageSettled(deps.stagehand);
+      await waitForPageReady(deps.stagehand);
     }
   } catch (error: any) {
     if ((error as any)?.message === 'Workflow aborted') throw error;
