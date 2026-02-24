@@ -24,13 +24,18 @@ export interface CredentialHandoffResult {
 }
 
 interface BrowserToolOptions {
-  onRequestCredentials?: (
-    request: CredentialHandoffRequest,
-  ) => Promise<CredentialHandoffResult>;
+  onRequestCredentials?: (request: CredentialHandoffRequest) => Promise<CredentialHandoffResult>;
 }
 
 function getPages(stagehand: Stagehand): any[] {
   return stagehand.context.pages();
+}
+
+function setActivePage(stagehand: Stagehand, page: any): void {
+  const context = stagehand.context as any;
+  if (typeof context.setActivePage === 'function') {
+    context.setActivePage(page);
+  }
 }
 
 function getActiveTabIndex(stagehand: Stagehand, pages: any[]): number {
@@ -85,11 +90,13 @@ async function getTabTextPreview(page: any, maxChars: number): Promise<string> {
   }
 }
 
-export function createBrowserTabTools(stagehand: Stagehand, options?: BrowserToolOptions): AgentTools {
+export function createBrowserTabTools(
+  stagehand: Stagehand,
+  options?: BrowserToolOptions,
+): AgentTools {
   const tools = {
     list_tabs: tool({
-      description:
-        'List all open tabs with index, title, URL, and which tab is currently active.',
+      description: 'List all open tabs with index, title, URL, and which tab is currently active.',
       inputSchema: z.object({}),
       execute: async () => {
         const { tabs, activeTabIndex } = await getTabSummaries(stagehand);
@@ -123,6 +130,7 @@ export function createBrowserTabTools(stagehand: Stagehand, options?: BrowserToo
 
         const page = pages[index];
         await page.bringToFront();
+        setActivePage(stagehand, page);
         await page
           .waitForLoadState('domcontentloaded', {
             timeout: 2000,
@@ -145,70 +153,71 @@ export function createBrowserTabTools(stagehand: Stagehand, options?: BrowserToo
         };
       },
     }),
-    read_tab: tool({
-      description:
-        'Read a tab by index (or the active tab by default) and return title, URL, and visible text preview.',
-      inputSchema: z.object({
-        index: z
-          .number()
-          .int()
-          .min(0)
-          .optional()
-          .describe('Optional zero-based tab index. If omitted, reads the active tab.'),
-        maxChars: z
-          .number()
-          .int()
-          .min(MIN_TEXT_PREVIEW_CHARS)
-          .max(MAX_TEXT_PREVIEW_CHARS)
-          .default(DEFAULT_TEXT_PREVIEW_CHARS)
-          .optional()
-          .describe('Maximum number of text characters to return from the tab.'),
-      }),
-      execute: async ({ index, maxChars }) => {
-        const pages = getPages(stagehand);
-        if (pages.length === 0) {
-          return { success: false, error: 'No open tabs to read.' };
-        }
+    // read_tab: tool({
+    //   description:
+    //     'Read a tab by index (or the active tab by default) and return title, URL, and visible text preview.',
+    //   inputSchema: z.object({
+    //     index: z
+    //       .number()
+    //       .int()
+    //       .min(0)
+    //       .optional()
+    //       .describe('Optional zero-based tab index. If omitted, reads the active tab.'),
+    //     maxChars: z
+    //       .number()
+    //       .int()
+    //       .min(MIN_TEXT_PREVIEW_CHARS)
+    //       .max(MAX_TEXT_PREVIEW_CHARS)
+    //       .default(DEFAULT_TEXT_PREVIEW_CHARS)
+    //       .optional()
+    //       .describe('Maximum number of text characters to return from the tab.'),
+    //   }),
+    //   execute: async ({ index, maxChars }) => {
+    //     const pages = getPages(stagehand);
+    //     if (pages.length === 0) {
+    //       return { success: false, error: 'No open tabs to read.' };
+    //     }
 
-        const initialActiveTabIndex = getActiveTabIndex(stagehand, pages);
-        const targetTabIndex = index ?? initialActiveTabIndex;
-        if (targetTabIndex < 0 || targetTabIndex >= pages.length) {
-          return {
-            success: false,
-            error: `Tab index ${targetTabIndex} is out of range. Valid indices are 0-${pages.length - 1}.`,
-          };
-        }
+    //     const initialActiveTabIndex = getActiveTabIndex(stagehand, pages);
+    //     const targetTabIndex = index ?? initialActiveTabIndex;
+    //     if (targetTabIndex < 0 || targetTabIndex >= pages.length) {
+    //       return {
+    //         success: false,
+    //         error: `Tab index ${targetTabIndex} is out of range. Valid indices are 0-${pages.length - 1}.`,
+    //       };
+    //     }
 
-        const page = pages[targetTabIndex];
-        await page.bringToFront();
+    //     const page = pages[targetTabIndex];
+    //     await page.bringToFront();
+    //     setActivePage(stagehand, page);
 
-        const safeMaxChars = Math.max(
-          MIN_TEXT_PREVIEW_CHARS,
-          Math.min(maxChars ?? DEFAULT_TEXT_PREVIEW_CHARS, MAX_TEXT_PREVIEW_CHARS),
-        );
+    //     const safeMaxChars = Math.max(
+    //       MIN_TEXT_PREVIEW_CHARS,
+    //       Math.min(maxChars ?? DEFAULT_TEXT_PREVIEW_CHARS, MAX_TEXT_PREVIEW_CHARS),
+    //     );
 
-        const [title, textPreview] = await Promise.all([
-          getPageTitle(page),
-          getTabTextPreview(page, safeMaxChars),
-        ]);
-        const url = getPageUrl(page);
-        const activeTabIndex = getActiveTabIndex(stagehand, pages);
+    //     const [title, textPreview] = await Promise.all([
+    //       getPageTitle(page),
+    //       getTabTextPreview(page, safeMaxChars),
+    //     ]);
+    //     const url = getPageUrl(page);
+    //     const activeTabIndex = getActiveTabIndex(stagehand, pages);
 
-        return {
-          success: true,
-          activeTabIndex,
-          tab: {
-            index: targetTabIndex,
-            title,
-            url,
-            isActive: activeTabIndex === targetTabIndex,
-          },
-          textPreview,
-          textPreviewChars: textPreview.length,
-          truncated: textPreview.length >= safeMaxChars,
-        };
-      },
-    }),
+    //     return {
+    //       success: true,
+    //       activeTabIndex,
+    //       tab: {
+    //         index: targetTabIndex,
+    //         title,
+    //         url,
+    //         isActive: activeTabIndex === targetTabIndex,
+    //       },
+    //       textPreview,
+    //       textPreviewChars: textPreview.length,
+    //       truncated: textPreview.length >= safeMaxChars,
+    //     };
+    //   },
+    // }),
     request_user_credentials: tool({
       description:
         'Pause execution and hand control to the user so they can enter credentials (login, 2FA, CAPTCHA, passkey). Wait for user to continue execution.',
@@ -225,8 +234,7 @@ export function createBrowserTabTools(stagehand: Stagehand, options?: BrowserToo
         if (!options?.onRequestCredentials) {
           return {
             success: false,
-            error:
-              'Credential handoff is unavailable in this execution context.',
+            error: 'Credential handoff is unavailable in this execution context.',
           };
         }
 
