@@ -9,6 +9,165 @@ import {
 
 const DEFAULT_MAX_TOKENS = 20000;
 
+// ---------------------------------------------------------------------------
+// Vision-only loop item discovery (no DOM, no page.evaluate)
+// ---------------------------------------------------------------------------
+
+export interface VisionItem {
+  /** Stable dedup key derived from the item's primary text (lowercase, max 80 chars) */
+  fingerprint: string;
+  /** Structured properties extracted from the screenshot */
+  data: Record<string, any>;
+}
+
+export interface PaginationCheck {
+  hasMore: boolean;
+  /** What the CUA agent should do to expose the next batch */
+  action: 'scroll_down' | 'click_next' | 'click_load_more' | 'none';
+  /** Human-readable hint about which element to interact with */
+  selectorHint: string;
+}
+
+/**
+ * Pure vision-based item identification.
+ * Takes a base64 screenshot, asks the LLM to list all matching items
+ * currently visible. Returns each item with a stable fingerprint for dedup.
+ * No DOM access whatsoever.
+ */
+export async function identifyItemsFromVision(params: {
+  llmClient: OpenAI;
+  model: string;
+  screenshotDataUrl: string;
+  description: string;
+  knownFingerprints: Set<string>;
+}): Promise<VisionItem[]> {
+  const { llmClient, model, screenshotDataUrl, description, knownFingerprints } = params;
+
+  const knownList =
+    knownFingerprints.size > 0
+      ? `\n\nAlready processed fingerprints (DO NOT include these):\n${[...knownFingerprints].join('\n')}`
+      : '';
+
+  const prompt = `You are analyzing a screenshot of a web page to find items for automated processing.
+
+Find ALL items matching this description: "${description}"
+
+For each visible item return:
+- "fingerprint": a stable, unique identifier derived from the item's primary text/title. Rules:
+  • Use the main title, name, or heading of the item
+  • Lowercase, replace spaces with underscores
+  • Max 80 characters
+  • Must be IDENTICAL if you saw this same item again
+- "data": an object with all relevant properties (title, url, description, price, date, etc.)
+
+IMPORTANT:
+- Only include items CURRENTLY VISIBLE on screen
+- If an item is only partially visible (cut off at bottom), still include it
+- Do NOT include items that are not visible${knownList}
+
+Return ONLY a JSON object: {"items": [...]}
+If no matching items are found, return: {"items": []}`;
+
+  const response = await llmClient.chat.completions.create({
+    model,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: screenshotDataUrl, detail: 'high' } },
+        ],
+      },
+    ],
+    max_tokens: 4000,
+  });
+
+  const raw = response.choices[0]?.message?.content ?? '';
+  let parsed: any;
+  try {
+    parsed = parseJsonFromText(raw);
+  } catch {
+    console.warn('[VISION_LOOP] Failed to parse item identification response:', raw.slice(0, 200));
+    return [];
+  }
+
+  const items: VisionItem[] = [];
+  const rawItems: any[] = Array.isArray(parsed) ? parsed : (parsed?.items ?? []);
+  for (const item of rawItems) {
+    if (!item || typeof item !== 'object') continue;
+    const fingerprint = String(item.fingerprint ?? '').trim().slice(0, 80);
+    if (!fingerprint) continue;
+    if (knownFingerprints.has(fingerprint)) continue;
+    items.push({ fingerprint, data: item.data ?? item });
+  }
+
+  return items;
+}
+
+/**
+ * Pure vision-based pagination check.
+ * Looks at a screenshot and determines if more items are accessible
+ * via scrolling, "Next" button, or "Load More". No DOM access.
+ */
+export async function checkForMoreItemsFromVision(params: {
+  llmClient: OpenAI;
+  model: string;
+  screenshotDataUrl: string;
+  description: string;
+  totalProcessed: number;
+}): Promise<PaginationCheck> {
+  const { llmClient, model, screenshotDataUrl, description, totalProcessed } = params;
+
+  const prompt = `You are analyzing a screenshot of a web page.
+
+I am iterating through a list of: "${description}"
+I have processed ${totalProcessed} items so far.
+
+Determine if there are MORE items I haven't processed yet.
+
+Look for:
+1. A "Next" button, "Next Page", or numbered pagination (e.g. "2", "3", "›")
+2. A "Load More", "Show More", or "View More" button
+3. A scroll indicator showing content below the fold (scrollbar position, "↓ more results")
+4. Lazy-loaded content that appears when scrolling down
+
+Return ONLY a JSON object:
+{
+  "hasMore": boolean,
+  "action": "scroll_down" | "click_next" | "click_load_more" | "none",
+  "selectorHint": "brief description of the element to interact with, or empty string"
+}
+
+If hasMore is false, set action to "none" and selectorHint to "".`;
+
+  const response = await llmClient.chat.completions.create({
+    model,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: screenshotDataUrl, detail: 'high' } },
+        ],
+      },
+    ],
+    max_tokens: 300,
+  });
+
+  const raw = response.choices[0]?.message?.content ?? '';
+  try {
+    const parsed = parseJsonFromText(raw);
+    return {
+      hasMore: Boolean(parsed?.hasMore),
+      action: parsed?.action ?? 'none',
+      selectorHint: parsed?.selectorHint ?? '',
+    };
+  } catch {
+    console.warn('[VISION_LOOP] Failed to parse pagination check response:', raw.slice(0, 200));
+    return { hasMore: false, action: 'none', selectorHint: '' };
+  }
+}
+
 type SchemaMap = Record<string, string>;
 
 export type ParsedSchema = {

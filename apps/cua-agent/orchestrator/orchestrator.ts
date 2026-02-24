@@ -27,6 +27,7 @@ import { withTimeout, waitForUserInput, DEFAULT_PROVIDER_ORDER } from './utils';
 import { LOADING_SELECTORS, getDomStabilityJs } from './page-scripts';
 import { buildSystemPrompt } from './system-prompt';
 import { extractWithLlm, normalizeLoopItems, parseSchemaMap } from './extraction';
+import { executeLoopStep, type LoopDeps } from './loop';
 import {
   acquireBrowserbaseSessionCreateLease,
   releaseBrowserbaseSession,
@@ -510,7 +511,7 @@ export class OrchestratorAgent {
       if (step.type === 'step') {
         await this.executeSingleStep(step.description, context, index, step);
       } else if (step.type === 'loop') {
-        await this.executeLoopStep(step, index);
+        await executeLoopStep(this.buildLoopDeps(), step, index);
       } else if (step.type === 'conditional') {
         await this.executeConditionalStep(step, context, index);
       } else if (step.type === 'extract') {
@@ -907,126 +908,18 @@ export class OrchestratorAgent {
     }
   }
 
-  private async extractLoopItems(step: LoopStep): Promise<any[]> {
-    if (!this.stagehand) throw new Error('Browser session not initialized');
-    if (!this.openai) throw new Error('LLM client not initialized');
-
-    const page = this.stagehand.context.activePage() || this.stagehand.context.pages()[0];
-    const goal = `List of ${step.description}`;
-
-    const result = await extractWithLlm({
-      llmClient: this.openai,
-      model: this.resolveModels().extract,
-      page,
-      dataExtractionGoal: goal,
-      skipValidation: true,
-      extractedVariables: this.extractedVariables,
-    });
-
-    const data = result.scraped_data;
-
-    // If already an array, return it
-    if (Array.isArray(data)) {
-      return data;
-    }
-
-    // If it's an object, find the first property that's an array
-    if (data && typeof data === 'object') {
-      const arrayValue = Object.values(data).find((val) => Array.isArray(val));
-      if (arrayValue) {
-        return arrayValue as any[];
-      }
-    }
-
-    return [];
-  }
-
-  private async executeLoopStep(step: LoopStep, index: number): Promise<void> {
-    if (!this.stagehand) throw new Error('Browser session not initialized');
-    if (!this.openai) throw new Error('LLM client not initialized');
-
-    console.log(`[ORCHESTRATOR] Starting loop: ${step.description}`);
-
-    this.assertNotAborted();
-
-    let totalProcessed = 0;
-    const maxIterations = 100;
-
-    // SAVE browser state at start
-    // const savedBrowserState = await this.captureBrowserState();
-
-    await this.waitForPageReady();
-
-    const items = await this.extractLoopItems(step);
-
-    console.log(items);
-    console.log(
-      `[ORCHESTRATOR] Found ${items.length} items on current page. Total processed: ${totalProcessed}`,
-    );
-
-    let loopSuccess = true;
-    let loopError: string | undefined;
-    try {
-      for (let i = 0; i < items.length && totalProcessed < maxIterations; i++) {
-        this.assertNotAborted();
-        const item = items[i];
-        console.log(`[ORCHESTRATOR] Processing item ${totalProcessed + 1}`);
-
-        this.emit({
-          type: 'loop:iteration:start',
-          step,
-          index,
-          iteration: i + 1,
-          totalItems: items.length,
-          item,
-        });
-
-        let iterationSuccess = true;
-        let iterationError: string | undefined;
-        try {
-          await this.executeSteps(step.steps, {
-            item,
-            itemIndex: i + 1,
-          });
-        } catch (error: any) {
-          iterationSuccess = false;
-          iterationError = error?.message ?? 'Iteration failed';
-        }
-        totalProcessed++;
-
-        this.emit({
-          type: 'loop:iteration:end',
-          step,
-          index,
-          iteration: i + 1,
-          totalItems: items.length,
-          success: iterationSuccess,
-          error: iterationError,
-        });
-
-        if (!iterationSuccess) {
-          throw new Error(iterationError);
-        }
-
-        // await this.restoreBrowserState(savedBrowserState);
-      }
-    } catch (error: any) {
-      loopSuccess = false;
-      loopError = error?.message ?? 'Loop failed';
-      console.log(error);
-      // await this.restoreBrowserState(savedBrowserState);
-    }
-
-    console.log(
-      `[ORCHESTRATOR] Loop complete: ${step.description}. Total items processed: ${totalProcessed}`,
-    );
-    this.emit({
-      type: 'step:end',
-      step,
-      index,
-      success: loopSuccess,
-      error: loopError,
-    });
+  private buildLoopDeps(): LoopDeps {
+    return {
+      stagehand: this.stagehand!,
+      openai: this.openai!,
+      models: this.resolveModels(),
+      openrouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
+      openrouterBaseUrl: OPENROUTER_BASE_URL,
+      providerOrder: DEFAULT_PROVIDER_ORDER,
+      emit: this.emit.bind(this),
+      assertNotAborted: this.assertNotAborted.bind(this),
+      executeSteps: this.executeSteps.bind(this),
+    };
   }
 
   private formatLoopContext(context?: LoopContext): string {
