@@ -13,6 +13,65 @@ index a0120e7..42a1939 100644
      this.organization = (clientOptions == null ? void 0 : clientOptions.organization) || process.env.OPENAI_ORG;
      if ((clientOptions == null ? void 0 : clientOptions.environment) && typeof clientOptions.environment === "string") {
        this.environment = clientOptions.environment;
+@@ -35621,11 +35621,15 @@ var OpenAICUAClient = class extends AgentClient {
+      const maxSteps = options.maxSteps || 10;
+      let currentStep = 0;
+      let completed = false;
++      const maxInputMessagesBeforeTruncate = 15;
++      const retainedInputMessages = 3;
+      const actions = [];
+      const messageList = [];
+      let finalMessage = "";
+      this.reasoningItems.clear();
+      let inputItems = this.createInitialInputItems(instruction);
++      let inputHistory = [...inputItems];
++      let shouldTruncateInputHistory = false;
+      let previousResponseId = void 0;
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
+@@ -35634,19 +35641,38 @@ var OpenAICUAClient = class extends AgentClient {
+            message: `Executing step ${currentStep + 1}/${maxSteps}`,
+            level: 1
+          });
++          const stepInputItems = shouldTruncateInputHistory ? [...this.createInitialInputItems(instruction), ...inputHistory.slice(-retainedInputMessages)] : inputItems;
++          const stepPreviousResponseId = shouldTruncateInputHistory ? void 0 : previousResponseId;
+          const result = yield this.executeStep(
+-            inputItems,
+-            previousResponseId,
++            stepInputItems,
++            stepPreviousResponseId,
+            logger
+          );
+          totalInputTokens += result.usage.input_tokens;
+          totalOutputTokens += result.usage.output_tokens;
+          totalInferenceTime += result.usage.inference_time_ms;
+          actions.push(...result.actions);
+          completed = result.completed;
+-          previousResponseId = result.responseId;
++          previousResponseId = shouldTruncateInputHistory ? void 0 : result.responseId;
+          if (!completed) {
+-            inputItems = result.nextInputItems;
++            if (shouldTruncateInputHistory) {
++              inputHistory = [...inputHistory, ...result.nextInputItems].slice(-retainedInputMessages);
++              inputItems = [...this.createInitialInputItems(instruction), ...inputHistory];
++            } else {
++              inputItems = result.nextInputItems;
++              inputHistory.push(...result.nextInputItems);
++              if (inputHistory.length >= maxInputMessagesBeforeTruncate) {
++                shouldTruncateInputHistory = true;
++                inputHistory = inputHistory.slice(-retainedInputMessages);
++                inputItems = [...this.createInitialInputItems(instruction), ...inputHistory];
++                previousResponseId = void 0;
++                logger({
++                  category: "agent",
++                  message: `Input message history reached ${maxInputMessagesBeforeTruncate}. Truncating to last ${retainedInputMessages} messages.`,
++                  level: 1
++                });
++              }
++            }
+          }
+          if (result.message) {
+            messageList.push(result.message);
 @@ -37700,6 +37700,188 @@ ${finalMessage}`;
    }
  };

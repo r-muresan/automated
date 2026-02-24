@@ -128,6 +128,10 @@ export async function executeLoopStep(
 
   await waitForPageReady(deps.stagehand);
 
+  const initialPages = new Set(deps.stagehand.context.pages());
+  const initialActivePage =
+    deps.stagehand.context.activePage() ?? deps.stagehand.context.pages()[0];
+
   try {
     while (totalProcessed < MAX_TOTAL_ITEMS && pageCount < MAX_PAGES) {
       deps.assertNotAborted();
@@ -208,8 +212,17 @@ export async function executeLoopStep(
           error: iterationError,
         });
 
-        // Settle after each item in case the step navigated or opened dialogs
-        await waitForPageReady(deps.stagehand);
+        // Close any tabs that were opened during this iteration, never the first tab
+        const currentPages = deps.stagehand.context.pages();
+        const firstPage = currentPages[0];
+        const newPages = currentPages.filter((p) => !initialPages.has(p) && p !== firstPage);
+        for (const page of newPages) {
+          await page.close();
+        }
+        if (newPages.length > 0) {
+          deps.stagehand.context.setActivePage(initialActivePage);
+          await initialActivePage.sendCDP('Page.bringToFront');
+        }
       }
 
       // ── 4. Check for more items (vision, no DOM) ────────────────────────
