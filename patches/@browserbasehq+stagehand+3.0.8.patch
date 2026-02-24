@@ -1,5 +1,5 @@
 diff --git a/node_modules/@browserbasehq/stagehand/dist/index.js b/node_modules/@browserbasehq/stagehand/dist/index.js
-index a0120e7..42a1939 100644
+index a0120e7..fc1e5a7 100644
 --- a/node_modules/@browserbasehq/stagehand/dist/index.js
 +++ b/node_modules/@browserbasehq/stagehand/dist/index.js
 @@ -35578,8 +35578,8 @@ var OpenAICUAClient = class extends AgentClient {
@@ -13,43 +13,43 @@ index a0120e7..42a1939 100644
      this.organization = (clientOptions == null ? void 0 : clientOptions.organization) || process.env.OPENAI_ORG;
      if ((clientOptions == null ? void 0 : clientOptions.environment) && typeof clientOptions.environment === "string") {
        this.environment = clientOptions.environment;
-@@ -35621,11 +35621,15 @@ var OpenAICUAClient = class extends AgentClient {
-      const maxSteps = options.maxSteps || 10;
-      let currentStep = 0;
-      let completed = false;
+@@ -35623,11 +35623,15 @@ var OpenAICUAClient = class extends AgentClient {
+       const maxSteps = options.maxSteps || 10;
+       let currentStep = 0;
+       let completed = false;
 +      const maxInputMessagesBeforeTruncate = 15;
 +      const retainedInputMessages = 3;
-      const actions = [];
-      const messageList = [];
-      let finalMessage = "";
-      this.reasoningItems.clear();
-      let inputItems = this.createInitialInputItems(instruction);
+       const actions = [];
+       const messageList = [];
+       let finalMessage = "";
+       this.reasoningItems.clear();
+       let inputItems = this.createInitialInputItems(instruction);
 +      let inputHistory = [...inputItems];
 +      let shouldTruncateInputHistory = false;
-      let previousResponseId = void 0;
-      let totalInputTokens = 0;
-      let totalOutputTokens = 0;
-@@ -35634,19 +35641,38 @@ var OpenAICUAClient = class extends AgentClient {
-            message: `Executing step ${currentStep + 1}/${maxSteps}`,
-            level: 1
-          });
+       let previousResponseId = void 0;
+       let totalInputTokens = 0;
+       let totalOutputTokens = 0;
+@@ -35639,9 +35643,11 @@ var OpenAICUAClient = class extends AgentClient {
+             message: `Executing step ${currentStep + 1}/${maxSteps}`,
+             level: 1
+           });
 +          const stepInputItems = shouldTruncateInputHistory ? [...this.createInitialInputItems(instruction), ...inputHistory.slice(-retainedInputMessages)] : inputItems;
 +          const stepPreviousResponseId = shouldTruncateInputHistory ? void 0 : previousResponseId;
-          const result = yield this.executeStep(
+           const result = yield this.executeStep(
 -            inputItems,
 -            previousResponseId,
 +            stepInputItems,
 +            stepPreviousResponseId,
-            logger
-          );
-          totalInputTokens += result.usage.input_tokens;
-          totalOutputTokens += result.usage.output_tokens;
-          totalInferenceTime += result.usage.inference_time_ms;
-          actions.push(...result.actions);
-          completed = result.completed;
+             logger
+           );
+           totalInputTokens += result.usage.input_tokens;
+@@ -35649,9 +35655,26 @@ var OpenAICUAClient = class extends AgentClient {
+           totalInferenceTime += result.usage.inference_time_ms;
+           actions.push(...result.actions);
+           completed = result.completed;
 -          previousResponseId = result.responseId;
 +          previousResponseId = shouldTruncateInputHistory ? void 0 : result.responseId;
-          if (!completed) {
+           if (!completed) {
 -            inputItems = result.nextInputItems;
 +            if (shouldTruncateInputHistory) {
 +              inputHistory = [...inputHistory, ...result.nextInputItems].slice(-retainedInputMessages);
@@ -69,10 +69,10 @@ index a0120e7..42a1939 100644
 +                });
 +              }
 +            }
-          }
-          if (result.message) {
-            messageList.push(result.message);
-@@ -37700,6 +37700,188 @@ ${finalMessage}`;
+           }
+           if (result.message) {
+             messageList.push(result.message);
+@@ -37700,6 +37723,188 @@ ${finalMessage}`;
    }
  };
  
@@ -261,7 +261,7 @@ index a0120e7..42a1939 100644
  // lib/v3/agent/AgentProvider.ts
  var modelToAgentProviderMap = {
    "computer-use-preview": "openai",
-@@ -37720,8 +37902,9 @@ var AgentProvider = class _AgentProvider {
+@@ -37720,8 +37925,9 @@ var AgentProvider = class _AgentProvider {
      this.logger = logger;
    }
    getClient(modelName, clientOptions, userProvidedInstructions, tools) {
@@ -273,7 +273,7 @@ index a0120e7..42a1939 100644
      this.logger({
        category: "agent",
        message: `Getting agent client for type: ${type}, model: ${modelName}${explicitProvider ? " (explicit provider)" : ""}`,
-@@ -37760,6 +37943,14 @@ var AgentProvider = class _AgentProvider {
+@@ -37760,6 +37966,14 @@ var AgentProvider = class _AgentProvider {
              userProvidedInstructions,
              clientOptions
            );
@@ -288,7 +288,7 @@ index a0120e7..42a1939 100644
          default:
            throw new UnsupportedModelProviderError(
              ["openai", "anthropic", "google", "microsoft"],
-@@ -37777,14 +37968,22 @@ var AgentProvider = class _AgentProvider {
+@@ -37777,14 +37991,22 @@ var AgentProvider = class _AgentProvider {
      }
    }
    static getAgentProvider(modelName) {
@@ -318,7 +318,7 @@ index a0120e7..42a1939 100644
    }
  };
  
-@@ -67110,7 +67309,7 @@ function resolveModel(model) {
+@@ -67110,7 +67332,7 @@ function resolveModel(model) {
      provider = split.provider;
      parsedModelName = split.modelName;
    }
