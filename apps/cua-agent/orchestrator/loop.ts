@@ -54,8 +54,8 @@ function resolveOpenRouterModelName(modelName: string): string {
 /** Viewport screenshot as a base64 data URL. Uses CDP — not DOM. */
 export async function capturePageScreenshot(stagehand: Stagehand): Promise<string> {
   const page = stagehand.context.activePage() || stagehand.context.pages()[0];
-  const screenshot = await page.screenshot({ fullPage: false });
-  return `data:image/png;base64,${Buffer.from(screenshot).toString('base64')}`;
+  const screenshot = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 70 });
+  return `data:image/jpeg;base64,${Buffer.from(screenshot).toString('base64')}`;
 }
 
 // ---------------------------------------------------------------------------

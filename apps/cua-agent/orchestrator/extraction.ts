@@ -320,9 +320,9 @@ export async function extractWithLlm(params: LlmExtractParams): Promise<ExtractO
   const extractedText = await page.evaluate(() => document.body?.innerText || '');
   let screenshotDataUrl: string | null = null;
   try {
-    const screenshot = await page.screenshot({ fullPage: true });
+    const screenshot = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 70 });
     const base64 = Buffer.from(screenshot).toString('base64');
-    screenshotDataUrl = `data:image/png;base64,${base64}`;
+    screenshotDataUrl = `data:image/jpeg;base64,${base64}`;
   } catch (error) {
     console.warn('[EXTRACT] Failed to capture screenshot:', (error as Error).message);
   }

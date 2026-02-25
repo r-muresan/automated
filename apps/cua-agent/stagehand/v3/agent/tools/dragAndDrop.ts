@@ -10,7 +10,7 @@ import { processCoordinates } from "../utils/coordinateNormalization.js";
 import { ensureXPath } from "../utils/xpath.js";
 import { waitAndCaptureScreenshot } from "../utils/screenshotHandler.js";
 
-export const dragAndDropTool = (v3: V3, provider?: string) =>
+export const dragAndDropTool = (v3: V3, provider?: string, modelId?: string) =>
   tool({
     description:
       "Drag and drop an element using its coordinates (this is the most reliable way to drag and drop an element, always use this over act, unless the element is not visible in the screenshot, but shown in ariaTree)",
@@ -35,12 +35,14 @@ export const dragAndDropTool = (v3: V3, provider?: string) =>
           startCoordinates[1],
           provider,
           v3,
+          modelId,
         );
         const processedEnd = processCoordinates(
           endCoordinates[0],
           endCoordinates[1],
           provider,
           v3,
+          modelId,
         );
 
         v3.logger({

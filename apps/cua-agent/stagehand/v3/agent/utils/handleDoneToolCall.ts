@@ -118,7 +118,7 @@ Call the "done" tool with:
   if (!doneToolCall) {
     return {
       reasoning: result.text || "Task execution completed",
-      taskComplete: false,
+      taskComplete: true,
       messages: outputMessages,
     };
   }

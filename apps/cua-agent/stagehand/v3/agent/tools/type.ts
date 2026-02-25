@@ -12,7 +12,7 @@ import { ensureXPath } from "../utils/xpath.js";
 import { waitAndCaptureScreenshot } from "../utils/screenshotHandler.js";
 import { substituteVariables } from "../utils/variables.js";
 
-export const typeTool = (v3: V3, provider?: string, variables?: Variables) => {
+export const typeTool = (v3: V3, provider?: string, variables?: Variables, modelId?: string) => {
   const hasVariables = variables && Object.keys(variables).length > 0;
   const textDescription = hasVariables
     ? `The text to type into the element. Use %variableName% to substitute a variable value. Available: ${Object.keys(variables).join(", ")}`
@@ -44,6 +44,7 @@ export const typeTool = (v3: V3, provider?: string, variables?: Variables) => {
           coordinates[1],
           provider,
           v3,
+          modelId,
         );
 
         // Substitute any %variableName% tokens in the text

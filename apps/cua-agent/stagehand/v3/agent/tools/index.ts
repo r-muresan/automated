@@ -39,6 +39,10 @@ export interface V3AgentToolOptions {
    */
   provider?: string;
   /**
+   * The model ID. Used for model-specific coordinate handling (e.g. Moonshot 0-1 coords)
+   */
+  modelId?: string;
+  /**
    * Tools to exclude from the available toolset.
    * These tools will be filtered out after mode-based filtering.
    */
@@ -88,25 +92,26 @@ export function createAgentTools(v3: V3, options?: V3AgentToolOptions) {
   const executionModel = options?.executionModel;
   const mode = options?.mode ?? "dom";
   const provider = options?.provider;
+  const modelId = options?.modelId;
   const excludeTools = options?.excludeTools;
   const variables = options?.variables;
 
   const allTools: ToolSet = {
     act: actTool(v3, executionModel, variables),
     ariaTree: ariaTreeTool(v3),
-    click: clickTool(v3, provider),
-    clickAndHold: clickAndHoldTool(v3, provider),
-    dragAndDrop: dragAndDropTool(v3, provider),
+    click: clickTool(v3, provider, modelId),
+    clickAndHold: clickAndHoldTool(v3, provider, modelId),
+    dragAndDrop: dragAndDropTool(v3, provider, modelId),
     extract: extractTool(v3, executionModel),
     fillForm: fillFormTool(v3, executionModel, variables),
-    fillFormVision: fillFormVisionTool(v3, provider, variables),
+    fillFormVision: fillFormVisionTool(v3, provider, variables, modelId),
     goto: gotoTool(v3),
     keys: keysTool(v3),
     navback: navBackTool(v3),
     screenshot: screenshotTool(v3),
-    scroll: mode === "hybrid" ? scrollVisionTool(v3, provider) : scrollTool(v3),
+    scroll: mode === "hybrid" ? scrollVisionTool(v3, provider, modelId) : scrollTool(v3),
     think: thinkTool(),
-    type: typeTool(v3, provider, variables),
+    type: typeTool(v3, provider, variables, modelId),
     wait: waitTool(v3, mode),
   };
 

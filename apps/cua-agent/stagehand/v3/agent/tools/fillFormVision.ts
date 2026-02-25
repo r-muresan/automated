@@ -16,6 +16,7 @@ export const fillFormVisionTool = (
   v3: V3,
   provider?: string,
   variables?: Variables,
+  modelId?: string,
 ) => {
   const hasVariables = variables && Object.keys(variables).length > 0;
   const valueDescription = hasVariables
@@ -72,6 +73,7 @@ MANDATORY USE CASES (always use fillFormVision for these):
             field.coordinates.y,
             provider,
             v3,
+            modelId,
           );
           return {
             ...field,

@@ -1,4 +1,4 @@
-import type { AgentToolMode, Variables } from "../../types/public/agent.js";
+import type { AgentToolMode, Variables } from '../../types/public/agent.js';
 
 export interface AgentSystemPromptOptions {
   url: string;
@@ -33,75 +33,73 @@ function buildToolsSection(
 
   const hybridTools: ToolDefinition[] = [
     {
-      name: "screenshot",
-      description: "Take a compressed JPEG screenshot for quick visual context",
+      name: 'screenshot',
+      description: 'Take a compressed JPEG screenshot for quick visual context',
     },
     {
-      name: "ariaTree",
+      name: 'ariaTree',
+      description: 'Get an accessibility (ARIA) hybrid tree for full page context',
+    },
+    {
+      name: 'click',
       description:
-        "Get an accessibility (ARIA) hybrid tree for full page context",
+        'Click on an element (PREFERRED - more reliable when element is visible in viewport)',
     },
     {
-      name: "click",
+      name: 'type',
       description:
-        "Click on an element (PREFERRED - more reliable when element is visible in viewport)",
+        'Type text into an element (PREFERRED - more reliable when element is visible in viewport)',
     },
     {
-      name: "type",
+      name: 'act',
       description:
-        "Type text into an element (PREFERRED - more reliable when element is visible in viewport)",
+        'Perform a specific atomic action (click, type, etc.) - ONLY use when element is in ariaTree but NOT visible in screenshot. Less reliable but can interact with out-of-viewport elements.',
     },
+    { name: 'dragAndDrop', description: 'Drag and drop an element' },
+    { name: 'clickAndHold', description: 'Click and hold on an element' },
+    { name: 'keys', description: 'Press a keyboard key' },
     {
-      name: "act",
-      description:
-        "Perform a specific atomic action (click, type, etc.) - ONLY use when element is in ariaTree but NOT visible in screenshot. Less reliable but can interact with out-of-viewport elements.",
+      name: 'fillFormVision',
+      description: 'Fill out a form using coordinates',
     },
-    { name: "dragAndDrop", description: "Drag and drop an element" },
-    { name: "clickAndHold", description: "Click and hold on an element" },
-    { name: "keys", description: "Press a keyboard key" },
-    {
-      name: "fillFormVision",
-      description: "Fill out a form using coordinates",
-    },
-    { name: "think", description: "Think about the task" },
-    { name: "extract", description: "Extract structured data" },
-    { name: "goto", description: "Navigate to a URL" },
-    { name: "wait", description: "Wait for a specified time" },
-    { name: "navback", description: "Navigate back in browser history" },
-    { name: "scroll", description: "Scroll the page x pixels up or down" },
+    { name: 'think', description: 'Think about the task' },
+    { name: 'extract', description: 'Extract structured data' },
+    { name: 'goto', description: 'Navigate to a URL' },
+    { name: 'wait', description: 'Wait for a specified time' },
+    { name: 'navback', description: 'Navigate back in browser history' },
+    { name: 'scroll', description: 'Scroll the page x pixels up or down' },
   ];
 
   const domTools: ToolDefinition[] = [
     {
-      name: "screenshot",
-      description: "Take a compressed JPEG screenshot for quick visual context",
+      name: 'screenshot',
+      description: 'Take a compressed JPEG screenshot for quick visual context',
     },
     {
-      name: "ariaTree",
-      description:
-        "Get an accessibility (ARIA) hybrid tree for full page context",
+      name: 'ariaTree',
+      description: 'Get an accessibility (ARIA) hybrid tree for full page context',
     },
     {
-      name: "act",
-      description: "Perform a specific atomic action (click, type)",
+      name: 'act',
+      description: 'Perform a specific atomic action (click, type)',
     },
-    { name: "keys", description: "Press a keyboard key" },
-    { name: "fillForm", description: "Fill out a form" },
-    { name: "think", description: "Think about the task" },
-    { name: "extract", description: "Extract structured data" },
-    { name: "goto", description: "Navigate to a URL" },
-    { name: "wait", description: "Wait for a specified time" },
-    { name: "navback", description: "Navigate back in browser history" },
-    { name: "scroll", description: "Scroll the page x pixels up or down" },
+    { name: 'keys', description: 'Press a keyboard key' },
+    { name: 'fillForm', description: 'Fill out a form' },
+    { name: 'think', description: 'Think about the task' },
+    { name: 'extract', description: 'Extract structured data' },
+    { name: 'goto', description: 'Navigate to a URL' },
+    { name: 'wait', description: 'Wait for a specified time' },
+    { name: 'navback', description: 'Navigate back in browser history' },
+    { name: 'scroll', description: 'Scroll the page x pixels up or down' },
   ];
 
   const baseTools = isHybridMode ? hybridTools : domTools;
 
   if (hasSearch) {
     baseTools.push({
-      name: "search",
+      name: 'search',
       description:
-        "Perform a web search and return results. Prefer this over navigating to Google and searching within the page for reliability and efficiency.",
+        'Perform a web search and return results. Prefer this over navigating to Google and searching within the page for reliability and efficiency.',
     });
   }
 
@@ -109,14 +107,12 @@ function buildToolsSection(
 
   const toolLines = filteredTools
     .map((tool) => `    <tool name="${tool.name}">${tool.description}</tool>`)
-    .join("\n");
+    .join('\n');
 
   return `<tools>\n${toolLines}\n  </tools>`;
 }
 
-export function buildAgentSystemPrompt(
-  options: AgentSystemPromptOptions,
-): string {
+export function buildAgentSystemPrompt(options: AgentSystemPromptOptions): string {
   const {
     url,
     executionInstruction,
@@ -130,7 +126,7 @@ export function buildAgentSystemPrompt(
   const isoDate = new Date().toISOString();
   const cdata = (text: string) => `<![CDATA[${text}]]>`;
 
-  const isHybridMode = mode === "hybrid";
+  const isHybridMode = mode === 'hybrid';
   const hasSearch = Boolean(process.env.BRAVE_API_KEY);
 
   // Tools section differs based on mode and excluded tools
@@ -153,10 +149,10 @@ export function buildAgentSystemPrompt(
         `<item>Use screenshot for visual confirmation when needed, but rely primarily on ariaTree for element detection.</item>`,
       ];
 
-  const strategySection = strategyItems.join("\n    ");
+  const strategySection = strategyItems.join('\n    ');
 
   const commonStrategyItems = `
-    <item>CRITICAL: Use extract ONLY when the task explicitly requires structured data output (e.g., "get job listings", "extract product details"). For reading page content or understanding elements, always use ${isHybridMode ? "screenshot or ariaTree" : "ariaTree"} instead - it's faster and more reliable.</item>
+    <item>CRITICAL: Use extract ONLY when the task explicitly requires structured data output (e.g., "get job listings", "extract product details"). For reading page content or understanding elements, always use ${isHybridMode ? 'screenshot or ariaTree' : 'ariaTree'} instead - it's faster and more reliable.</item>
     <item>Keep actions atomic and verify outcomes before proceeding.</item>
     <item>For each action, provide clear reasoning about why you're taking that step.</item>
     <item>When you need to input text that could be entered character-by-character or through multiple separate inputs, prefer using the keys tool to type the entire sequence at once. This is more efficient for scenarios like verification codes split across multiple fields, or when virtual keyboards are present but direct typing would be faster.</item>
@@ -199,12 +195,12 @@ export function buildAgentSystemPrompt(
     <note>captchas, popups, etc.</note>
     <captcha>If you see a captcha, use the wait tool. It will automatically be solved by our internal solver.</captcha>
   </roadblocks>`
-    : "";
+    : '';
 
   // Build customInstructions block only if provided
   const customInstructionsBlock = systemInstructions
     ? `<customInstructions>${cdata(systemInstructions)}</customInstructions>\n  `
-    : "";
+    : '';
 
   // Build variables section only if variables are provided
   const hasVariables = variables && Object.keys(variables).length > 0;
@@ -219,16 +215,14 @@ export function buildAgentSystemPrompt(
     ${Object.entries(variables)
       .map(([name, v]) => {
         const description =
-          typeof v === "object" && v !== null && "value" in v
-            ? v.description
-            : undefined;
+          typeof v === 'object' && v !== null && 'value' in v ? v.description : undefined;
         return description
           ? `<variable name="${name}">${description}</variable>`
           : `<variable name="${name}" />`;
       })
-      .join("\n    ")}
+      .join('\n    ')}
   </variables>`
-    : "";
+    : '';
 
   return `<system>
   <identity>You are a web automation assistant using browser automation tools to accomplish the user's goal.</identity>

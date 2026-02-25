@@ -1,7 +1,7 @@
-import { createAgentTools } from "../agent/tools/index.js";
-import { buildAgentSystemPrompt } from "../agent/prompts/agentSystemPrompt.js";
-import { LogLine } from "../types/public/logs.js";
-import { V3 } from "../v3.js";
+import { createAgentTools } from '../agent/tools/index.js';
+import { buildAgentSystemPrompt } from '../agent/prompts/agentSystemPrompt.js';
+import { LogLine } from '../types/public/logs.js';
+import { V3 } from '../v3.js';
 import {
   ModelMessage,
   ToolSet,
@@ -13,11 +13,11 @@ import {
   type GenerateTextOnStepFinishCallback,
   type StreamTextOnStepFinishCallback,
   type PrepareStepFunction,
-} from "ai";
-import { StagehandZodObject } from "../zodCompat.js";
-import { processMessages } from "../agent/utils/messageProcessing.js";
-import { LLMClient } from "../llm/LLMClient.js";
-import { SessionFileLogger } from "../flowLogger.js";
+} from 'ai';
+import { StagehandZodObject } from '../zodCompat.js';
+import { processMessages } from '../agent/utils/messageProcessing.js';
+import { LLMClient } from '../llm/LLMClient.js';
+import { SessionFileLogger } from '../flowLogger.js';
 import {
   AgentExecuteOptions,
   AgentStreamExecuteOptions,
@@ -30,15 +30,15 @@ import {
   AgentToolMode,
   AgentModelConfig,
   Variables,
-} from "../types/public/agent.js";
-import { V3FunctionName } from "../types/public/methods.js";
-import { mapToolResultToActions } from "../agent/utils/actionMapping.js";
+} from '../types/public/agent.js';
+import { V3FunctionName } from '../types/public/methods.js';
+import { mapToolResultToActions } from '../agent/utils/actionMapping.js';
 import {
   MissingLLMConfigurationError,
   StreamingCallbacksInNonStreamingModeError,
   AgentAbortError,
-} from "../types/public/sdkErrors.js";
-import { handleDoneToolCall } from "../agent/utils/handleDoneToolCall.js";
+} from '../types/public/sdkErrors.js';
+import { handleDoneToolCall } from '../agent/utils/handleDoneToolCall.js';
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -48,17 +48,14 @@ function getErrorMessage(error: unknown): string {
  * Prepends a system message with cache control to the messages array.
  * The cache control providerOptions are used by Anthropic and ignored by other providers.
  */
-function prependSystemMessage(
-  systemPrompt: string,
-  messages: ModelMessage[],
-): ModelMessage[] {
+function prependSystemMessage(systemPrompt: string, messages: ModelMessage[]): ModelMessage[] {
   return [
     {
-      role: "system",
+      role: 'system',
       content: systemPrompt,
       providerOptions: {
         anthropic: {
-          cacheControl: { type: "ephemeral" },
+          cacheControl: { type: 'ephemeral' },
         },
       },
     },
@@ -90,7 +87,7 @@ export class V3AgentHandler {
     this.executionModel = executionModel;
     this.systemInstructions = systemInstructions;
     this.mcpTools = mcpTools;
-    this.mode = mode ?? "dom";
+    this.mode = mode ?? 'dom';
   }
 
   private async prepareAgent(
@@ -98,7 +95,7 @@ export class V3AgentHandler {
   ): Promise<AgentContext> {
     try {
       const options =
-        typeof instructionOrOptions === "string"
+        typeof instructionOrOptions === 'string'
           ? { instruction: instructionOrOptions }
           : instructionOrOptions;
 
@@ -123,8 +120,8 @@ export class V3AgentHandler {
 
       // Use provided messages for continuation, or start fresh with the instruction
       const messages: ModelMessage[] = options.messages?.length
-        ? [...options.messages, { role: "user", content: options.instruction }]
-        : [{ role: "user", content: options.instruction }];
+        ? [...options.messages, { role: 'user', content: options.instruction }]
+        : [{ role: 'user', content: options.instruction }];
 
       if (!this.llmClient?.getLanguageModel) {
         throw new MissingLLMConfigurationError();
@@ -135,20 +132,78 @@ export class V3AgentHandler {
         model: baseModel,
         middleware: {
           ...SessionFileLogger.createLlmLoggingMiddleware(baseModel.modelId),
+          // The @ai-sdk/openai provider JSON.stringify's all tool result content,
+          // but correctly converts `type: "file"` parts in *user* messages to image_url.
+          // Intercept before serialization: extract image parts from any tool result,
+          // keep text parts in the tool result, and inject images as a follow-up user message.
+          transformParams: async ({ params }: { params: any }) => {
+            const newPrompt: any[] = [];
+            for (const message of (params.prompt ?? []) as any[]) {
+              if (message.role !== 'tool') {
+                newPrompt.push(message);
+                continue;
+              }
+              const newContent: any[] = [];
+              const imagesToInject: any[] = [];
+              for (const part of (message.content ?? []) as any[]) {
+                if (
+                  part.type === 'tool-result' &&
+                  part.output?.type === 'content' &&
+                  Array.isArray(part.output.value)
+                ) {
+                  const values = part.output.value as any[];
+                  const mediaParts = values.filter(
+                    (v: any) =>
+                      (v.type === 'media' || v.type === 'file') &&
+                      typeof v.mediaType === 'string' &&
+                      v.mediaType.startsWith('image/'),
+                  );
+                  if (mediaParts.length > 0) {
+                    // Keep non-image content as text in the tool result
+                    const textParts = values.filter(
+                      (v: any) => v.type === 'text' && typeof v.text === 'string',
+                    );
+                    const textValue =
+                      textParts.length > 0
+                        ? textParts.map((v: any) => v.text).join('\n')
+                        : 'screenshot taken';
+                    newContent.push({
+                      ...part,
+                      output: { type: 'text', value: textValue },
+                    });
+                    for (const mp of mediaParts) {
+                      imagesToInject.push({
+                        type: 'file',
+                        data: mp.data,
+                        mediaType: mp.mediaType,
+                      });
+                    }
+                    continue;
+                  }
+                }
+                newContent.push(part);
+              }
+              newPrompt.push({ ...message, content: newContent });
+              if (imagesToInject.length > 0) {
+                newPrompt.push({ role: 'user', content: imagesToInject });
+              }
+            }
+            return { ...params, prompt: newPrompt };
+          },
         },
       });
 
-      if (
-        this.mode === "hybrid" &&
-        !baseModel.modelId.includes("gemini-3-flash") &&
-        !baseModel.modelId.includes("claude")
-      ) {
-        this.logger({
-          category: "agent",
-          message: `Warning: "${baseModel.modelId}" may not perform well in hybrid mode. See recommended models: https://docs.stagehand.dev/v3/basics/agent#hybrid-mode`,
-          level: 0,
-        });
-      }
+      // if (
+      //   this.mode === "hybrid" &&
+      //   !baseModel.modelId.includes("gemini-3-flash") &&
+      //   !baseModel.modelId.includes("claude")
+      // ) {
+      //   this.logger({
+      //     category: "agent",
+      //     message: `Warning: "${baseModel.modelId}" may not perform well in hybrid mode. See recommended models: https://docs.stagehand.dev/v3/basics/agent#hybrid-mode`,
+      //     level: 0,
+      //   });
+      // }
 
       return {
         options,
@@ -161,7 +216,7 @@ export class V3AgentHandler {
       };
     } catch (error) {
       this.logger({
-        category: "agent",
+        category: 'agent',
         message: `failed to prepare agent: ${error}`,
         level: 0,
       });
@@ -188,7 +243,7 @@ export class V3AgentHandler {
   ) {
     return async (event: StepResult<ToolSet>) => {
       this.logger({
-        category: "agent",
+        category: 'agent',
         message: `Step finished: ${event.finishReason}`,
         level: 2,
       });
@@ -202,20 +257,20 @@ export class V3AgentHandler {
           if (event.text && event.text.length > 0) {
             state.collectedReasoning.push(event.text);
             this.logger({
-              category: "agent",
+              category: 'agent',
               message: `reasoning: ${event.text}`,
               level: 1,
             });
           }
 
-          if (toolCall.toolName === "done") {
+          if (toolCall.toolName === 'done') {
             state.completed = true;
             if (args?.taskComplete) {
               const doneReasoning = args.reasoning;
-              const allReasoning = state.collectedReasoning.join(" ");
+              const allReasoning = state.collectedReasoning.join(' ');
               state.finalMessage = doneReasoning
                 ? `${allReasoning} ${doneReasoning}`.trim()
-                : allReasoning || "Task completed successfully";
+                : allReasoning || 'Task completed successfully';
             }
           }
           const mappedActions = mapToolResultToActions({
@@ -234,12 +289,12 @@ export class V3AgentHandler {
         state.currentPageUrl = (await this.v3.context.awaitActivePage()).url();
 
         // Capture screenshot after tool execution (only for evals)
-        if (process.env.EVALS === "true") {
+        if (process.env.EVALS === 'true') {
           try {
             await this.captureAndEmitScreenshot();
           } catch (e) {
             this.logger({
-              category: "agent",
+              category: 'agent',
               message: `Warning: Failed to capture screenshot: ${getErrorMessage(e)}`,
               level: 1,
             });
@@ -253,24 +308,20 @@ export class V3AgentHandler {
     };
   }
 
-  public async execute(
-    instructionOrOptions: string | AgentExecuteOptions,
-  ): Promise<AgentResult> {
+  public async execute(instructionOrOptions: string | AgentExecuteOptions): Promise<AgentResult> {
     const startTime = Date.now();
-    const options =
-      typeof instructionOrOptions === "object" ? instructionOrOptions : null;
+    const options = typeof instructionOrOptions === 'object' ? instructionOrOptions : null;
     const signal = options?.signal;
 
     // Highlight cursor defaults to true for hybrid mode, can be overridden
-    const shouldHighlightCursor =
-      options?.highlightCursor ?? this.mode === "hybrid";
+    const shouldHighlightCursor = options?.highlightCursor ?? this.mode === 'hybrid';
 
     const state: AgentState = {
       collectedReasoning: [],
       actions: [],
-      finalMessage: "",
+      finalMessage: '',
       completed: false,
-      currentPageUrl: "",
+      currentPageUrl: '',
     };
 
     let messages: ModelMessage[] = [];
@@ -287,7 +338,7 @@ export class V3AgentHandler {
       } = await this.prepareAgent(instructionOrOptions);
 
       // Enable cursor overlay for hybrid mode (coordinate-based interactions)
-      if (shouldHighlightCursor && this.mode === "hybrid") {
+      if (shouldHighlightCursor && this.mode === 'hybrid') {
         const page = await this.v3.context.awaitActivePage();
         await page.enableCursorOverlay().catch(() => {});
       }
@@ -298,12 +349,7 @@ export class V3AgentHandler {
       const callbacks = (instructionOrOptions as AgentExecuteOptions).callbacks;
 
       if (callbacks) {
-        const streamingOnlyCallbacks = [
-          "onChunk",
-          "onFinish",
-          "onError",
-          "onAbort",
-        ];
+        const streamingOnlyCallbacks = ['onChunk', 'onFinish', 'onError', 'onAbort'];
         const invalidCallbacks = streamingOnlyCallbacks.filter(
           (name) => callbacks[name as keyof typeof callbacks] != null,
         );
@@ -317,15 +363,15 @@ export class V3AgentHandler {
         messages: prependSystemMessage(systemPrompt, messages),
         tools: allTools,
         stopWhen: (result) => this.handleStop(result, maxSteps),
-        toolChoice: "auto",
+        toolChoice: 'auto',
 
         prepareStep: this.createPrepareStep(callbacks?.prepareStep),
         onStepFinish: this.createStepHandler(state, callbacks?.onStepFinish),
         abortSignal: preparedOptions.signal,
-        providerOptions: wrappedModel.modelId.includes("gemini-3")
+        providerOptions: wrappedModel.modelId.includes('gemini-3')
           ? {
               google: {
-                mediaResolution: "MEDIA_RESOLUTION_HIGH",
+                mediaResolution: 'MEDIA_RESOLUTION_HIGH',
               },
             }
           : undefined,
@@ -357,13 +403,13 @@ export class V3AgentHandler {
 
       // Re-throw abort errors wrapped in AgentAbortError for consistent error typing
       if (signal?.aborted) {
-        const reason = signal.reason ? String(signal.reason) : "aborted";
+        const reason = signal.reason ? String(signal.reason) : 'aborted';
         throw new AgentAbortError(reason);
       }
 
       const errorMessage = getErrorMessage(error);
       this.logger({
-        category: "agent",
+        category: 'agent',
         message: `Error executing agent task: ${errorMessage}`,
         level: 0,
       });
@@ -382,36 +428,28 @@ export class V3AgentHandler {
   public async stream(
     instructionOrOptions: string | AgentStreamExecuteOptions,
   ): Promise<AgentStreamResult> {
-    const streamOptions =
-      typeof instructionOrOptions === "object" ? instructionOrOptions : null;
+    const streamOptions = typeof instructionOrOptions === 'object' ? instructionOrOptions : null;
 
     // Highlight cursor defaults to true for hybrid mode, can be overridden
-    const shouldHighlightCursor =
-      streamOptions?.highlightCursor ?? this.mode === "hybrid";
+    const shouldHighlightCursor = streamOptions?.highlightCursor ?? this.mode === 'hybrid';
 
-    const {
-      options,
-      maxSteps,
-      systemPrompt,
-      allTools,
-      messages,
-      wrappedModel,
-      initialPageUrl,
-    } = await this.prepareAgent(instructionOrOptions);
+    const { options, maxSteps, systemPrompt, allTools, messages, wrappedModel, initialPageUrl } =
+      await this.prepareAgent(instructionOrOptions);
 
     // Enable cursor overlay for hybrid mode (coordinate-based interactions)
-    if (shouldHighlightCursor && this.mode === "hybrid") {
+    if (shouldHighlightCursor && this.mode === 'hybrid') {
       const page = await this.v3.context.awaitActivePage();
       await page.enableCursorOverlay().catch(() => {});
     }
 
-    const callbacks = (instructionOrOptions as AgentStreamExecuteOptions)
-      .callbacks as AgentStreamCallbacks | undefined;
+    const callbacks = (instructionOrOptions as AgentStreamExecuteOptions).callbacks as
+      | AgentStreamCallbacks
+      | undefined;
 
     const state: AgentState = {
       collectedReasoning: [],
       actions: [],
-      finalMessage: "",
+      finalMessage: '',
       completed: false,
       currentPageUrl: initialPageUrl,
     };
@@ -425,10 +463,9 @@ export class V3AgentHandler {
     });
 
     const handleError = (error: unknown) => {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger({
-        category: "agent",
+        category: 'agent',
         message: `Error during streaming: ${errorMessage}`,
         level: 0,
       });
@@ -440,7 +477,7 @@ export class V3AgentHandler {
       messages: prependSystemMessage(systemPrompt, messages),
       tools: allTools,
       stopWhen: (result) => this.handleStop(result, maxSteps),
-      toolChoice: "auto",
+      toolChoice: 'auto',
       prepareStep: this.createPrepareStep(callbacks?.prepareStep),
       onStepFinish: this.createStepHandler(state, callbacks?.onStepFinish),
       onError: (event) => {
@@ -482,14 +519,14 @@ export class V3AgentHandler {
         // Reject the result promise with AgentAbortError when stream is aborted
         const reason = options.signal?.reason
           ? String(options.signal.reason)
-          : "Stream was aborted";
+          : 'Stream was aborted';
         rejectResult(new AgentAbortError(reason));
       },
       abortSignal: options.signal,
-      providerOptions: wrappedModel.modelId.includes("gemini-3")
+      providerOptions: wrappedModel.modelId.includes('gemini-3')
         ? {
             google: {
-              mediaResolution: "MEDIA_RESOLUTION_HIGH",
+              mediaResolution: 'MEDIA_RESOLUTION_HIGH',
             },
           }
         : undefined,
@@ -514,17 +551,17 @@ export class V3AgentHandler {
     output?: Record<string, unknown>,
   ): AgentResult {
     if (!state.finalMessage) {
-      const allReasoning = state.collectedReasoning.join(" ").trim();
+      const allReasoning = state.collectedReasoning.join(' ').trim();
 
       if (!state.completed && maxSteps && result.steps?.length >= maxSteps) {
         this.logger({
-          category: "agent",
+          category: 'agent',
           message: `Agent stopped: reached maximum steps (${maxSteps})`,
           level: 1,
         });
         state.finalMessage = `Agent stopped: reached maximum steps (${maxSteps})`;
       } else {
-        state.finalMessage = allReasoning || result.text || "";
+        state.finalMessage = allReasoning || result.text || '';
       }
     }
 
@@ -543,7 +580,7 @@ export class V3AgentHandler {
 
     return {
       success: state.completed,
-      message: state.finalMessage || "Task execution completed",
+      message: state.finalMessage || 'Task execution completed',
       actions: state.actions,
       completed: state.completed,
       output,
@@ -561,12 +598,15 @@ export class V3AgentHandler {
   }
 
   private createTools(excludeTools?: string[], variables?: Variables) {
-    const provider = this.llmClient?.getLanguageModel?.()?.provider;
+    const model = this.llmClient?.getLanguageModel?.();
+    const provider = model?.provider;
+    const modelId = model?.modelId;
     return createAgentTools(this.v3, {
       executionModel: this.executionModel,
       logger: this.logger,
       mode: this.mode,
       provider,
+      modelId,
       excludeTools,
       variables,
     });
@@ -577,7 +617,7 @@ export class V3AgentHandler {
     maxSteps: number,
   ): boolean | PromiseLike<boolean> {
     const lastStep = result.steps[result.steps.length - 1];
-    if (lastStep?.toolCalls?.some((tc) => tc.toolName === "done")) {
+    if (lastStep?.toolCalls?.some((tc) => tc.toolName === 'done')) {
       return true;
     }
     return stepCountIs(maxSteps)(result);
@@ -609,7 +649,7 @@ export class V3AgentHandler {
     state.finalMessage = doneResult.reasoning;
 
     const doneAction = mapToolResultToActions({
-      toolCallName: "done",
+      toolCallName: 'done',
       toolResult: {
         success: true,
         reasoning: doneResult.reasoning,
@@ -641,10 +681,10 @@ export class V3AgentHandler {
     try {
       const page = await this.v3.context.awaitActivePage();
       const screenshot = await page.screenshot({ fullPage: false });
-      this.v3.bus.emit("agent_screenshot_taken_event", screenshot);
+      this.v3.bus.emit('agent_screenshot_taken_event', screenshot);
     } catch (error) {
       this.logger({
-        category: "agent",
+        category: 'agent',
         message: `Error capturing screenshot: ${getErrorMessage(error)}`,
         level: 0,
       });

@@ -5,7 +5,7 @@ import type { Action } from "../../types/public/methods.js";
 import { processCoordinates } from "../utils/coordinateNormalization.js";
 import { ensureXPath } from "../utils/xpath.js";
 
-export const clickAndHoldTool = (v3: V3, provider?: string) =>
+export const clickAndHoldTool = (v3: V3, provider?: string, modelId?: string) =>
   tool({
     description: "Click and hold on an element using its coordinates",
     inputSchema: z.object({
@@ -29,6 +29,7 @@ export const clickAndHoldTool = (v3: V3, provider?: string) =>
           coordinates[1],
           provider,
           v3,
+          modelId,
         );
 
         v3.logger({

@@ -193,18 +193,20 @@ export class OrchestratorAgent {
   private logUsageAfterToolCall(
     toolName: string,
     totals: { inputTokens: number; cachedInputTokens: number; outputTokens: number },
+    deltas?: { inputTokens: number; cachedInputTokens: number; outputTokens: number },
   ): void {
+    const tokens = deltas ?? totals;
     console.log(
-      `[ORCHESTRATOR] Usage after tool call "${toolName}": input_tokens=${totals.inputTokens}, cached_input_tokens=${totals.cachedInputTokens}, output_tokens=${totals.outputTokens}`,
+      `[ORCHESTRATOR] Usage after tool call "${toolName}": input_tokens=${tokens.inputTokens}, cached_input_tokens=${tokens.cachedInputTokens}, output_tokens=${tokens.outputTokens}`,
     );
     this.emit({
       type: 'log',
       level: 'info',
       message: `Usage after tool call: ${toolName}`,
       data: {
-        input_tokens: totals.inputTokens,
-        cached_input_tokens: totals.cachedInputTokens,
-        output_tokens: totals.outputTokens,
+        input_tokens: tokens.inputTokens,
+        cached_input_tokens: tokens.cachedInputTokens,
+        output_tokens: tokens.outputTokens,
       },
     });
   }
@@ -761,7 +763,11 @@ export class OrchestratorAgent {
           typeof toolCall?.toolName === 'string' && toolCall.toolName.trim().length > 0
             ? toolCall.toolName
             : 'unknown';
-        this.logUsageAfterToolCall(toolName, usageTotals);
+        this.logUsageAfterToolCall(toolName, usageTotals, {
+          inputTokens: Number.isFinite(stepInputTokens) ? stepInputTokens : 0,
+          cachedInputTokens: Number.isFinite(stepCachedInputTokens) ? stepCachedInputTokens : 0,
+          outputTokens: Number.isFinite(stepOutputTokens) ? stepOutputTokens : 0,
+        });
       }
     };
 
@@ -778,34 +784,6 @@ export class OrchestratorAgent {
             onStepFinish,
           },
         });
-
-      if (!result.success && this.isInvalidJsonResponseError(result.message)) {
-        console.warn(
-          '[ORCHESTRATOR] Hybrid agent returned Invalid JSON response; retrying step in CUA mode',
-        );
-        this.emit({
-          type: 'log',
-          level: 'warn',
-          message: 'Hybrid agent failed with Invalid JSON response; retrying in CUA mode',
-          data: {
-            stepIndex: index,
-            instruction,
-          },
-        });
-
-        result = await this.stagehand
-          .agent({
-            ...agentConfig,
-            mode: 'cua',
-          })
-          .execute({
-            instruction: instruction,
-            maxSteps: 50,
-            callbacks: {
-              onStepFinish,
-            },
-          });
-      }
 
       this.assertNotAborted();
       this.stepResults.push({
