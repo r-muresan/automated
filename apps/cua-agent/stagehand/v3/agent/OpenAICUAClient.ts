@@ -56,8 +56,14 @@ export class OpenAICUAClient extends AgentClient {
 
     // Process client options
     this.apiKey =
-      (clientOptions?.apiKey as string) || process.env.OPENAI_API_KEY || "";
-    this.baseURL = (clientOptions?.baseURL as string) || undefined;
+      (clientOptions?.apiKey as string) ||
+      process.env.OPENAI_API_KEY ||
+      process.env.OPENROUTER_API_KEY ||
+      "";
+    this.baseURL =
+      (clientOptions?.baseURL as string) ||
+      process.env.OPENROUTER_BASE_URL ||
+      undefined;
     this.organization =
       (clientOptions?.organization as string) || process.env.OPENAI_ORG;
 

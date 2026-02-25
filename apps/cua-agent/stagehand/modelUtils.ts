@@ -1,8 +1,4 @@
 import { ClientOptions, ModelConfiguration } from "./v3/types/public/model.js";
-import {
-  AVAILABLE_CUA_MODELS,
-  AvailableCuaModel,
-} from "./v3/types/public/agent.js";
 
 //useful when resolving a model from string or object formats we accept
 export function extractModelName(
@@ -17,6 +13,9 @@ export function splitModelName(model: string): {
   modelName: string;
 } {
   const firstSlashIndex = model.indexOf("/");
+  if (firstSlashIndex === -1) {
+    return { provider: model, modelName: model };
+  }
   const provider = model.substring(0, firstSlashIndex);
   const modelName = model.substring(firstSlashIndex + 1);
   return { provider, modelName };
@@ -41,7 +40,8 @@ export function resolveModel(model: string | ModelConfiguration): {
   // Check if provider is explicitly set in clientOptions
   const hasExplicitProvider = clientOptions.provider !== undefined;
 
-  // If provider is explicitly set, don't split the model name - pass it through as-is
+  // Preserve provider-qualified model IDs (e.g. "moonshotai/kimi-k2.5") so
+  // downstream CUA clients can send the exact identifier to OpenRouter.
   let provider: string;
   let parsedModelName: string;
 
@@ -49,16 +49,14 @@ export function resolveModel(model: string | ModelConfiguration): {
     provider = clientOptions.provider as string;
     parsedModelName = modelString; // Keep the full model name
   } else {
-    // Parse the model string normally
+    // Parse provider for metadata only; keep full model id for execution.
     const split = splitModelName(modelString);
     provider = split.provider;
-    parsedModelName = split.modelName;
+    parsedModelName = modelString;
   }
 
   // Check if it's a CUA model
-  const isCua =
-    hasExplicitProvider ||
-    AVAILABLE_CUA_MODELS.includes(modelString as AvailableCuaModel);
+  const isCua = true;
 
   return {
     provider,

@@ -3,12 +3,12 @@ import { AgentProviderType } from "../types/public/agent.js";
 import { LogLine } from "../types/public/logs.js";
 import { ClientOptions } from "../types/public/model.js";
 import {
-  UnsupportedModelError,
   UnsupportedModelProviderError,
 } from "../types/public/sdkErrors.js";
 import { AgentClient } from "./AgentClient.js";
 import { AnthropicCUAClient } from "./AnthropicCUAClient.js";
 import { OpenAICUAClient } from "./OpenAICUAClient.js";
+import { OpenRouterCUAClient } from "./OpenRouterCUAClient.js";
 import { GoogleCUAClient } from "./GoogleCUAClient.js";
 import { MicrosoftCUAClient } from "./MicrosoftCUAClient.js";
 
@@ -51,10 +51,17 @@ export class AgentProvider {
     tools?: ToolSet,
   ): AgentClient {
     // Check if provider is explicitly set in clientOptions
-    const explicitProvider = clientOptions?.provider as
-      | AgentProviderType
-      | undefined;
-    const type = explicitProvider || AgentProvider.getAgentProvider(modelName);
+    const explicitProvider =
+      typeof clientOptions?.provider === "string"
+        ? (clientOptions.provider as AgentProviderType)
+        : undefined;
+    const isOpenRouter = Boolean(
+      clientOptions?.baseURL &&
+        String(clientOptions.baseURL).includes("openrouter.ai"),
+    );
+    const type = isOpenRouter
+      ? "openrouter"
+      : explicitProvider || AgentProvider.getAgentProvider(modelName);
 
     this.logger({
       category: "agent",
@@ -95,9 +102,17 @@ export class AgentProvider {
             userProvidedInstructions,
             clientOptions,
           );
+        case "openrouter":
+          return new OpenRouterCUAClient(
+            type,
+            modelName,
+            userProvidedInstructions,
+            clientOptions,
+            tools,
+          );
         default:
           throw new UnsupportedModelProviderError(
-            ["openai", "anthropic", "google", "microsoft"],
+            ["openai", "anthropic", "google", "microsoft", "openrouter"],
             "Computer Use Agent",
           );
       }
@@ -114,17 +129,27 @@ export class AgentProvider {
   }
 
   static getAgentProvider(modelName: string): AgentProviderType {
-    const normalized = modelName.includes("/")
-      ? modelName.split("/")[1]
-      : modelName;
+    const prefixToProvider: Record<string, AgentProviderType> = {
+      openai: "openai",
+      anthropic: "anthropic",
+      google: "google",
+      microsoft: "microsoft",
+      openrouter: "openrouter",
+    };
 
-    if (normalized in modelToAgentProviderMap) {
-      return modelToAgentProviderMap[normalized];
+    if (modelName.includes("/")) {
+      const [prefixRaw, normalized] = modelName.split("/");
+      const prefix = prefixRaw.toLowerCase();
+      if (normalized in modelToAgentProviderMap) {
+        return modelToAgentProviderMap[normalized];
+      }
+      if (prefix in prefixToProvider) {
+        return prefixToProvider[prefix];
+      }
+    } else if (modelName in modelToAgentProviderMap) {
+      return modelToAgentProviderMap[modelName];
     }
 
-    throw new UnsupportedModelError(
-      Object.keys(modelToAgentProviderMap),
-      "Computer Use Agent",
-    );
+    return "openai";
   }
 }

@@ -186,6 +186,29 @@ export class OrchestratorAgent {
     }
   }
 
+  private isInvalidJsonResponseError(message?: string): boolean {
+    return typeof message === 'string' && message.toLowerCase().includes('invalid json response');
+  }
+
+  private logUsageAfterToolCall(
+    toolName: string,
+    totals: { inputTokens: number; cachedInputTokens: number; outputTokens: number },
+  ): void {
+    console.log(
+      `[ORCHESTRATOR] Usage after tool call "${toolName}": input_tokens=${totals.inputTokens}, cached_input_tokens=${totals.cachedInputTokens}, output_tokens=${totals.outputTokens}`,
+    );
+    this.emit({
+      type: 'log',
+      level: 'info',
+      message: `Usage after tool call: ${toolName}`,
+      data: {
+        input_tokens: totals.inputTokens,
+        cached_input_tokens: totals.cachedInputTokens,
+        output_tokens: totals.outputTokens,
+      },
+    });
+  }
+
   private async init(startingUrl?: string): Promise<void> {
     this.assertNotAborted();
     const apiKey = process.env.OPENROUTER_API_KEY;
@@ -700,7 +723,7 @@ export class OrchestratorAgent {
         this.requestCredentialHandoff(request, step, index, instruction),
     });
 
-    const agent = this.stagehand.agent({
+    const agentConfig = {
       systemPrompt: buildSystemPrompt(this.extractedVariables, context),
       tools,
       stream: false,
@@ -709,17 +732,84 @@ export class OrchestratorAgent {
         apiKey: process.env.OPENROUTER_API_KEY,
         baseURL: OPENROUTER_BASE_URL,
       },
-      mode: 'cua',
-    });
+    } as const;
+
+    const usageTotals = {
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      outputTokens: 0,
+    };
+
+    const onStepFinish = (event: any) => {
+      const stepInputTokens = Number(event?.usage?.inputTokens ?? 0);
+      const stepCachedInputTokens = Number(event?.usage?.cachedInputTokens ?? 0);
+      const stepOutputTokens = Number(event?.usage?.outputTokens ?? 0);
+
+      usageTotals.inputTokens += Number.isFinite(stepInputTokens) ? stepInputTokens : 0;
+      usageTotals.cachedInputTokens += Number.isFinite(stepCachedInputTokens)
+        ? stepCachedInputTokens
+        : 0;
+      usageTotals.outputTokens += Number.isFinite(stepOutputTokens) ? stepOutputTokens : 0;
+
+      const toolCalls: Array<{ toolName?: string }> = Array.isArray(event?.toolCalls)
+        ? event.toolCalls
+        : [];
+      if (toolCalls.length === 0) return;
+
+      for (const toolCall of toolCalls) {
+        const toolName =
+          typeof toolCall?.toolName === 'string' && toolCall.toolName.trim().length > 0
+            ? toolCall.toolName
+            : 'unknown';
+        this.logUsageAfterToolCall(toolName, usageTotals);
+      }
+    };
 
     try {
-      const result = await agent.execute({
-        instruction: instruction,
-        maxSteps: 50,
-      });
+      let result = await this.stagehand
+        .agent({
+          ...agentConfig,
+          mode: 'hybrid',
+        })
+        .execute({
+          instruction: instruction,
+          maxSteps: 50,
+          callbacks: {
+            onStepFinish,
+          },
+        });
 
+      if (!result.success && this.isInvalidJsonResponseError(result.message)) {
+        console.warn(
+          '[ORCHESTRATOR] Hybrid agent returned Invalid JSON response; retrying step in CUA mode',
+        );
+        this.emit({
+          type: 'log',
+          level: 'warn',
+          message: 'Hybrid agent failed with Invalid JSON response; retrying in CUA mode',
+          data: {
+            stepIndex: index,
+            instruction,
+          },
+        });
+
+        result = await this.stagehand
+          .agent({
+            ...agentConfig,
+            mode: 'cua',
+          })
+          .execute({
+            instruction: instruction,
+            maxSteps: 50,
+            callbacks: {
+              onStepFinish,
+            },
+          });
+      }
+
+      this.assertNotAborted();
       this.stepResults.push({
-        instruction,
+        instruction: instruction,
         success: result.success,
         output: stepOutput,
         error: result.success ? undefined : result.message,

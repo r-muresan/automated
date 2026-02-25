@@ -69,6 +69,35 @@ const AISDKProvidersWithAPIKey: Record<string, AISDKCustomProvider> = {
   gateway: createGateway,
 };
 
+function hasAnyClientOptions(clientOptions?: ClientOptions): boolean {
+  return Boolean(
+    clientOptions &&
+      Object.values(clientOptions).some((v) => v !== undefined && v !== null),
+  );
+}
+
+function isOpenRouterBaseURL(clientOptions?: ClientOptions): boolean {
+  return Boolean(
+    clientOptions?.baseURL &&
+      String(clientOptions.baseURL).toLowerCase().includes("openrouter.ai"),
+  );
+}
+
+function hasCustomBaseURL(clientOptions?: ClientOptions): boolean {
+  return Boolean(clientOptions?.baseURL);
+}
+
+function getOpenAICompatibleModelName(
+  subProvider: string,
+  subModelName: string,
+): string {
+  if (subProvider === "openrouter") {
+    return subModelName;
+  }
+
+  return `${subProvider}/${subModelName}`;
+}
+
 const modelToProviderMap: { [key in AvailableModel]: ModelProvider } = {
   "gpt-4.1": "openai",
   "gpt-4.1-mini": "openai",
@@ -109,9 +138,21 @@ export function getAISDKLanguageModel(
   subModelName: string,
   clientOptions?: ClientOptions,
 ) {
-  const hasValidOptions =
-    clientOptions &&
-    Object.values(clientOptions).some((v) => v !== undefined && v !== null);
+  const hasValidOptions = hasAnyClientOptions(clientOptions);
+  const openAICompatibleModelName = getOpenAICompatibleModelName(
+    subProvider,
+    subModelName,
+  );
+  const shouldUseOpenAICompatibleProvider =
+    isOpenRouterBaseURL(clientOptions) ||
+    (!AISDKProviders[subProvider] && hasCustomBaseURL(clientOptions));
+
+  if (shouldUseOpenAICompatibleProvider) {
+    if (hasValidOptions) {
+      return createOpenAI(clientOptions).chat(openAICompatibleModelName);
+    }
+    return openai.chat(openAICompatibleModelName);
+  }
 
   if (hasValidOptions) {
     const creator = AISDKProvidersWithAPIKey[subProvider];
