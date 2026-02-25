@@ -1,4 +1,4 @@
-import type { AgentTools, Stagehand } from '@browserbasehq/stagehand';
+import type { AgentTools, Stagehand } from '../stagehand/v3';
 import { tool } from 'ai';
 import { z } from 'zod';
 

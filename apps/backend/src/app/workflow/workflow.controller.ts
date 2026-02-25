@@ -286,10 +286,15 @@ export class WorkflowController {
   async startExecution(
     @Param('id') id: string,
     @GetUser() user: any,
-    @Body() body?: { inputValues?: Record<string, string> },
+    @Body() body?: { inputValues?: Record<string, string>; requireBrowserbase?: boolean },
   ): Promise<WorkflowExecutionCommandResponse> {
     const email = user?.email;
-    return this.workflowExecutionService.startWorkflow(id, email, body?.inputValues);
+    return this.workflowExecutionService.startWorkflow(
+      id,
+      email,
+      body?.inputValues,
+      body?.requireBrowserbase ?? false,
+    );
   }
 
   @Post(':id/execution/stop')

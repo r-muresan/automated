@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import type { Step, Workflow } from 'apps/cua-agent';
 import { PrismaService } from '../prisma.service';
-import type { InteractionPayload } from '@automated/api-dtos';
+import type { InteractionPayload, WorkflowDetail } from '@automated/api-dtos';
 import { WorkflowGenerationService } from './workflow-generation.service';
 
 @Injectable()
@@ -517,7 +517,7 @@ export class WorkflowService {
     });
   }
 
-  async getWorkflow(id: string) {
+  async getWorkflow(id: string): Promise<WorkflowDetail | null> {
     console.log(`[SERVICE] Querying database for workflow ID: ${id}`);
     const workflow = await this.prisma.workflow.findUnique({
       where: { id },
@@ -528,7 +528,7 @@ export class WorkflowService {
       },
     });
     console.log(`[SERVICE] Database result for ${id}: ${workflow ? 'FOUND' : 'NOT FOUND'}`);
-    if (!workflow) return workflow;
+    if (!workflow) return null;
     return {
       ...workflow,
       steps: this.buildApiStepTree(workflow.steps),

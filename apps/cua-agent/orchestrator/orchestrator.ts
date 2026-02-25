@@ -1,6 +1,6 @@
 import * as dotenv from 'dotenv';
 import OpenAI from 'openai';
-import { Stagehand } from '@browserbasehq/stagehand';
+import { Stagehand } from '../stagehand/v3';
 import { z } from 'zod';
 import type {
   Workflow,
@@ -23,7 +23,7 @@ import type {
 } from '../types';
 
 import { AGENT_TIMEOUT_MS } from './constants';
-import { withTimeout, DEFAULT_PROVIDER_ORDER } from './utils';
+import { withTimeout } from './utils';
 import { waitForPageReady } from './page-ready';
 import { buildSystemPrompt } from './system-prompt';
 import { createBrowserTabTools, type CredentialHandoffRequest } from './agent-tools';
@@ -137,11 +137,30 @@ export class OrchestratorAgent {
           data: error?.message ?? error,
         });
       } else {
-        console.error(`[ORCHESTRATOR] Workflow error: ${error.message}`);
+        const message = error?.message ?? String(error);
+        const stack = error?.stack;
+        const cause = error?.cause;
+        console.error(`[ORCHESTRATOR] Workflow error: ${message}`);
+        if (stack) {
+          console.error(`[ORCHESTRATOR] Workflow error stack:\n${stack}`);
+        }
+        if (cause) {
+          console.error(`[ORCHESTRATOR] Workflow error cause:`, cause);
+        }
+        this.emit({
+          type: 'log',
+          level: 'error',
+          message: 'Workflow error details',
+          data: {
+            error: message,
+            ...(stack ? { stack } : {}),
+            ...(cause ? { cause: String(cause) } : {}),
+          },
+        });
         this.emit({
           type: 'workflow:error',
           workflow,
-          error: error?.message ?? 'Unknown error',
+          error: message,
         });
       }
     } finally {
@@ -689,10 +708,6 @@ export class OrchestratorAgent {
         modelName: this.resolveModels().agent,
         apiKey: process.env.OPENROUTER_API_KEY,
         baseURL: OPENROUTER_BASE_URL,
-        provider: {
-          order: DEFAULT_PROVIDER_ORDER,
-          allow_fallbacks: false,
-        },
       },
       mode: 'cua',
     });
@@ -746,7 +761,6 @@ export class OrchestratorAgent {
       models: this.resolveModels(),
       openrouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
       openrouterBaseUrl: OPENROUTER_BASE_URL,
-      providerOrder: DEFAULT_PROVIDER_ORDER,
       emit: this.emit.bind(this),
       assertNotAborted: this.assertNotAborted.bind(this),
       executeSteps: this.executeSteps.bind(this),

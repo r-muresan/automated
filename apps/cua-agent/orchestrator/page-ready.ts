@@ -1,4 +1,4 @@
-import type { Stagehand } from '@browserbasehq/stagehand';
+import type { Stagehand } from '../stagehand/v3';
 import { LOADING_SELECTORS, getDomStabilityJs } from './page-scripts';
 
 export async function waitForPageReady(

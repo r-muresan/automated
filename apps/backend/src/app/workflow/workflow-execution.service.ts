@@ -204,6 +204,7 @@ export class WorkflowExecutionService {
     workflowId: string,
     email?: string,
     inputValues?: Record<string, string>,
+    requireBrowserbase = false,
   ): Promise<WorkflowExecutionCommandResponse> {
     // Check if already running
     const currentState = this.executionStates.get(workflowId);
@@ -227,6 +228,13 @@ export class WorkflowExecutionService {
 
     if (workflow.steps.length === 0) {
       return { success: false, message: 'Workflow has no steps to execute' };
+    }
+
+    if (requireBrowserbase && !process.env.BROWSERBASE_API_KEY) {
+      return {
+        success: false,
+        message: 'Browserbase is required for this run, but BROWSERBASE_API_KEY is not configured.',
+      };
     }
 
     // Check browser minutes cap before starting

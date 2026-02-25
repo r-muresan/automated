@@ -1,7 +1,5 @@
 import * as readline from 'readline';
 
-export const DEFAULT_PROVIDER_ORDER = ['google-vertex/global', 'google-vertex', 'fireworks'];
-
 export function withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Promise<T> {
   return Promise.race([
     promise,

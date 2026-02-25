@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import type { Stagehand } from '@browserbasehq/stagehand';
+import type { Stagehand } from '../stagehand/v3';
 import type { LoopStep, Step, OrchestratorEvent, LoopContext } from '../types';
 import {
   identifyItemsFromVision,
@@ -23,7 +23,6 @@ export interface LoopDeps {
   models: { extract: string; agent: string };
   openrouterApiKey: string;
   openrouterBaseUrl: string;
-  providerOrder: string[];
   emit: (event: OrchestratorEvent) => void;
   assertNotAborted: () => void;
   executeSteps: (steps: Step[], context?: LoopContext) => Promise<void>;
@@ -32,6 +31,20 @@ export interface LoopDeps {
     step: LoopStep,
     index: number,
   ) => Promise<CredentialHandoffResult>;
+}
+
+const CUA_MODEL_ALIASES: Record<string, string> = {
+  'anthropic/claude-sonnet-4.6': 'anthropic/claude-sonnet-4.6',
+  'anthropic/claude-opus-4.6': 'anthropic/claude-opus-4.6',
+};
+
+function resolveCuaModelName(modelName: string): string {
+  return CUA_MODEL_ALIASES[modelName] ?? modelName;
+}
+
+function resolveOpenRouterModelName(modelName: string): string {
+  const normalized = resolveCuaModelName(modelName);
+  return normalized.startsWith('openai/') ? normalized : `openai/${normalized}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,15 +97,11 @@ Perform exactly the action described. Do not do anything else.`,
     ),
     stream: false,
     model: {
-      modelName: deps.models.agent,
+      modelName: resolveOpenRouterModelName(deps.models.agent),
       apiKey: deps.openrouterApiKey,
       baseURL: deps.openrouterBaseUrl,
-      provider: {
-        order: deps.providerOrder,
-        allow_fallbacks: false,
-      },
     },
-    mode: 'cua',
+    mode: 'hybrid',
   });
 
   try {

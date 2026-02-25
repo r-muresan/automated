@@ -145,14 +145,29 @@ export type OrchestratorEvent =
       error?: string;
       savedFile?: SaveStepOutput;
     }
-  | { type: 'loop:iteration:start'; step: LoopStep; index: number; iteration: number; totalItems: number; item: unknown }
-  | { type: 'loop:iteration:end'; step: LoopStep; index: number; iteration: number; totalItems: number; success: boolean; error?: string }
+  | {
+      type: 'loop:iteration:start';
+      step: LoopStep;
+      index: number;
+      iteration: number;
+      totalItems: number;
+      item: unknown;
+    }
+  | {
+      type: 'loop:iteration:end';
+      step: LoopStep;
+      index: number;
+      iteration: number;
+      totalItems: number;
+      success: boolean;
+      error?: string;
+    }
   | { type: 'log'; level: 'info' | 'warn' | 'error'; message: string; data?: any };
 
 export interface OrchestratorModels {
   /** Model for data extraction steps (default: google/gemini-2.5-flash) */
   extract?: string;
-  /** Model for agent/browser steps (default: moonshotai/kimi-k2.5) */
+  /** Model for agent/browser steps (default: anthropic/claude-sonnet-4.6) */
   agent?: string;
   /** Model for conditional evaluation (default: google/gemini-3-flash-preview) */
   conditional?: string;
