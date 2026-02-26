@@ -9,9 +9,10 @@ import {
 } from 'playwright-core';
 import { PrismaClient } from '../libs/prisma/generated/prisma/client';
 import { createBrowserTabTools } from '../apps/cua-agent/orchestrator/agent-tools';
-import { EXCEL_TOOL_NAMES } from '../apps/cua-agent/orchestrator/agent-tools/spreadsheet/constants';
+import { getSpreadsheetToolNamesForProvider } from '../apps/cua-agent/orchestrator/agent-tools/spreadsheet/constants';
 import { getSpreadsheetProvider } from '../apps/cua-agent/orchestrator/agent-tools/spreadsheet/detection';
 import type { CdpPageLike } from '../apps/cua-agent/orchestrator/agent-tools/types';
+import type { SpreadsheetProvider } from '../apps/cua-agent/orchestrator/agent-tools/types';
 import {
   acquireBrowserbaseSessionCreateLease,
   releaseBrowserbaseSession,
@@ -212,7 +213,7 @@ function parseCliArgs(argv: string[]): CliArgs {
 }
 
 function printHelp(): void {
-  console.log(`Excel tool smoke test
+  console.log(`Spreadsheet tool smoke test
 
 Usage:
   npx tsx scripts/test-excel-tools.ts [--email <user-email>] [--workbook-url <url>]
@@ -262,13 +263,13 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: 
   });
 }
 
-async function waitForExcelWorkbookPage(page: PlaywrightPage, timeoutMs: number): Promise<boolean> {
+async function waitForSpreadsheetPage(page: PlaywrightPage, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (getSpreadsheetProvider(page.url()) === 'excel_web') return true;
+    if (getSpreadsheetProvider(page.url()) !== null) return true;
     await wait(300);
   }
-  return getSpreadsheetProvider(page.url()) === 'excel_web';
+  return getSpreadsheetProvider(page.url()) !== null;
 }
 
 async function tryOpenWorkbookFromExcelHome(page: PlaywrightPage): Promise<void> {
@@ -371,9 +372,13 @@ async function hasWorkbookNameBox(page: PlaywrightPage): Promise<boolean> {
   return false;
 }
 
-async function findWorkbookReadyPage(browserContext: BrowserContext): Promise<PlaywrightPage | null> {
+async function findWorkbookReadyPage(
+  browserContext: BrowserContext,
+  provider: SpreadsheetProvider,
+): Promise<PlaywrightPage | null> {
   for (const candidate of browserContext.pages()) {
-    if (getSpreadsheetProvider(candidate.url()) !== 'excel_web') continue;
+    if (getSpreadsheetProvider(candidate.url()) !== provider) continue;
+    if (provider !== 'excel_web') return candidate;
     if (await hasWorkbookNameBox(candidate)) return candidate;
   }
   return null;
@@ -444,6 +449,10 @@ function extractWorkbookSheetCount(result: unknown): number {
   if (typeof payload.total_sheets === 'number') return payload.total_sheets;
   if (typeof payload.totalSheets === 'number') return payload.totalSheets;
   return 0;
+}
+
+function toolName(prefix: 'excel' | 'sheets', suffix: string): string {
+  return `${prefix}_${suffix}`;
 }
 
 async function createBrowserbaseSession(
@@ -569,14 +578,19 @@ async function main() {
       await tryOpenWorkbookFromExcelHome(page);
     }
 
-    const onWorkbookPage = await waitForExcelWorkbookPage(page, 30_000);
+    const onWorkbookPage = await waitForSpreadsheetPage(page, 30_000);
     if (!onWorkbookPage) {
       throw new Error(
-        `Could not reach an Excel workbook page. Current URL: ${page.url()}. ` +
+        `Could not reach a supported spreadsheet page. Current URL: ${page.url()}. ` +
           'Pass --workbook-url or set EXCEL_WORKBOOK_URL for deterministic execution.',
       );
     }
-    console.log(`[INFO] Workbook page detected: ${page.url()}`);
+    const provider = getSpreadsheetProvider(page.url());
+    if (!provider) {
+      throw new Error(`Could not detect spreadsheet provider for URL: ${page.url()}`);
+    }
+    const toolPrefix: 'excel' | 'sheets' = provider === 'excel_web' ? 'excel' : 'sheets';
+    console.log(`[INFO] Spreadsheet page detected: provider=${provider} url=${page.url()}`);
 
     stagehandContext = new StagehandContextAdapter(browserContext);
     await stagehandContext.refresh();
@@ -590,9 +604,10 @@ async function main() {
       },
     } as any) as unknown as Record<string, ToolLike>;
 
-    const missingTools = EXCEL_TOOL_NAMES.filter((toolName) => !(toolName in tools));
+    const providerToolNames = getSpreadsheetToolNamesForProvider(provider);
+    const missingTools = providerToolNames.filter((name) => !(name in tools));
     if (missingTools.length > 0) {
-      throw new Error(`Missing Excel tools in createBrowserTabTools: ${missingTools.join(', ')}`);
+      throw new Error(`Missing ${provider} tools in createBrowserTabTools: ${missingTools.join(', ')}`);
     }
 
     let workbookInfo: unknown = null;
@@ -602,7 +617,7 @@ async function main() {
     while (Date.now() < readinessDeadline) {
       await stagehandContext.refresh();
 
-      const readyPage = await findWorkbookReadyPage(browserContext);
+      const readyPage = await findWorkbookReadyPage(browserContext, provider);
       if (readyPage && readyPage !== page) {
         page = readyPage;
         await page.bringToFront().catch(() => {});
@@ -610,12 +625,12 @@ async function main() {
         console.log(`[INFO] Switched to workbook tab: ${page.url()}`);
       }
 
-      workbookInfo = await invokeTool(tools, 'excel_get_workbook_info', {});
+      workbookInfo = await invokeTool(tools, toolName(toolPrefix, 'get_workbook_info'), {});
       totalSheets = extractWorkbookSheetCount(workbookInfo);
       if (totalSheets > 0) break;
 
       const now = Date.now();
-      if (now - lastOpenAttemptAt > 8_000) {
+      if (provider === 'excel_web' && now - lastOpenAttemptAt > 8_000) {
         await tryOpenWorkbookFromExcelHome(page).catch(() => {});
         lastOpenAttemptAt = now;
       }
@@ -624,13 +639,13 @@ async function main() {
 
     if (totalSheets < 1) {
       throw new Error(
-        `Workbook surface is still not usable (excel_get_workbook_info.total_sheets=${totalSheets}). ` +
+        `Workbook surface is still not usable (${toolName(toolPrefix, 'get_workbook_info')}.total_sheets=${totalSheets}). ` +
           `Current URL: ${page.url()}`,
       );
     }
     console.log(`[INFO] Workbook tool surface ready (total_sheets=${totalSheets}).`);
 
-    const baselineValueResult = await invokeTool(tools, 'excel_read_cell', {
+    const baselineValueResult = await invokeTool(tools, toolName(toolPrefix, 'read_cell'), {
       cell_a1: DEFAULT_TEST_CELL_A1,
     });
     const baselineValue =
@@ -641,15 +656,15 @@ async function main() {
         ? (baselineValueResult as { value: string }).value
         : '';
 
-    const writeValue = `excel-tool-test-${Date.now()}`;
+    const writeValue = `${toolPrefix}-tool-test-${Date.now()}`;
 
     const tests: ToolTest[] = [
-      { toolName: 'excel_get_workbook_info', args: {} },
-      { toolName: 'excel_select_cell', args: { cell_a1: 'A1' } },
-      { toolName: 'excel_read_cell', args: { cell_a1: 'A1' } },
-      { toolName: 'excel_set_cell', args: { cell_a1: DEFAULT_TEST_CELL_A1, value: writeValue } },
+      { toolName: toolName(toolPrefix, 'get_workbook_info'), args: {} },
+      { toolName: toolName(toolPrefix, 'select_cell'), args: { cell_a1: 'A1' } },
+      { toolName: toolName(toolPrefix, 'read_cell'), args: { cell_a1: 'A1' } },
+      { toolName: toolName(toolPrefix, 'set_cell'), args: { cell_a1: DEFAULT_TEST_CELL_A1, value: writeValue } },
       {
-        toolName: 'excel_read_cell',
+        toolName: toolName(toolPrefix, 'read_cell'),
         args: { cell_a1: DEFAULT_TEST_CELL_A1 },
         expect: (result) => {
           if (!result || typeof result !== 'object') return 'Read result is not an object.';
@@ -659,19 +674,19 @@ async function main() {
             : `Expected ${DEFAULT_TEST_CELL_A1}="${writeValue}", got "${String(value ?? '')}".`;
         },
       },
-      { toolName: 'excel_set_cell', args: { cell_a1: DEFAULT_TEST_CELL_A1, value: baselineValue } },
-      { toolName: 'excel_read_sheet', args: { start_row: 1, width: 220 } },
-      { toolName: 'excel_insert_rows', args: { position: 1000, count: 1 } },
-      { toolName: 'excel_delete_row', args: { position: 1000 } },
-      { toolName: 'excel_insert_columns', args: { position: 50, count: 1 } },
-      { toolName: 'excel_delete_column', args: { position: 50 } },
+      { toolName: toolName(toolPrefix, 'set_cell'), args: { cell_a1: DEFAULT_TEST_CELL_A1, value: baselineValue } },
+      { toolName: toolName(toolPrefix, 'read_sheet'), args: { start_row: 1, width: 220 } },
+      { toolName: toolName(toolPrefix, 'insert_rows'), args: { position: 1000, count: 1 } },
+      { toolName: toolName(toolPrefix, 'delete_row'), args: { position: 1000 } },
+      { toolName: toolName(toolPrefix, 'insert_columns'), args: { position: 50, count: 1 } },
+      { toolName: toolName(toolPrefix, 'delete_column'), args: { position: 50 } },
     ];
 
     const results = await runToolTests(tools, tests);
     const passCount = results.filter((entry) => entry.ok).length;
     const failCount = results.length - passCount;
 
-    console.log('\n=== Excel Tool Test Summary ===');
+    console.log('\n=== Spreadsheet Tool Test Summary ===');
     console.log(`Total: ${results.length}`);
     console.log(`Passed: ${passCount}`);
     console.log(`Failed: ${failCount}`);

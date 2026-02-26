@@ -12,9 +12,12 @@ import type {
 
 const SPREADSHEET_BRIDGE_VERSION = '2.1.0';
 const SPREADSHEET_BRIDGE_GLOBAL = '__cuaSpreadsheetBridge';
-const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
+
+// Shared bridge template used to build provider-specific injected scripts.
+const SPREADSHEET_BRIDGE_SCRIPT_TEMPLATE = `(() => {
   const version = ${JSON.stringify(SPREADSHEET_BRIDGE_VERSION)};
   const globalName = ${JSON.stringify(SPREADSHEET_BRIDGE_GLOBAL)};
+  const targetProvider = '__TARGET_PROVIDER__';
 
   if (
     globalThis[globalName] &&
@@ -41,12 +44,13 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
     const query = parsed.search.toLowerCase();
     const hash = parsed.hash.toLowerCase();
 
-    if (
+    const isGoogleSheet =
       (host === 'docs.google.com' || host === 'sheets.google.com') &&
-      /^\\/spreadsheets\\/d\\/[^/]+(?:\\/|$)/i.test(path)
-    ) {
-      return 'google_sheets';
+      /^\\/spreadsheets\\/d\\/[^/]+(?:\\/|$)/i.test(path);
+    if (targetProvider === 'google_sheets') {
+      return isGoogleSheet ? 'google_sheets' : null;
     }
+    if (targetProvider !== 'excel_web' && isGoogleSheet) return 'google_sheets';
 
     const isExcelHost =
       host === 'excel.office.com' ||
@@ -56,7 +60,9 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
       host === 'office.live.com' ||
       host === 'www.office.com' ||
       host === 'office.com';
-    if (!isExcelHost) return null;
+    if (!isExcelHost) {
+      return null;
+    }
 
     const workbookParamKeys = ['docid', 'resid', 'id', 'file', 'wopisrc', 'itemid', 'driveid'];
     const hasWorkbookQueryParam = workbookParamKeys.some(
@@ -432,8 +438,8 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
     const rect = node.getBoundingClientRect?.();
     const viewportWidth = Number.isFinite(window.innerWidth) && window.innerWidth > 0 ? window.innerWidth : 1280;
     const viewportHeight = Number.isFinite(window.innerHeight) && window.innerHeight > 0 ? window.innerHeight : 720;
-    const rawX = rect ? Math.round(rect.left + Math.max(5, Math.min(20, rect.width / 2))) : 20;
-    const rawY = rect ? Math.round(rect.top + Math.max(5, Math.min(12, rect.height / 2))) : 20;
+    const rawX = rect ? Math.round(rect.left + Math.max(8, Math.min(80, rect.width / 4))) : 40;
+    const rawY = rect ? Math.round(rect.top + Math.max(8, Math.min(80, rect.height / 4))) : 40;
     const clientX = Math.max(2, Math.min(viewportWidth - 2, rawX));
     const clientY = Math.max(2, Math.min(viewportHeight - 2, rawY));
 
@@ -900,16 +906,112 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
     if (action === 'delete' && kind === 'column') {
       candidateSets.push({ required: ['delete', 'column'], excluded: ['row'] });
     }
-    if (action === 'insert') {
-      candidateSets.push({ required: ['insert'], excluded: [] });
-    }
-    if (action === 'delete') {
-      candidateSets.push({ required: ['delete'], excluded: [] });
-    }
 
     for (const entry of candidateSets) {
       if (clickMenuItemByKeywords(entry.required, entry.excluded)) return true;
     }
+    return false;
+  };
+
+  const findTopMenuButton = (menuLabel) => {
+    const wanted = normalizeText(menuLabel);
+    if (!wanted) return null;
+    const selectors = [
+      '[role="menubar"] [role="menuitem"]',
+      '.menu-button[role="menuitem"]',
+      '.menu-button',
+    ];
+
+    for (const selector of selectors) {
+      for (const node of queryAllSafe(selector)) {
+        if (!isVisible(node)) continue;
+        const label = normalizeText(textOf(node) || node.getAttribute?.('aria-label') || '');
+        if (!label) continue;
+        if (label === wanted || label.startsWith(wanted + ' ')) {
+          return node;
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const collectPopupMenuItems = () => {
+    const selectors = [
+      '.goog-menuitem',
+      '[role="menu"] [role="menuitem"]',
+      '[role="menu"] [role="menuitemradio"]',
+      '[role="menu"] [role="menuitemcheckbox"]',
+      '.ms-ContextualMenu-item button',
+    ];
+
+    const dedup = new Set();
+    const nodes = [];
+    for (const selector of selectors) {
+      for (const node of queryAllSafe(selector)) {
+        if (!isVisible(node) || dedup.has(node)) continue;
+        dedup.add(node);
+        nodes.push(node);
+      }
+    }
+    return nodes;
+  };
+
+  const clickPopupMenuItemByKeywords = (required, excluded = []) => {
+    const requiredNormalized = required.map((entry) => normalizeText(entry)).filter(Boolean);
+    const excludedNormalized = excluded.map((entry) => normalizeText(entry)).filter(Boolean);
+    if (requiredNormalized.length === 0) return false;
+
+    for (const node of collectPopupMenuItems()) {
+      const label = nodeLabel(node);
+      if (!label) continue;
+      if (!requiredNormalized.every((term) => label.includes(term))) continue;
+      if (excludedNormalized.some((term) => label.includes(term))) continue;
+      if (clickElement(node)) return true;
+    }
+
+    return false;
+  };
+
+  const clickGoogleMenuStructureAction = async (kind, action) => {
+    const menuLabel = action === 'delete' ? 'Edit' : 'Insert';
+    const menuButton = findTopMenuButton(menuLabel);
+    if (!menuButton) return false;
+
+    if (!clickElement(menuButton)) return false;
+    await wait(120);
+
+    const candidateSets = [];
+    if (action === 'insert' && kind === 'row') {
+      candidateSets.push({ required: ['insert', 'row'], excluded: ['column'] });
+      candidateSets.push({ required: ['row'], excluded: ['column'] });
+    }
+    if (action === 'insert' && kind === 'column') {
+      candidateSets.push({ required: ['insert', 'column'], excluded: ['row'] });
+      candidateSets.push({ required: ['column'], excluded: ['row'] });
+    }
+    if (action === 'delete' && kind === 'row') {
+      candidateSets.push({ required: ['delete', 'row'], excluded: ['column'] });
+    }
+    if (action === 'delete' && kind === 'column') {
+      candidateSets.push({ required: ['delete', 'column'], excluded: ['row'] });
+    }
+
+    for (const entry of candidateSets) {
+      if (clickPopupMenuItemByKeywords(entry.required, entry.excluded)) {
+        await wait(120);
+        return true;
+      }
+    }
+
+    try {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }),
+      );
+      document.dispatchEvent(
+        new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', bubbles: true }),
+      );
+    } catch {}
     return false;
   };
 
@@ -955,6 +1057,9 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
 
   const findGridAnchorElement = () => {
     const selectors = [
+      '#waffle-grid-container',
+      '.grid-container',
+      '.cell-input',
       '#m_excelWebRenderer_ewaCtl_canvasdiv',
       '#m_excelWebRenderer_ewaCtl_gridDiv',
       '#m_excelWebRenderer_ewaCtl_rowHeadersDiv',
@@ -973,6 +1078,7 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
   };
 
   const mutateStructure = async (params) => {
+    const context = detectContext();
     const kind = params && params.kind === 'column' ? 'column' : 'row';
     const action = params && params.action === 'delete' ? 'delete' : 'insert';
     const position = Number(params?.position);
@@ -1027,6 +1133,41 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
         openContextMenuForElement(anchor);
         await wait(120);
         clicked = clickStructureAction(kind, action);
+        if (!clicked && context.provider === 'google_sheets' && action === 'delete') {
+          clicked = clickMenuItemByKeywords(['delete']);
+          if (clicked) {
+            await wait(120);
+          }
+        }
+      }
+
+      if (!clicked && context.provider === 'google_sheets') {
+        clicked = await clickGoogleMenuStructureAction(kind, action);
+      }
+
+      if (!clicked && context.provider === 'google_sheets' && action === 'delete') {
+        // Google Sheets UIs can hide delete row/column behind variants that don't expose
+        // stable menu labels. Fall back to the standard delete shortcut on the selection.
+        const target = document.activeElement || findGridAnchorElement() || document.body;
+        const eventOptions = {
+          bubbles: true,
+          cancelable: true,
+          key: '-',
+          code: 'Minus',
+          ctrlKey: true,
+          metaKey: false,
+          altKey: false,
+          shiftKey: false,
+        };
+        try {
+          target.dispatchEvent(new KeyboardEvent('keydown', eventOptions));
+          target.dispatchEvent(new KeyboardEvent('keypress', eventOptions));
+          target.dispatchEvent(new KeyboardEvent('keyup', eventOptions));
+          await wait(160);
+          clicked = true;
+        } catch {
+          // keep clicked=false and fall through to structured error
+        }
       }
 
       if (!clicked) {
@@ -1116,6 +1257,32 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
   };
 })();`;
 
+// Provider-specific injected bridge scripts.
+const SPREADSHEET_BRIDGE_SCRIPT_GOOGLE = SPREADSHEET_BRIDGE_SCRIPT_TEMPLATE.replace(
+  '__TARGET_PROVIDER__',
+  'google_sheets',
+);
+const SPREADSHEET_BRIDGE_SCRIPT_EXCEL = SPREADSHEET_BRIDGE_SCRIPT_TEMPLATE.replace(
+  '__TARGET_PROVIDER__',
+  'excel_web',
+);
+
+function getSpreadsheetBridgeScriptForProvider(
+  provider: ReturnType<typeof getSpreadsheetProvider> | null | undefined,
+): string {
+  return provider === 'google_sheets' ? SPREADSHEET_BRIDGE_SCRIPT_GOOGLE : SPREADSHEET_BRIDGE_SCRIPT_EXCEL;
+}
+
+function getSpreadsheetBridgeScriptForUrl(
+  url: string | null | undefined,
+  fallbackProvider?: ReturnType<typeof getSpreadsheetProvider> | null,
+): string {
+  if (typeof url !== 'string' || url.length === 0) {
+    return getSpreadsheetBridgeScriptForProvider(fallbackProvider ?? null);
+  }
+  return getSpreadsheetBridgeScriptForProvider(getSpreadsheetProvider(url) ?? fallbackProvider ?? null);
+}
+
 export function spreadsheetToolError(
   code: SpreadsheetErrorCode,
   message: string,
@@ -1183,13 +1350,15 @@ export async function ensureSpreadsheetBridge(page: CdpPageLike): Promise<void> 
     return;
   }
 
+  const pageProvider = getSpreadsheetProvider(page.url());
+  const bridgeScript = getSpreadsheetBridgeScriptForUrl(page.url(), pageProvider);
   console.log('[ORCHESTRATOR] Spreadsheet bridge: injecting CDP script');
   await page.sendCDP('Page.addScriptToEvaluateOnNewDocument', {
-    source: SPREADSHEET_BRIDGE_SCRIPT,
+    source: bridgeScript,
   });
 
   const injectionResult = await page.sendCDP<Protocol.Runtime.EvaluateResponse>('Runtime.evaluate', {
-    expression: SPREADSHEET_BRIDGE_SCRIPT,
+    expression: bridgeScript,
     returnByValue: true,
     awaitPromise: true,
   });
@@ -1219,6 +1388,7 @@ export async function runBridge(
   method: string,
   args: unknown[] = [],
 ): Promise<BridgeRunResult> {
+  const pageProvider = getSpreadsheetProvider(page.url());
   const expression = `(() => {
     try {
       const bridge = globalThis.${SPREADSHEET_BRIDGE_GLOBAL};
@@ -1292,10 +1462,28 @@ export async function runBridge(
     return parseBridgePayload(response.result?.value);
   };
 
+  const readContextUrl = async (contextId: number): Promise<string | null> => {
+    try {
+      const response = await page.sendCDP<Protocol.Runtime.EvaluateResponse>('Runtime.evaluate', {
+        expression: 'window.location.href',
+        contextId,
+        returnByValue: true,
+        awaitPromise: true,
+      });
+      if (response.exceptionDetails) return null;
+      const value = response.result?.value;
+      return typeof value === 'string' ? value : null;
+    } catch {
+      return null;
+    }
+  };
+
   const executeInContext = async (contextId?: number): Promise<BridgeRunResult> => {
     if (typeof contextId === 'number') {
+      const contextUrl = await readContextUrl(contextId);
+      const bridgeScript = getSpreadsheetBridgeScriptForUrl(contextUrl, pageProvider);
       const bootstrap = await page.sendCDP<Protocol.Runtime.EvaluateResponse>('Runtime.evaluate', {
-        expression: SPREADSHEET_BRIDGE_SCRIPT,
+        expression: bridgeScript,
         contextId,
         returnByValue: true,
         awaitPromise: true,
@@ -1404,11 +1592,21 @@ export async function runBridge(
 
     const results: BridgeRunResult[] = [];
     for (const frameCandidate of frameCandidates) {
-      const frameLike = frameCandidate as { evaluate?: (expression: string) => Promise<unknown> };
+      const frameLike = frameCandidate as {
+        evaluate?: (expression: string) => Promise<unknown>;
+        url?: (() => string) | string;
+      };
       if (typeof frameLike.evaluate !== 'function') continue;
+      const frameUrl =
+        typeof frameLike.url === 'function'
+          ? frameLike.url()
+          : typeof frameLike.url === 'string'
+            ? frameLike.url
+            : null;
+      const bridgeScript = getSpreadsheetBridgeScriptForUrl(frameUrl ?? page.url(), pageProvider);
 
       try {
-        await withTimeout(frameLike.evaluate(SPREADSHEET_BRIDGE_SCRIPT), 2500);
+        await withTimeout(frameLike.evaluate(bridgeScript), 2500);
       } catch {
         continue;
       }
