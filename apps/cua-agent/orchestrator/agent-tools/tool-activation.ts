@@ -1,5 +1,5 @@
 import { getSpreadsheetProvider } from './spreadsheet/detection';
-import { SPREADSHEET_TOOL_NAMES } from './spreadsheet/constants';
+import { SPREADSHEET_TOOL_NAMES, getSpreadsheetToolNamesForProvider } from './spreadsheet/constants';
 export { SPREADSHEET_TOOL_NAMES };
 
 export const ORCHESTRATOR_ALWAYS_ON_TOOL_NAMES = [
@@ -33,8 +33,9 @@ export function buildHybridActiveToolsForUrl(url: string): string[] {
     activeTools.add('search');
   }
 
-  if (getSpreadsheetProvider(url)) {
-    for (const toolName of SPREADSHEET_TOOL_NAMES) {
+  const provider = getSpreadsheetProvider(url);
+  if (provider) {
+    for (const toolName of getSpreadsheetToolNamesForProvider(provider)) {
       activeTools.add(toolName);
     }
   }

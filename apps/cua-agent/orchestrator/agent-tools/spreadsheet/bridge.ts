@@ -50,6 +50,8 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
 
     const isExcelHost =
       host === 'excel.office.com' ||
+      host === 'excel.officeapps.live.com' ||
+      /^excel\\.[a-z0-9.-]*officeapps\\.live\\.com$/i.test(host) ||
       host === 'excel.cloud.microsoft' ||
       host === 'office.live.com' ||
       host === 'www.office.com' ||
@@ -111,6 +113,9 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
     const selectors = [
       '.docs-sheet-tab[role="tab"]',
       '.docs-sheet-tab',
+      '#m_excelWebRenderer_ewaCtl_m_sheetTabBar [role="tab"]',
+      '#m_excelWebRenderer_ewaCtl_m_sheetTabBar .tab-anchor-text',
+      '#m_excelWebRenderer_ewaCtl_m_sheetTabBar a',
       '[role="tab"][data-automationid*="SheetTab"]',
       '[role="tab"][id*="sheet-tab"]',
       '[role="tab"][id*="SheetTab"]',
@@ -198,10 +203,14 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
   const getSelectionA1 = (provider) => {
     const shared = [
       '#t-name-box',
+      '#FormulaBar-NameBox-input',
       'input[aria-label="Name box"]',
       'input[aria-label*="Name box"]',
       'input[aria-label*="Name Box"]',
+      'input[role="combobox"][aria-label*="Name Box"]',
+      'input[role="combobox"][aria-label*="Name box"]',
       'input[id*="NameBox"]',
+      'input[id*="NameBox-input"]',
       'input[data-automationid*="NameBox"]',
       '[data-automationid*="NameBox"] input',
     ];
@@ -332,10 +341,14 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
   const findNameBoxElement = () => {
     const selectors = [
       '#t-name-box',
+      '#FormulaBar-NameBox-input',
       'input[aria-label="Name box"]',
       'input[aria-label*="Name box"]',
       'input[aria-label*="Name Box"]',
+      'input[role="combobox"][aria-label*="Name Box"]',
+      'input[role="combobox"][aria-label*="Name box"]',
       'input[id*="NameBox"]',
+      'input[id*="NameBox-input"]',
       'input[data-automationid*="NameBox"]',
       '[data-automationid*="NameBox"] input',
       '[role="textbox"][aria-label*="Name box"]',
@@ -417,8 +430,12 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
   const openContextMenuForElement = (node) => {
     if (!node) return false;
     const rect = node.getBoundingClientRect?.();
-    const clientX = rect ? Math.round(rect.left + Math.max(5, Math.min(20, rect.width / 2))) : 20;
-    const clientY = rect ? Math.round(rect.top + Math.max(5, Math.min(12, rect.height / 2))) : 20;
+    const viewportWidth = Number.isFinite(window.innerWidth) && window.innerWidth > 0 ? window.innerWidth : 1280;
+    const viewportHeight = Number.isFinite(window.innerHeight) && window.innerHeight > 0 ? window.innerHeight : 720;
+    const rawX = rect ? Math.round(rect.left + Math.max(5, Math.min(20, rect.width / 2))) : 20;
+    const rawY = rect ? Math.round(rect.top + Math.max(5, Math.min(12, rect.height / 2))) : 20;
+    const clientX = Math.max(2, Math.min(viewportWidth - 2, rawX));
+    const clientY = Math.max(2, Math.min(viewportHeight - 2, rawY));
 
     try {
       node.dispatchEvent(
@@ -557,11 +574,14 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
       }
       pressEnterOn(nameBox);
       await wait(90);
+      const activeSelectionA1 = getSelectionA1(context.provider);
+      const nameBoxStillFocused = document.activeElement === nameBox;
       return {
         success: true,
         requestedRangeA1: buildRangeReference(parsed.sheetName, parsed.rangePart),
         activeSheetName: getActiveSheetName(),
-        activeSelectionA1: getSelectionA1(context.provider),
+        activeSelectionA1,
+        nameBoxStillFocused,
       };
     } catch (error) {
       return {
@@ -880,11 +900,76 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
     if (action === 'delete' && kind === 'column') {
       candidateSets.push({ required: ['delete', 'column'], excluded: ['row'] });
     }
+    if (action === 'insert') {
+      candidateSets.push({ required: ['insert'], excluded: [] });
+    }
+    if (action === 'delete') {
+      candidateSets.push({ required: ['delete'], excluded: [] });
+    }
 
     for (const entry of candidateSets) {
       if (clickMenuItemByKeywords(entry.required, entry.excluded)) return true;
     }
     return false;
+  };
+
+  const ensureHomeTabSelected = async () => {
+    const selectors = [
+      'button[role="tab"]#Home',
+      '[role="tab"]#Home',
+      'button[role="tab"][aria-label="Home"]',
+      '[role="tab"][aria-label="Home"]',
+      '[role="tab"][aria-label^="Home"]',
+    ];
+
+    for (const selector of selectors) {
+      const candidate = queryAllSafe(selector).find((node) => isVisible(node));
+      if (!candidate) continue;
+      const ariaSelected = String(candidate.getAttribute?.('aria-selected') || '').toLowerCase();
+      if (ariaSelected === 'true') return true;
+      if (clickElement(candidate)) {
+        await wait(120);
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  const findRibbonStructureButton = (action) => {
+    const label = action === 'insert' ? 'Insert' : 'Delete';
+    const selectors = [
+      'button.fui-SplitButton__primaryActionButton[aria-label="' + label + '"]',
+      'button[aria-label="' + label + '"]',
+      '[role="button"][aria-label="' + label + '"]',
+    ];
+
+    for (const selector of selectors) {
+      for (const node of queryAllSafe(selector)) {
+        if (isVisible(node)) return node;
+      }
+    }
+
+    return null;
+  };
+
+  const findGridAnchorElement = () => {
+    const selectors = [
+      '#m_excelWebRenderer_ewaCtl_canvasdiv',
+      '#m_excelWebRenderer_ewaCtl_gridDiv',
+      '#m_excelWebRenderer_ewaCtl_rowHeadersDiv',
+      '#m_excelWebRenderer_ewaCtl_colHeadersDiv',
+      '[role="grid"]',
+      '.ewa-gridcontrol',
+    ];
+
+    for (const selector of selectors) {
+      for (const node of queryAllSafe(selector)) {
+        if (isVisible(node)) return node;
+      }
+    }
+
+    return null;
   };
 
   const mutateStructure = async (params) => {
@@ -920,11 +1005,30 @@ const SPREADSHEET_BRIDGE_SCRIPT = `(() => {
       }
 
       await wait(80);
-      const anchor = findSelectedHeader(kind) || document.activeElement || document.body;
-      openContextMenuForElement(anchor);
-      await wait(100);
+      await ensureHomeTabSelected();
 
-      const clicked = clickStructureAction(kind, action);
+      let clicked = false;
+      const ribbonButton = findRibbonStructureButton(action);
+      if (ribbonButton) {
+        clicked = clickElement(ribbonButton);
+        if (clicked) {
+          await wait(140);
+        }
+      }
+
+      if (!clicked) {
+        try {
+          if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+          }
+        } catch {}
+
+        const anchor = findSelectedHeader(kind) || findGridAnchorElement() || document.body;
+        openContextMenuForElement(anchor);
+        await wait(120);
+        clicked = clickStructureAction(kind, action);
+      }
+
       if (!clicked) {
         return {
           success: false,
@@ -1147,24 +1251,7 @@ export async function runBridge(
     }
   })()`;
 
-  try {
-    const response = await page.sendCDP<Protocol.Runtime.EvaluateResponse>('Runtime.evaluate', {
-      expression,
-      returnByValue: true,
-      awaitPromise: true,
-    });
-
-    if (response.exceptionDetails) {
-      return {
-        ok: false,
-        error: {
-          code: 'UNSUPPORTED_PROVIDER_STATE',
-          message: response.exceptionDetails.text || `Bridge call "${method}" failed`,
-        },
-      };
-    }
-
-    const value = response.result?.value;
+  const parseBridgePayload = (value: unknown): BridgeRunResult => {
     if (!value || typeof value !== 'object') {
       return {
         ok: false,
@@ -1190,6 +1277,225 @@ export async function runBridge(
             : `Bridge call "${method}" returned an error`,
       },
     };
+  };
+
+  const parseBridgeResponse = (response: Protocol.Runtime.EvaluateResponse): BridgeRunResult => {
+    if (response.exceptionDetails) {
+      return {
+        ok: false,
+        error: {
+          code: 'UNSUPPORTED_PROVIDER_STATE',
+          message: response.exceptionDetails.text || `Bridge call "${method}" failed`,
+        },
+      };
+    }
+    return parseBridgePayload(response.result?.value);
+  };
+
+  const executeInContext = async (contextId?: number): Promise<BridgeRunResult> => {
+    if (typeof contextId === 'number') {
+      const bootstrap = await page.sendCDP<Protocol.Runtime.EvaluateResponse>('Runtime.evaluate', {
+        expression: SPREADSHEET_BRIDGE_SCRIPT,
+        contextId,
+        returnByValue: true,
+        awaitPromise: true,
+      });
+      if (bootstrap.exceptionDetails) {
+        return {
+          ok: false,
+          error: {
+            code: 'UNSUPPORTED_PROVIDER_STATE',
+            message:
+              bootstrap.exceptionDetails.text ||
+              `Bridge bootstrap failed in frame context for "${method}"`,
+          },
+        };
+      }
+    }
+
+    const params: Protocol.Runtime.EvaluateRequest = {
+      expression,
+      returnByValue: true,
+      awaitPromise: true,
+      ...(typeof contextId === 'number' ? { contextId } : {}),
+    };
+    const response = await page.sendCDP<Protocol.Runtime.EvaluateResponse>('Runtime.evaluate', params);
+    return parseBridgeResponse(response);
+  };
+
+  const isSuccessfulPayload = (result: BridgeRunResult): boolean => {
+    if (!('value' in result)) return false;
+    if (!result.value || typeof result.value !== 'object') return true;
+    if (!('success' in (result.value as Record<string, unknown>))) return true;
+    return (result.value as { success?: unknown }).success === true;
+  };
+
+  const workbookScore = (result: BridgeRunResult): number => {
+    if (!('value' in result)) return -1;
+    const payload = result.value && typeof result.value === 'object' ? (result.value as Record<string, unknown>) : {};
+    const totalSheets =
+      typeof payload.total_sheets === 'number'
+        ? payload.total_sheets
+        : typeof payload.totalSheets === 'number'
+          ? payload.totalSheets
+          : 0;
+    const activeSelection = typeof payload.activeSelectionA1 === 'string' ? payload.activeSelectionA1 : '';
+    const activeSheet = typeof payload.active_sheet === 'string' ? payload.active_sheet : '';
+    return totalSheets * 10 + (activeSelection ? 2 : 0) + (activeSheet ? 1 : 0);
+  };
+
+  const collectFrameIds = async (): Promise<string[]> => {
+    try {
+      const frameTreeResponse = await page.sendCDP<Protocol.Page.GetFrameTreeResponse>('Page.getFrameTree');
+      const frameIds: string[] = [];
+      const visit = (node?: Protocol.Page.FrameTree): void => {
+        if (!node || !node.frame?.id) return;
+        frameIds.push(node.frame.id);
+        const children = Array.isArray(node.childFrames) ? node.childFrames : [];
+        for (const child of children) {
+          visit(child);
+        }
+      };
+      visit(frameTreeResponse.frameTree);
+      return frameIds;
+    } catch {
+      return [];
+    }
+  };
+
+  const executeViaFrameEvaluate = async (): Promise<BridgeRunResult | null> => {
+    const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
+      return await new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error(`Frame evaluation timeout after ${ms}ms`));
+        }, ms);
+        promise
+          .then((value) => {
+            clearTimeout(timer);
+            resolve(value);
+          })
+          .catch((error) => {
+            clearTimeout(timer);
+            reject(error);
+          });
+      });
+    };
+
+    const pageWithFrames = page as unknown as {
+      evaluate?: (expression: string) => Promise<unknown>;
+      frames?: () => unknown[];
+    };
+    const frameCandidates: unknown[] = [];
+    if (typeof pageWithFrames.evaluate === 'function') {
+      frameCandidates.push(pageWithFrames);
+    }
+    if (typeof pageWithFrames.frames === 'function') {
+      try {
+        const frames = pageWithFrames.frames();
+        if (Array.isArray(frames)) {
+          frameCandidates.push(...frames);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (frameCandidates.length === 0) return null;
+
+    const results: BridgeRunResult[] = [];
+    for (const frameCandidate of frameCandidates) {
+      const frameLike = frameCandidate as { evaluate?: (expression: string) => Promise<unknown> };
+      if (typeof frameLike.evaluate !== 'function') continue;
+
+      try {
+        await withTimeout(frameLike.evaluate(SPREADSHEET_BRIDGE_SCRIPT), 2500);
+      } catch {
+        continue;
+      }
+
+      try {
+        const payload = await withTimeout(frameLike.evaluate(expression), 2500);
+        results.push(parseBridgePayload(payload));
+      } catch {
+        // ignore and continue
+      }
+    }
+
+    if (results.length === 0) return null;
+    if (method !== 'getWorkbookInfo') {
+      const successful = results.find((result) => isSuccessfulPayload(result));
+      if (successful) return successful;
+      return results[0];
+    }
+
+    let best = results[0];
+    let bestScore = workbookScore(best);
+    for (const result of results.slice(1)) {
+      const score = workbookScore(result);
+      if (score > bestScore) {
+        best = result;
+        bestScore = score;
+      }
+    }
+    return best;
+  };
+
+  try {
+    const frameEvalResult = await executeViaFrameEvaluate();
+    if (frameEvalResult) {
+      return frameEvalResult;
+    }
+
+    const topResult = await executeInContext();
+    if (method !== 'getWorkbookInfo' && isSuccessfulPayload(topResult)) {
+      return topResult;
+    }
+
+    const frameIds = await collectFrameIds();
+    if (frameIds.length <= 1) {
+      return topResult;
+    }
+
+    let bestWorkbookInfoResult = topResult;
+    let bestWorkbookInfoScore = method === 'getWorkbookInfo' ? workbookScore(topResult) : -1;
+    let firstFrameFailureResult: BridgeRunResult | null = null;
+
+    for (const frameId of frameIds.slice(1)) {
+      let isolatedWorld: Protocol.Page.CreateIsolatedWorldResponse | null = null;
+      try {
+        isolatedWorld = await page.sendCDP<Protocol.Page.CreateIsolatedWorldResponse>(
+          'Page.createIsolatedWorld',
+          {
+            frameId,
+            worldName: `cuaSpreadsheetBridge:${method}`,
+          },
+        );
+      } catch {
+        continue;
+      }
+
+      const executionContextId = isolatedWorld?.executionContextId;
+      if (typeof executionContextId !== 'number') continue;
+
+      const frameResult = await executeInContext(executionContextId);
+      if (method !== 'getWorkbookInfo') {
+        if (isSuccessfulPayload(frameResult)) {
+          return frameResult;
+        }
+        if (!firstFrameFailureResult) {
+          firstFrameFailureResult = frameResult;
+        }
+        continue;
+      }
+
+      const score = workbookScore(frameResult);
+      if (score > bestWorkbookInfoScore) {
+        bestWorkbookInfoResult = frameResult;
+        bestWorkbookInfoScore = score;
+      }
+    }
+
+    return method === 'getWorkbookInfo' ? bestWorkbookInfoResult : firstFrameFailureResult ?? topResult;
   } catch (error: any) {
     return {
       ok: false,

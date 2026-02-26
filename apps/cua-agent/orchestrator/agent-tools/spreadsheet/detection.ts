@@ -30,6 +30,8 @@ export function isExcelWebUrl(url: string): boolean {
 
   const isExcelHost =
     host === 'excel.office.com' ||
+    host === 'excel.officeapps.live.com' ||
+    /^excel\\.[a-z0-9.-]*officeapps\\.live\\.com$/i.test(host) ||
     host === 'excel.cloud.microsoft' ||
     host === 'office.live.com' ||
     host === 'www.office.com' ||

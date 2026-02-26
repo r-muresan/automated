@@ -9,6 +9,7 @@ import type {
   SpreadsheetToolError,
 } from '../types';
 import { ensureSpreadsheetBridge, getSpreadsheetPageState, runBridge, spreadsheetToolError } from './bridge';
+import { EXCEL_TOOL_PREFIX, SHEETS_TOOL_PREFIX } from './constants';
 
 function isBridgeError(result: BridgeRunResult): result is Extract<BridgeRunResult, { ok: false }> {
   return 'error' in result;
@@ -361,14 +362,40 @@ async function activateRange(
     };
   }
 
+  let activeSheetName =
+    typeof activation.value.activeSheetName === 'string' ? activation.value.activeSheetName : undefined;
+  let activeSelectionA1 =
+    typeof activation.value.activeSelectionA1 === 'string' ? activation.value.activeSelectionA1 : undefined;
+
+  if (activation.value.nameBoxStillFocused === true) {
+    try {
+      await page.keyPress('Enter');
+    } catch (error: any) {
+      return {
+        ok: false,
+        error: spreadsheetToolError(
+          'UNSUPPORTED_PROVIDER_STATE',
+          error?.message ?? `Failed to confirm range activation for ${rangeA1}.`,
+          { rangeA1 },
+        ),
+      };
+    }
+    await sleep(90);
+
+    const metadata = await bridgeResult(page, 'getSelectionMetadata');
+    if ('error' in metadata) return { ok: false, error: metadata.error };
+    if (typeof metadata.value.activeSheetName === 'string') {
+      activeSheetName = metadata.value.activeSheetName;
+    }
+    if (typeof metadata.value.activeSelectionA1 === 'string') {
+      activeSelectionA1 = metadata.value.activeSelectionA1;
+    }
+  }
+
   return {
     ok: true,
-    activeSheetName:
-      typeof activation.value.activeSheetName === 'string' ? activation.value.activeSheetName : undefined,
-    activeSelectionA1:
-      typeof activation.value.activeSelectionA1 === 'string'
-        ? activation.value.activeSelectionA1
-        : undefined,
+    activeSheetName,
+    activeSelectionA1,
   };
 }
 
@@ -458,30 +485,229 @@ async function writeRangeViaClipboard(
   return { ok: true };
 }
 
-const rangeInputSchema = z.union([
-  z.string().min(1).describe('A1 notation (for example A1, B2:C3, Sheet1!A1:B2, or comma-separated).'),
-  z.array(z.string().min(1)).min(1).describe('List of A1 ranges.'),
-]);
+type SpreadsheetToolPrefix = typeof SHEETS_TOOL_PREFIX | typeof EXCEL_TOOL_PREFIX;
 
-const renameOperationSchema = z.object({
-  old_name: z.string().min(1),
-  new_name: z.string().min(1),
+const READ_SHEET_ROW_WINDOW = 20;
+const READ_SHEET_COLUMN_LIMIT = 26;
+
+const PROVIDER_BY_PREFIX: Record<SpreadsheetToolPrefix, SpreadsheetProvider> = {
+  [SHEETS_TOOL_PREFIX]: 'google_sheets',
+  [EXCEL_TOOL_PREFIX]: 'excel_web',
+};
+
+const cellInputSchema = z.object({
+  cell_a1: z
+    .string()
+    .min(1)
+    .describe('Single A1 cell reference (for example A1 or Sheet1!B2).'),
 });
 
-const rowOperationSchema = z.object({
+const setCellInputSchema = z.object({
+  cell_a1: z
+    .string()
+    .min(1)
+    .describe('Single A1 cell reference (for example A1 or Sheet1!B2).'),
+  value: z.any().describe('Cell value to write. Formulas should start with "=".'),
+});
+
+const readSheetInputSchema = z.object({
+  sheet_name: z.string().min(1).optional(),
+  start_row: z
+    .number()
+    .int()
+    .min(1)
+    .default(1)
+    .describe('1-based starting row. Reads exactly 20 rows from this row.'),
+  width: z.number().int().min(60).default(300),
+});
+
+const insertRowsInputSchema = z.object({
   position: z.number().int().min(1),
   count: z.number().int().min(1).default(1),
   sheet_name: z.string().min(1).optional(),
 });
 
-export function createSpreadsheetTools(stagehand: Stagehand) {
+const insertColumnsInputSchema = z.object({
+  position: z.number().int().min(1),
+  count: z.number().int().min(1).default(1),
+  sheet_name: z.string().min(1).optional(),
+});
+
+const deleteRowInputSchema = z.object({
+  position: z.number().int().min(1),
+  sheet_name: z.string().min(1).optional(),
+});
+
+const deleteColumnInputSchema = z.object({
+  position: z.number().int().min(1),
+  sheet_name: z.string().min(1).optional(),
+});
+
+function toPrefixedToolName(prefix: SpreadsheetToolPrefix, baseName: string): string {
+  return `${prefix}_${baseName}`;
+}
+
+function providerDisplayName(provider: SpreadsheetProvider): string {
+  return provider === 'google_sheets' ? 'Google Sheets' : 'Excel Web';
+}
+
+async function getReadySpreadsheetStateForPrefix(
+  stagehand: Stagehand,
+  prefix: SpreadsheetToolPrefix,
+): Promise<
+  | { page: CdpPageLike; provider: SpreadsheetProvider; url: string }
+  | { error: SpreadsheetToolError }
+> {
+  const state = await getReadySpreadsheetState(stagehand);
+  if ('error' in state) return state;
+
+  const expectedProvider = PROVIDER_BY_PREFIX[prefix];
+  if (state.provider !== expectedProvider) {
+    return {
+      error: spreadsheetToolError(
+        'UNSUPPORTED_PROVIDER_STATE',
+        `${prefix}_* tools require ${providerDisplayName(expectedProvider)}. Active provider is ${providerDisplayName(state.provider)}.`,
+      ),
+    };
+  }
+
+  return state;
+}
+
+function resolveActiveSheetName(
+  metadata: Record<string, unknown>,
+  parsedRange: ParsedRange | null,
+  requestedSheetName?: string,
+): string {
+  if (typeof metadata.activeSheetName === 'string') return metadata.activeSheetName;
+  if (parsedRange?.sheetName) return parsedRange.sheetName;
+  if (requestedSheetName) return requestedSheetName;
+  return '';
+}
+
+function assertSingleCellRange(cellA1: string): ParsedRange | null {
+  const parsed = parseA1Range(cellA1);
+  if (!parsed) return null;
+  if (parsed.rows !== 1 || parsed.cols !== 1) return null;
+  return parsed;
+}
+
+function normalizeSingleCellA1(value: string): string | null {
+  const parsed = assertSingleCellRange(value);
+  if (!parsed) return null;
+  return `${columnNumberToLetters(parsed.startCol)}${parsed.startRow}`;
+}
+
+function createPrefixedSpreadsheetTools(stagehand: Stagehand, prefix: SpreadsheetToolPrefix) {
   return {
-    get_workbook_info: tool({
-      description:
-        'Get workbook metadata including sheet names and active sheet when the active tab is Google Sheets or Excel Web.',
+    [toPrefixedToolName(prefix, 'read_cell')]: tool({
+      description: 'Read a single cell value.',
+      inputSchema: cellInputSchema,
+      execute: async ({ cell_a1 }) => {
+        const state = await getReadySpreadsheetStateForPrefix(stagehand, prefix);
+        if ('error' in state) return state.error;
+
+        const parsed = assertSingleCellRange(cell_a1);
+        if (!parsed) {
+          return spreadsheetToolError(
+            'UNSUPPORTED_PROVIDER_STATE',
+            'cell_a1 must be a single cell reference (for example A1 or Sheet1!B2).',
+            { cell_a1 },
+          );
+        }
+
+        const dataResult = await readRangeViaClipboard(state.page, cell_a1.trim());
+        if ('error' in dataResult) return dataResult.error;
+
+        return {
+          success: true,
+          provider: state.provider,
+          cell_a1: cell_a1.trim(),
+          sheet_name: resolveActiveSheetName(dataResult.metadata, parsed),
+          value: dataResult.values[0]?.[0] ?? '',
+        };
+      },
+    }),
+
+    [toPrefixedToolName(prefix, 'set_cell')]: tool({
+      description: 'Set a single cell value.',
+      inputSchema: setCellInputSchema,
+      execute: async ({ cell_a1, value }) => {
+        const state = await getReadySpreadsheetStateForPrefix(stagehand, prefix);
+        if ('error' in state) return state.error;
+
+        const parsed = assertSingleCellRange(cell_a1);
+        if (!parsed) {
+          return spreadsheetToolError(
+            'UNSUPPORTED_PROVIDER_STATE',
+            'cell_a1 must be a single cell reference (for example A1 or Sheet1!B2).',
+            { cell_a1 },
+          );
+        }
+
+        const writeResult = await writeRangeViaClipboard(state.page, cell_a1.trim(), [[value]]);
+        if ('error' in writeResult) return writeResult.error;
+
+        const readBack = await readRangeViaClipboard(state.page, cell_a1.trim());
+        if ('error' in readBack) return readBack.error;
+
+        return {
+          success: true,
+          provider: state.provider,
+          cell_a1: cell_a1.trim(),
+          sheet_name: resolveActiveSheetName(readBack.metadata, parsed),
+          value: readBack.values[0]?.[0] ?? '',
+        };
+      },
+    }),
+
+    [toPrefixedToolName(prefix, 'select_cell')]: tool({
+      description: 'Select and focus a single cell.',
+      inputSchema: cellInputSchema,
+      execute: async ({ cell_a1 }) => {
+        const state = await getReadySpreadsheetStateForPrefix(stagehand, prefix);
+        if ('error' in state) return state.error;
+
+        const parsed = assertSingleCellRange(cell_a1);
+        if (!parsed) {
+          return spreadsheetToolError(
+            'UNSUPPORTED_PROVIDER_STATE',
+            'cell_a1 must be a single cell reference (for example A1 or Sheet1!B2).',
+            { cell_a1 },
+          );
+        }
+
+        const activationResult = await activateRange(state.page, cell_a1.trim());
+        if ('error' in activationResult) return activationResult.error;
+
+        const expectedSelection = normalizeSingleCellA1(cell_a1.trim());
+        const actualSelection = normalizeSingleCellA1(activationResult.activeSelectionA1 ?? '');
+        if (expectedSelection && actualSelection && expectedSelection !== actualSelection) {
+          return spreadsheetToolError(
+            'UNSUPPORTED_PROVIDER_STATE',
+            `Tried to select ${expectedSelection}, but active selection is ${actualSelection}.`,
+            {
+              requested_cell_a1: cell_a1.trim(),
+              active_selection_a1: activationResult.activeSelectionA1 ?? '',
+            },
+          );
+        }
+
+        return {
+          success: true,
+          provider: state.provider,
+          cell_a1: cell_a1.trim(),
+          sheet_name: activationResult.activeSheetName ?? parsed.sheetName ?? '',
+          active_selection_a1: activationResult.activeSelectionA1 ?? '',
+        };
+      },
+    }),
+
+    [toPrefixedToolName(prefix, 'get_workbook_info')]: tool({
+      description: 'Get workbook metadata including sheets and active selection.',
       inputSchema: z.object({}),
       execute: async () => {
-        const state = await getReadySpreadsheetState(stagehand);
+        const state = await getReadySpreadsheetStateForPrefix(stagehand, prefix);
         if ('error' in state) return state.error;
 
         const workbookResult = await bridgeResult(state.page, 'getWorkbookInfo');
@@ -504,325 +730,48 @@ export function createSpreadsheetTools(stagehand: Stagehand) {
       },
     }),
 
-    get_sheets: tool({
-      description: 'Get all sheet names from the active workbook.',
-      inputSchema: z.object({}),
-      execute: async () => {
-        const state = await getReadySpreadsheetState(stagehand);
+    [toPrefixedToolName(prefix, 'read_sheet')]: tool({
+      description: 'Read a 20-row window from the active sheet or provided sheet name.',
+      inputSchema: readSheetInputSchema,
+      execute: async ({ sheet_name, start_row, width }) => {
+        const state = await getReadySpreadsheetStateForPrefix(stagehand, prefix);
         if ('error' in state) return state.error;
 
-        const sheetsResult = await bridgeResult(state.page, 'getSheets');
-        if ('error' in sheetsResult) return sheetsResult.error;
-
-        const sheets = Array.isArray(sheetsResult.value)
-          ? sheetsResult.value.filter((entry): entry is string => typeof entry === 'string')
-          : Array.isArray((sheetsResult.value as { sheets?: unknown }).sheets)
-            ? ((sheetsResult.value as { sheets: unknown[] }).sheets.filter(
-                (entry): entry is string => typeof entry === 'string',
-              ) as string[])
-            : [];
-
-        return {
-          success: true,
-          provider: state.provider,
-          sheet_names: sheets,
-        };
-      },
-    }),
-
-    get_range_data: tool({
-      description:
-        'Get cell data for one or more A1 ranges. Returns a formatted table by default. Keep range size under 200 cells for best performance.',
-      inputSchema: z.object({
-        range_a1: rangeInputSchema,
-        return_style_info: z.boolean().default(false),
-        width: z.number().int().min(60).default(300),
-        max_rows: z.number().int().min(1).max(500).default(100),
-      }),
-      execute: async ({ range_a1, return_style_info, width, max_rows }) => {
-        const state = await getReadySpreadsheetState(stagehand);
-        if ('error' in state) return state.error;
-
-        const ranges = normalizeRanges(range_a1);
-        if (!ranges.length) {
-          return spreadsheetToolError('UNSUPPORTED_PROVIDER_STATE', 'At least one valid A1 range is required.');
-        }
-
-        const rangeResults: Array<{
-          range_a1: string;
-          sheet_name: string;
-          start_row: number;
-          values: string[][];
-          raw_tsv: string;
-          table: string;
-        }> = [];
-        let totalCells = 0;
-
-        for (const range of ranges) {
-          const dataResult = await readRangeViaClipboard(state.page, range);
-          if ('error' in dataResult) return dataResult.error;
-
-          const parsed = parseA1Range(range);
-          const startRow = parsed?.startRow ?? 1;
-          const sheetName =
-            typeof dataResult.metadata.activeSheetName === 'string'
-              ? dataResult.metadata.activeSheetName
-              : parsed?.sheetName ?? '';
-
-          totalCells += dataResult.values.reduce((acc, row) => acc + row.length, 0);
-          rangeResults.push({
-            range_a1: range,
-            sheet_name: sheetName,
-            start_row: startRow,
-            values: dataResult.values,
-            raw_tsv: dataResult.rawTsv,
-            table: formatTable(dataResult.values, width, max_rows, startRow),
-          });
-        }
-
-        if (return_style_info) {
-          return {
-            success: true,
-            provider: state.provider,
-            ranges: rangeResults.map((entry) => ({
-              range_a1: entry.range_a1,
-              sheet_name: entry.sheet_name,
-              start_row: entry.start_row,
-              values: entry.values,
-              style_info: entry.values.map((row) => row.map(() => ({}))),
-            })),
-            total_cells: totalCells,
-            warning:
-              totalCells > 200
-                ? `Requested ${totalCells} cells. Keep ranges under 200 cells for best performance.`
-                : undefined,
-          };
-        }
-
-        if (rangeResults.length === 1) {
-          const only = rangeResults[0];
-          return {
-            success: true,
-            provider: state.provider,
-            range_a1: only.range_a1,
-            sheet_name: only.sheet_name,
-            values: only.values,
-            raw_tsv: only.raw_tsv,
-            table: only.table,
-            total_cells: totalCells,
-            warning:
-              totalCells > 200
-                ? `Requested ${totalCells} cells. Keep ranges under 200 cells for best performance.`
-                : undefined,
-          };
-        }
-
-        return {
-          success: true,
-          provider: state.provider,
-          ranges: rangeResults,
-          table: rangeResults.map((entry) => `${entry.range_a1}\n${entry.table}`).join('\n\n'),
-          total_cells: totalCells,
-          warning:
-            totalCells > 200
-              ? `Requested ${totalCells} cells. Keep ranges under 200 cells for best performance.`
-              : undefined,
-        };
-      },
-    }),
-
-    set_range_data: tool({
-      description:
-        'Set values for one or more A1 ranges. Supports single values, 1D row/column fills, 2D grid fills, and formulas.',
-      inputSchema: z.object({
-        range_a1: rangeInputSchema,
-        value: z.any().describe('Single value, 1D list, 2D list, or formula string beginning with "=".'),
-      }),
-      execute: async ({ range_a1, value }) => {
-        const state = await getReadySpreadsheetState(stagehand);
-        if ('error' in state) return state.error;
-
-        const ranges = normalizeRanges(range_a1);
-        if (!ranges.length) {
-          return spreadsheetToolError('UNSUPPORTED_PROVIDER_STATE', 'At least one valid A1 range is required.');
-        }
-
-        const operations: Array<{
-          range_a1: string;
-          cells_set: number;
-          formula: boolean;
-          calculated?: string;
-        }> = [];
-
-        for (const range of ranges) {
-          const dimensions = resolveRangeDimensions(range, value);
-          const matrix = buildMatrix(value, dimensions.rows, dimensions.cols);
-          const writeResult = await writeRangeViaClipboard(state.page, range, matrix.matrix);
-          if ('error' in writeResult) return writeResult.error;
-
-          const formula = matrixContainsFormula(matrix.matrix);
-          let calculated: string | undefined;
-          if (formula && matrix.rows === 1 && matrix.cols === 1) {
-            const readBack = await readRangeViaClipboard(state.page, range);
-            if (readBack.ok) {
-              calculated = readBack.values[0]?.[0] ?? '';
-            }
-          }
-
-          operations.push({
-            range_a1: range,
-            cells_set: matrix.rows * matrix.cols,
-            formula,
-            ...(calculated != null ? { calculated } : {}),
-          });
-        }
-
-        return {
-          success: operations.every((entry) => entry.cells_set > 0),
-          provider: state.provider,
-          operations,
-        };
-      },
-    }),
-
-    display_sheet: tool({
-      description:
-        'Read sheet contents as a formatted table with column headers and row numbers.',
-      inputSchema: z.object({
-        sheet_name: z.string().min(1).optional(),
-        max_rows: z.number().int().min(1).max(500).default(50),
-        width: z.number().int().min(60).default(300),
-      }),
-      execute: async ({ sheet_name, max_rows, width }) => {
-        const state = await getReadySpreadsheetState(stagehand);
-        if ('error' in state) return state.error;
-
+        const endRow = start_row + READ_SHEET_ROW_WINDOW - 1;
+        const lastColumnLetter = columnNumberToLetters(READ_SHEET_COLUMN_LIMIT);
         const sheetPrefix = sheet_name ? `${quoteSheetName(sheet_name)}!` : '';
-        const range = `${sheetPrefix}A1:Z${max_rows}`;
-        const dataResult = await readRangeViaClipboard(state.page, range);
+        const rangeA1 = `${sheetPrefix}A${start_row}:${lastColumnLetter}${endRow}`;
+        const dataResult = await readRangeViaClipboard(state.page, rangeA1);
         if ('error' in dataResult) return dataResult.error;
 
-        const trimmed = trimEmptyGrid(dataResult.values);
-        const activeSheetName =
-          typeof dataResult.metadata.activeSheetName === 'string'
-            ? dataResult.metadata.activeSheetName
-            : sheet_name ?? '';
+        const trimmedValues = trimEmptyGrid(dataResult.values);
 
         return {
           success: true,
           provider: state.provider,
-          sheet_name: activeSheetName,
-          values: trimmed,
-          table: formatTable(trimmed, width, max_rows, 1),
+          range_a1: rangeA1,
+          sheet_name: resolveActiveSheetName(dataResult.metadata, null, sheet_name),
+          start_row,
+          end_row: endRow,
+          row_window_size: READ_SHEET_ROW_WINDOW,
+          values: trimmedValues,
+          table: formatTable(trimmedValues, width, READ_SHEET_ROW_WINDOW, start_row),
         };
       },
     }),
 
-    create_sheet: tool({
-      description: 'Create one or more sheets.',
-      inputSchema: z.object({
-        sheet_names: z.array(z.string().min(1)).min(1),
-      }),
-      execute: async ({ sheet_names }) => {
-        const state = await getReadySpreadsheetState(stagehand);
-        if ('error' in state) return state.error;
-
-        const result = await bridgeResult(state.page, 'createSheets', [sheet_names]);
-        if ('error' in result) return result.error;
-        return {
-          success: result.value.success === true,
-          provider: state.provider,
-          operations: Array.isArray(result.value.operations) ? result.value.operations : [],
-          sheet_names: Array.isArray(result.value.sheetNames)
-            ? result.value.sheetNames.filter((entry): entry is string => typeof entry === 'string')
-            : [],
-          active_sheet:
-            typeof result.value.activeSheetName === 'string' ? result.value.activeSheetName : '',
-        };
-      },
-    }),
-
-    delete_sheet: tool({
-      description: 'Delete one or more sheets by name.',
-      inputSchema: z.object({
-        sheet_names: z.array(z.string().min(1)).min(1),
-      }),
-      execute: async ({ sheet_names }) => {
-        const state = await getReadySpreadsheetState(stagehand);
-        if ('error' in state) return state.error;
-
-        const result = await bridgeResult(state.page, 'deleteSheets', [sheet_names]);
-        if ('error' in result) return result.error;
-        return {
-          success: result.value.success === true,
-          provider: state.provider,
-          operations: Array.isArray(result.value.operations) ? result.value.operations : [],
-          sheet_names: Array.isArray(result.value.sheetNames)
-            ? result.value.sheetNames.filter((entry): entry is string => typeof entry === 'string')
-            : [],
-          active_sheet:
-            typeof result.value.activeSheetName === 'string' ? result.value.activeSheetName : '',
-        };
-      },
-    }),
-
-    rename_sheet: tool({
-      description: 'Rename a single sheet.',
-      inputSchema: z.object({
-        old_name: z.string().min(1),
-        new_name: z.string().min(1),
-      }),
-      execute: async ({ old_name, new_name }) => {
-        const state = await getReadySpreadsheetState(stagehand);
-        if ('error' in state) return state.error;
-
-        const result = await bridgeResult(state.page, 'renameSheet', [old_name, new_name]);
-        if ('error' in result) return result.error;
-        return {
-          success: result.value.success === true,
-          provider: state.provider,
-          old_name,
-          new_name,
-          sheet_names: Array.isArray(result.value.sheetNames)
-            ? result.value.sheetNames.filter((entry): entry is string => typeof entry === 'string')
-            : [],
-        };
-      },
-    }),
-
-    batch_rename_sheets: tool({
-      description: 'Rename multiple sheets in one call.',
-      inputSchema: z.object({
-        operations: z.array(renameOperationSchema).min(1),
-      }),
-      execute: async ({ operations }) => {
-        const state = await getReadySpreadsheetState(stagehand);
-        if ('error' in state) return state.error;
-
-        const result = await bridgeResult(state.page, 'batchRenameSheets', [operations]);
-        if ('error' in result) return result.error;
-        return {
-          success: result.value.success === true,
-          provider: state.provider,
-          operations: Array.isArray(result.value.operations) ? result.value.operations : [],
-          sheet_names: Array.isArray(result.value.sheetNames)
-            ? result.value.sheetNames.filter((entry): entry is string => typeof entry === 'string')
-            : [],
-        };
-      },
-    }),
-
-    insert_rows: tool({
-      description: 'Insert empty rows at a 1-based row position.',
-      inputSchema: rowOperationSchema,
+    [toPrefixedToolName(prefix, 'insert_rows')]: tool({
+      description: 'Insert one or more rows at a 1-based row position.',
+      inputSchema: insertRowsInputSchema,
       execute: async ({ position, count, sheet_name }) => {
-        const state = await getReadySpreadsheetState(stagehand);
+        const state = await getReadySpreadsheetStateForPrefix(stagehand, prefix);
         if ('error' in state) return state.error;
 
         const result = await bridgeResult(state.page, 'mutateStructure', [
           { kind: 'row', action: 'insert', position, count, sheet_name },
         ]);
         if ('error' in result) return result.error;
+
         return {
           success: result.value.success === true,
           provider: state.provider,
@@ -835,21 +784,18 @@ export function createSpreadsheetTools(stagehand: Stagehand) {
       },
     }),
 
-    insert_columns: tool({
-      description: 'Insert empty columns at a 1-based column position.',
-      inputSchema: z.object({
-        position: z.number().int().min(1),
-        count: z.number().int().min(1).default(1),
-        sheet_name: z.string().min(1).optional(),
-      }),
+    [toPrefixedToolName(prefix, 'insert_columns')]: tool({
+      description: 'Insert one or more columns at a 1-based column position.',
+      inputSchema: insertColumnsInputSchema,
       execute: async ({ position, count, sheet_name }) => {
-        const state = await getReadySpreadsheetState(stagehand);
+        const state = await getReadySpreadsheetStateForPrefix(stagehand, prefix);
         if ('error' in state) return state.error;
 
         const result = await bridgeResult(state.page, 'mutateStructure', [
           { kind: 'column', action: 'insert', position, count, sheet_name },
         ]);
         if ('error' in result) return result.error;
+
         return {
           success: result.value.success === true,
           provider: state.provider,
@@ -862,92 +808,57 @@ export function createSpreadsheetTools(stagehand: Stagehand) {
       },
     }),
 
-    delete_rows: tool({
-      description: 'Delete rows starting at a 1-based row position.',
-      inputSchema: rowOperationSchema,
-      execute: async ({ position, count, sheet_name }) => {
-        const state = await getReadySpreadsheetState(stagehand);
+    [toPrefixedToolName(prefix, 'delete_row')]: tool({
+      description: 'Delete one row at a 1-based row position.',
+      inputSchema: deleteRowInputSchema,
+      execute: async ({ position, sheet_name }) => {
+        const state = await getReadySpreadsheetStateForPrefix(stagehand, prefix);
         if ('error' in state) return state.error;
 
         const result = await bridgeResult(state.page, 'mutateStructure', [
-          { kind: 'row', action: 'delete', position, count, sheet_name },
+          { kind: 'row', action: 'delete', position, count: 1, sheet_name },
         ]);
         if ('error' in result) return result.error;
+
         return {
           success: result.value.success === true,
           provider: state.provider,
           kind: 'row',
           action: 'delete',
           position,
-          count,
           completed: typeof result.value.completed === 'number' ? result.value.completed : 0,
         };
       },
     }),
 
-    delete_columns: tool({
-      description: 'Delete columns starting at a 1-based column position.',
-      inputSchema: z.object({
-        position: z.number().int().min(1),
-        count: z.number().int().min(1).default(1),
-        sheet_name: z.string().min(1).optional(),
-      }),
-      execute: async ({ position, count, sheet_name }) => {
-        const state = await getReadySpreadsheetState(stagehand);
+    [toPrefixedToolName(prefix, 'delete_column')]: tool({
+      description: 'Delete one column at a 1-based column position.',
+      inputSchema: deleteColumnInputSchema,
+      execute: async ({ position, sheet_name }) => {
+        const state = await getReadySpreadsheetStateForPrefix(stagehand, prefix);
         if ('error' in state) return state.error;
 
         const result = await bridgeResult(state.page, 'mutateStructure', [
-          { kind: 'column', action: 'delete', position, count, sheet_name },
+          { kind: 'column', action: 'delete', position, count: 1, sheet_name },
         ]);
         if ('error' in result) return result.error;
+
         return {
           success: result.value.success === true,
           provider: state.provider,
           kind: 'column',
           action: 'delete',
           position,
-          count,
           completed: typeof result.value.completed === 'number' ? result.value.completed : 0,
         };
       },
     }),
+  };
+}
 
-    batch_insert_rows: tool({
-      description: 'Insert rows at multiple positions.',
-      inputSchema: z.object({
-        operations: z.array(rowOperationSchema).min(1),
-      }),
-      execute: async ({ operations }) => {
-        const state = await getReadySpreadsheetState(stagehand);
-        if ('error' in state) return state.error;
-
-        const results: Array<Record<string, unknown>> = [];
-        for (const operation of operations) {
-          const result = await bridgeResult(state.page, 'mutateStructure', [
-            {
-              kind: 'row',
-              action: 'insert',
-              position: operation.position,
-              count: operation.count,
-              sheet_name: operation.sheet_name,
-            },
-          ]);
-          if ('error' in result) return result.error;
-          results.push({
-            position: operation.position,
-            count: operation.count,
-            sheet_name: operation.sheet_name ?? '',
-            success: result.value.success === true,
-            completed: typeof result.value.completed === 'number' ? result.value.completed : 0,
-          });
-        }
-
-        return {
-          success: results.every((entry) => entry.success === true),
-          provider: state.provider,
-          operations: results,
-        };
-      },
-    }),
+export function createSpreadsheetTools(stagehand: Stagehand) {
+  return {
+    ...createPrefixedSpreadsheetTools(stagehand, SHEETS_TOOL_PREFIX),
+    ...createPrefixedSpreadsheetTools(stagehand, EXCEL_TOOL_PREFIX),
   };
 }

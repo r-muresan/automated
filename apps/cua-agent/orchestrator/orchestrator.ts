@@ -29,6 +29,7 @@ import { buildSystemPrompt } from './system-prompt';
 import {
   buildHybridActiveToolsForUrl,
   createBrowserTabTools,
+  getSpreadsheetProvider,
   type CredentialHandoffRequest,
 } from './agent-tools';
 import { extractWithLlm, normalizeLoopItems, parseSchemaMap } from './extraction';
@@ -86,10 +87,13 @@ export class OrchestratorAgent {
   }
 
   private buildPrepareStepForActiveTools(scope: string) {
-    void scope;
-    return async () => {
+    return async ({ stepNumber }: { stepNumber?: number } = {}) => {
       const activeUrl = this.getActivePageUrl();
+      const provider = getSpreadsheetProvider(activeUrl);
       const activeTools = buildHybridActiveToolsForUrl(activeUrl);
+      console.log(
+        `[ORCHESTRATOR] Active tools scope=${scope} step=${typeof stepNumber === 'number' ? stepNumber : 'unknown'} provider=${provider ?? 'none'} tools=${JSON.stringify(activeTools)}`,
+      );
       return { activeTools };
     };
   }
@@ -232,6 +236,19 @@ export class OrchestratorAgent {
         output_tokens: tokens.outputTokens,
       },
     });
+  }
+
+  private summarizeToolResultForLog(toolResult: unknown): string {
+    if (typeof toolResult === 'string') {
+      return toolResult.length > 600 ? `${toolResult.slice(0, 600)}...` : toolResult;
+    }
+    try {
+      const serialized = JSON.stringify(toolResult);
+      if (typeof serialized !== 'string') return String(toolResult);
+      return serialized.length > 600 ? `${serialized.slice(0, 600)}...` : serialized;
+    } catch {
+      return String(toolResult);
+    }
   }
 
   private async init(startingUrl?: string): Promise<void> {
@@ -795,7 +812,9 @@ export class OrchestratorAgent {
         : [];
       if (toolCalls.length === 0) return;
 
-      for (const toolCall of toolCalls) {
+      const toolResults: unknown[] = Array.isArray(event?.toolResults) ? event.toolResults : [];
+
+      for (const [toolIndex, toolCall] of toolCalls.entries()) {
         const toolName =
           typeof toolCall?.toolName === 'string' && toolCall.toolName.trim().length > 0
             ? toolCall.toolName
@@ -805,6 +824,11 @@ export class OrchestratorAgent {
           cachedInputTokens: Number.isFinite(stepCachedInputTokens) ? stepCachedInputTokens : 0,
           outputTokens: Number.isFinite(stepOutputTokens) ? stepOutputTokens : 0,
         });
+        if (toolIndex < toolResults.length) {
+          console.log(
+            `[ORCHESTRATOR] Tool result "${toolName}": ${this.summarizeToolResultForLog(toolResults[toolIndex])}`,
+          );
+        }
       }
     };
 

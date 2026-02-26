@@ -117,7 +117,7 @@ Perform exactly the action described. Do not do anything else.`,
           const provider = getSpreadsheetProvider(activeUrl);
           const activeTools = buildHybridActiveToolsForUrl(activeUrl);
           console.log(
-            `[VISION_LOOP] Tool activation step=${stepNumber}: provider=${provider ?? 'none'} spreadsheetTools=${provider ? 'enabled' : 'disabled'} activeTools=${activeTools.join(',')}`,
+            `[VISION_LOOP] Tool activation step=${stepNumber}: provider=${provider ?? 'none'} spreadsheetTools=${provider ? 'enabled' : 'disabled'} activeTools=${JSON.stringify(activeTools)}`,
           );
           return { activeTools };
         },
