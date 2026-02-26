@@ -7,7 +7,9 @@ import {
   type VisionItem,
 } from './extraction';
 import {
+  buildHybridActiveToolsForUrl,
   createBrowserTabTools,
+  getSpreadsheetProvider,
   type CredentialHandoffRequest,
   type CredentialHandoffResult,
 } from './agent-tools';
@@ -105,7 +107,22 @@ Perform exactly the action described. Do not do anything else.`,
   });
 
   try {
-    await agent.execute({ instruction, maxSteps: 10 });
+    await agent.execute({
+      instruction,
+      maxSteps: 10,
+      callbacks: {
+        prepareStep: async ({ stepNumber }: { stepNumber: number }) => {
+          const page = deps.stagehand.context.activePage() ?? deps.stagehand.context.pages()[0];
+          const activeUrl = page?.url?.() ?? '';
+          const provider = getSpreadsheetProvider(activeUrl);
+          const activeTools = buildHybridActiveToolsForUrl(activeUrl);
+          console.log(
+            `[VISION_LOOP] Tool activation step=${stepNumber}: provider=${provider ?? 'none'} spreadsheetTools=${provider ? 'enabled' : 'disabled'} activeTools=${activeTools.join(',')}`,
+          );
+          return { activeTools };
+        },
+      },
+    });
   } catch (error: any) {
     console.warn(`[VISION_LOOP] Navigation agent error (continuing): ${error.message}`);
   }

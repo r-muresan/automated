@@ -22,6 +22,12 @@
         "buildTarget": "cua-agent:build",
         "runBuildTargetDependencies": false
       }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint \"apps/cua-agent/**/*.ts\" --max-warnings=0 --report-unused-disable-directives-severity off"
+      }
     }
   },
   "tags": []

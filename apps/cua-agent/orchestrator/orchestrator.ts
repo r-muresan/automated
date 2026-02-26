@@ -26,7 +26,12 @@ import { AGENT_TIMEOUT_MS } from './constants';
 import { withTimeout } from './utils';
 import { waitForPageReady } from './page-ready';
 import { buildSystemPrompt } from './system-prompt';
-import { createBrowserTabTools, type CredentialHandoffRequest } from './agent-tools';
+import {
+  buildHybridActiveToolsForUrl,
+  createBrowserTabTools,
+  getSpreadsheetProvider,
+  type CredentialHandoffRequest,
+} from './agent-tools';
 import { extractWithLlm, normalizeLoopItems, parseSchemaMap } from './extraction';
 import { executeLoopStep, type LoopDeps } from './loop';
 import {
@@ -68,6 +73,28 @@ export class OrchestratorAgent {
       agent: this.options.models?.agent ?? DEFAULT_MODELS.agent,
       conditional: this.options.models?.conditional ?? DEFAULT_MODELS.conditional,
       save: this.options.models?.save ?? DEFAULT_MODELS.save,
+    };
+  }
+
+  private getActivePageUrl(): string {
+    if (!this.stagehand) return '';
+    try {
+      const page = this.stagehand.context.activePage() ?? this.stagehand.context.pages()[0];
+      return page?.url?.() ?? '';
+    } catch {
+      return '';
+    }
+  }
+
+  private buildPrepareStepForActiveTools(scope: string) {
+    return async ({ stepNumber }: { stepNumber: number }) => {
+      const activeUrl = this.getActivePageUrl();
+      const provider = getSpreadsheetProvider(activeUrl);
+      const activeTools = buildHybridActiveToolsForUrl(activeUrl);
+      console.log(
+        `[ORCHESTRATOR] Tool activation (${scope}) step=${stepNumber}: provider=${provider ?? 'none'} spreadsheetTools=${provider ? 'enabled' : 'disabled'} activeTools=${activeTools.join(',')}`,
+      );
+      return { activeTools };
     };
   }
 
@@ -741,6 +768,7 @@ export class OrchestratorAgent {
       cachedInputTokens: 0,
       outputTokens: 0,
     };
+    const prepareStep = this.buildPrepareStepForActiveTools(`executeSingleStep:${index}`);
 
     const onStepFinish = (event: any) => {
       const stepInputTokens = Number(event?.usage?.inputTokens ?? 0);
@@ -781,6 +809,7 @@ export class OrchestratorAgent {
           instruction: instruction,
           maxSteps: 50,
           callbacks: {
+            prepareStep,
             onStepFinish,
           },
         });
@@ -906,6 +935,7 @@ export class OrchestratorAgent {
             this.requestCredentialHandoff(request, step, index, this.describeStepInstruction(step)),
         }),
         stream: false,
+        mode: 'hybrid',
       });
 
       try {
@@ -916,6 +946,11 @@ export class OrchestratorAgent {
           agent.execute({
             instruction: conditionInstruction,
             maxSteps: 10,
+            callbacks: {
+              prepareStep: this.buildPrepareStepForActiveTools(
+                `executeConditionalStep:${index}`,
+              ),
+            },
             output: z.object({
               conditionMet: z.boolean().describe('Whether the condition is met'),
             }),
