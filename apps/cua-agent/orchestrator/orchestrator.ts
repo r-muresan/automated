@@ -29,7 +29,6 @@ import { buildSystemPrompt } from './system-prompt';
 import {
   buildHybridActiveToolsForUrl,
   createBrowserTabTools,
-  getSpreadsheetProvider,
   type CredentialHandoffRequest,
 } from './agent-tools';
 import { extractWithLlm, normalizeLoopItems, parseSchemaMap } from './extraction';
@@ -87,13 +86,10 @@ export class OrchestratorAgent {
   }
 
   private buildPrepareStepForActiveTools(scope: string) {
-    return async ({ stepNumber }: { stepNumber: number }) => {
+    void scope;
+    return async () => {
       const activeUrl = this.getActivePageUrl();
-      const provider = getSpreadsheetProvider(activeUrl);
       const activeTools = buildHybridActiveToolsForUrl(activeUrl);
-      console.log(
-        `[ORCHESTRATOR] Tool activation (${scope}) step=${stepNumber}: provider=${provider ?? 'none'} spreadsheetTools=${provider ? 'enabled' : 'disabled'} activeTools=${activeTools.join(',')}`,
-      );
       return { activeTools };
     };
   }

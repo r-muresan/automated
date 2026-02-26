@@ -1799,7 +1799,6 @@ export class V3 {
           type: "string",
         },
         systemPrompt: { value: agentConfig.systemPrompt ?? "", type: "string" },
-        tools: { value: JSON.stringify(agentConfig.tools ?? {}), type: "object" },
         ...(agentConfig.integrations && {
           integrations: {
             value: JSON.stringify(agentConfig.integrations),

@@ -256,12 +256,13 @@ export function buildAgentSystemPrompt(options: AgentSystemPromptOptions): strin
   </strategy>
   ${roadblocksSection}
   ${variablesSection}
-  <completion>
-    <note>When you complete the task, explain any information that was found that was relevant to the original task.</note>
-    <examples>
-      <example>If you were asked for specific flights, list the flights you found.</example>
-      <example>If you were asked for information about a product, list the product information you were asked for.</example>
-    </examples>
-  </completion>
 </system>`;
 }
+
+// <completion>
+// <note>When you complete the task, explain any information that was found that was relevant to the original task.</note>
+// <examples>
+//   <example>If you were asked for specific flights, list the flights you found.</example>
+//   <example>If you were asked for information about a product, list the product information you were asked for.</example>
+// </examples>
+// </completion>
