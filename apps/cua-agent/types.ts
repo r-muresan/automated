@@ -138,6 +138,12 @@ export type OrchestratorEvent =
   | { type: 'session:ready'; sessionId: string; liveViewUrl: string }
   | { type: 'step:start'; step: Step; index: number; instruction: string }
   | {
+      type: 'step:reasoning';
+      step: Step;
+      index: number;
+      delta: string;
+    }
+  | {
       type: 'step:end';
       step: Step;
       index: number;

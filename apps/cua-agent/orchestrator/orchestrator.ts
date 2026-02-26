@@ -755,7 +755,6 @@ export class OrchestratorAgent {
     const agentConfig = {
       systemPrompt: buildSystemPrompt(this.extractedVariables, context),
       tools,
-      stream: false,
       model: {
         modelName: this.resolveModels().agent,
         apiKey: process.env.OPENROUTER_API_KEY,
@@ -769,8 +768,22 @@ export class OrchestratorAgent {
       outputTokens: 0,
     };
     const prepareStep = this.buildPrepareStepForActiveTools(`executeSingleStep:${index}`);
+    let chunksSinceLastStepFinish = 0;
+    const streamChunkText = new Map<string, string>();
 
     const onStepFinish = (event: any) => {
+      const stepText = typeof event?.text === 'string' ? event.text : '';
+      if (chunksSinceLastStepFinish === 0 && stepText.length > 0) {
+        this.emit({
+          type: 'step:reasoning',
+          step,
+          index,
+          delta: stepText,
+        });
+      }
+      chunksSinceLastStepFinish = 0;
+      streamChunkText.clear();
+
       const stepInputTokens = Number(event?.usage?.inputTokens ?? 0);
       const stepCachedInputTokens = Number(event?.usage?.cachedInputTokens ?? 0);
       const stepOutputTokens = Number(event?.usage?.outputTokens ?? 0);
@@ -800,10 +813,11 @@ export class OrchestratorAgent {
     };
 
     try {
-      let result = await this.stagehand
+      const streamResult = await this.stagehand
         .agent({
           ...agentConfig,
           mode: 'hybrid',
+          stream: true,
         })
         .execute({
           instruction: instruction,
@@ -811,8 +825,25 @@ export class OrchestratorAgent {
           callbacks: {
             prepareStep,
             onStepFinish,
+            onChunk: ({ chunk }: any) => {
+              if (chunk?.type !== 'reasoning-delta' && chunk?.type !== 'text-delta') return;
+              const delta = typeof chunk?.text === 'string' ? chunk.text : '';
+              if (!delta) return;
+              const chunkId = typeof chunk?.id === 'string' ? chunk.id : 'default';
+              const nextText = `${streamChunkText.get(chunkId) ?? ''}${delta}`;
+              streamChunkText.set(chunkId, nextText);
+              chunksSinceLastStepFinish += 1;
+              this.emit({
+                type: 'step:reasoning',
+                step,
+                index,
+                delta: nextText,
+              });
+            },
           },
         });
+      await streamResult.consumeStream();
+      const result = await streamResult.result;
 
       this.assertNotAborted();
       this.stepResults.push({

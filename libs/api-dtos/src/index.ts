@@ -218,6 +218,7 @@ export type WorkflowRunsResponse = Record<string, WorkflowRunSummary | null>;
 export type WorkflowActionEventType =
   | 'step:start'
   | 'step:end'
+  | 'step:reasoning'
   | 'loop:iteration:start'
   | 'loop:iteration:end'
   | 'credential:request'
@@ -238,6 +239,7 @@ export interface WorkflowActionData {
   fallback?: boolean;
   requestId?: string;
   reason?: string;
+  reasoningDelta?: string;
   buttonLabel?: string;
   continued?: boolean;
   [key: string]: any;

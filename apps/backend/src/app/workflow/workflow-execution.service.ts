@@ -26,6 +26,7 @@ const LOG_LIMIT = 500;
 const ACTION_EVENT_TYPES = [
   'step:start',
   'step:end',
+  'step:reasoning',
   'loop:iteration:start',
   'loop:iteration:end',
   'credential:request',
@@ -783,6 +784,24 @@ export class WorkflowExecutionService {
         });
         break;
       }
+      case 'step:reasoning': {
+        this.addLog(
+          workflowId,
+          {
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            message: 'Step reasoning update',
+            eventType: 'step:reasoning',
+            data: {
+              stepIndex: event.index,
+              stepType: event.step.type,
+              reasoningDelta: event.delta,
+            },
+          },
+          { persist: false },
+        );
+        break;
+      }
       case 'loop:iteration:start': {
         this.addLog(workflowId, {
           timestamp: new Date().toISOString(),
@@ -876,7 +895,11 @@ export class WorkflowExecutionService {
     }
   }
 
-  private addLog(workflowId: string, entry: WorkflowLogEntry) {
+  private addLog(
+    workflowId: string,
+    entry: WorkflowLogEntry,
+    options?: { persist?: boolean },
+  ) {
     const logs = this.executionLogs.get(workflowId) ?? [];
     logs.push(entry);
     if (logs.length > LOG_LIMIT) {
@@ -900,7 +923,9 @@ export class WorkflowExecutionService {
       });
     }
 
-    void this.persistRunLog(runId, entry);
+    if (options?.persist !== false) {
+      void this.persistRunLog(runId, entry);
+    }
   }
 
   private persistRunUpdate(runId: string | undefined, data: Prisma.WorkflowRunUpdateInput) {
