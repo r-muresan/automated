@@ -1628,20 +1628,27 @@ export class Page {
 
   /**
    * Type a string by dispatching keyDown/keyUp events per character.
-   * Focus must already be on the desired element. Uses CDP Input.dispatchKeyEvent
-   * and never falls back to Input.insertText. Optional delay applies between
+   * Focus must already be on the desired element. Optional delay applies between
    * successive characters.
+   * If `bulk` is enabled and no delay/mistakes are requested, uses `Input.insertText`
+   * to insert the full text in one shot.
    */
   @logAction("Page.type")
   async type(
     text: string,
-    options?: { delay?: number; withMistakes?: boolean },
+    options?: { delay?: number; withMistakes?: boolean; bulk?: boolean },
   ): Promise<void> {
     const delay = Math.max(0, options?.delay ?? 0);
     const withMistakes = !!options?.withMistakes;
+    const bulk = !!options?.bulk;
 
     const sleep = (ms: number) =>
       new Promise<void>((r) => (ms > 0 ? setTimeout(r, ms) : r()));
+
+    if (bulk && !withMistakes && delay === 0) {
+      await this.mainSession.send<never>("Input.insertText", { text });
+      return;
+    }
 
     const keyStroke = async (
       ch: string,

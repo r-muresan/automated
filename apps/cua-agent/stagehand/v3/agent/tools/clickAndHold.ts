@@ -2,11 +2,23 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { V3 } from "../../v3.js";
 import type { Action } from "../../types/public/methods.js";
-import { processCoordinates } from "../utils/coordinateNormalization.js";
+import {
+  isMoonshotModel,
+  processCoordinates,
+} from "../utils/coordinateNormalization.js";
 import { ensureXPath } from "../utils/xpath.js";
 
 export const clickAndHoldTool = (v3: V3, provider?: string, modelId?: string) =>
-  tool({
+  {
+    const unitScaleCoordinates = isMoonshotModel(modelId);
+    const coordinateSchema = unitScaleCoordinates
+      ? z.number().min(0).max(1)
+      : z.number();
+    const coordinateDescription = unitScaleCoordinates
+      ? "The (x, y) coordinates to click on, normalized to 0..1"
+      : "The (x, y) coordinates to click on";
+
+    return tool({
     description: "Click and hold on an element using its coordinates",
     inputSchema: z.object({
       describe: z
@@ -18,8 +30,8 @@ export const clickAndHoldTool = (v3: V3, provider?: string, modelId?: string) =>
         .number()
         .describe("The duration to hold the element in milliseconds"),
       coordinates: z
-        .array(z.number())
-        .describe("The (x, y) coordinates to click on"),
+        .array(coordinateSchema)
+        .describe(coordinateDescription),
     }),
     execute: async ({ describe, coordinates, duration }) => {
       try {
@@ -87,3 +99,4 @@ export const clickAndHoldTool = (v3: V3, provider?: string, modelId?: string) =>
       }
     },
   });
+};

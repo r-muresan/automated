@@ -1,11 +1,11 @@
-import type { V3 } from "../../v3.js";
+import type { V3 } from '../../v3.js';
 
 // Default viewport for advancedStealth mode
 const STEALTH_VIEWPORT = { width: 1288, height: 711 };
 
 export function isGoogleProvider(provider?: string): boolean {
   if (!provider) return false;
-  return provider.toLowerCase().includes("google");
+  return provider.toLowerCase().includes('google');
 }
 
 // Moonshot (kimi) models return coordinates in a 0-1 range, we need to scale
@@ -13,7 +13,7 @@ export function isGoogleProvider(provider?: string): boolean {
 export function isMoonshotModel(modelId?: string): boolean {
   if (!modelId) return false;
   const lower = modelId.toLowerCase();
-  return lower.includes("moonshot") || lower.includes("kimi");
+  return lower.includes('moonshot') || lower.includes('kimi');
 }
 
 // Google returns coordinates in a 0-1000 range, we need to normalize
@@ -51,14 +51,15 @@ export function processCoordinates(
   v3?: V3,
   modelId?: string,
 ): { x: number; y: number } {
+  console.log({ x, y });
+
   if (v3) {
-    const viewport = v3.isAdvancedStealth
-      ? STEALTH_VIEWPORT
-      : v3.configuredViewport;
+    const viewport = v3.isAdvancedStealth ? STEALTH_VIEWPORT : v3.configuredViewport;
     if (isGoogleProvider(provider)) {
       return normalizeGoogleCoordinates(x, y, viewport);
     }
-    if (isMoonshotModel(modelId)) {
+
+    if (isMoonshotModel(modelId) && x <= 1 && y <= 1) {
       return normalizeMoonshotCoordinates(x, y, viewport);
     }
   }

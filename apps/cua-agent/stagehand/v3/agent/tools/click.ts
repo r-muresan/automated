@@ -6,12 +6,24 @@ import type {
   ClickToolResult,
   ModelOutputContentItem,
 } from "../../types/public/agent.js";
-import { processCoordinates } from "../utils/coordinateNormalization.js";
+import {
+  isMoonshotModel,
+  processCoordinates,
+} from "../utils/coordinateNormalization.js";
 import { ensureXPath } from "../utils/xpath.js";
 import { waitAndCaptureScreenshot } from "../utils/screenshotHandler.js";
 
 export const clickTool = (v3: V3, provider?: string, modelId?: string) =>
-  tool({
+  {
+    const unitScaleCoordinates = isMoonshotModel(modelId);
+    const coordinateSchema = unitScaleCoordinates
+      ? z.number().min(0).max(1)
+      : z.number();
+    const coordinateDescription = unitScaleCoordinates
+      ? "The (x, y) coordinates to click on, normalized to 0..1"
+      : "The (x, y) coordinates to click on";
+
+    return tool({
     description:
       "Click on an element using its coordinates (this is the most reliable way to click on an element, always use this over act, unless the element is not visible in the screenshot, but shown in ariaTree)",
     inputSchema: z.object({
@@ -21,8 +33,8 @@ export const clickTool = (v3: V3, provider?: string, modelId?: string) =>
           "Describe the element to click on in a short, specific phrase that mentions the element type and a good visual description",
         ),
       coordinates: z
-        .array(z.number())
-        .describe("The (x, y) coordinates to click on"),
+        .array(coordinateSchema)
+        .describe(coordinateDescription),
     }),
     execute: async ({ describe, coordinates }): Promise<ClickToolResult> => {
       try {
@@ -122,3 +134,4 @@ export const clickTool = (v3: V3, provider?: string, modelId?: string) =>
       };
     },
   });
+};

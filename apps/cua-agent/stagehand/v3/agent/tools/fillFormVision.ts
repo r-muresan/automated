@@ -7,7 +7,10 @@ import type {
   ModelOutputContentItem,
   Variables,
 } from "../../types/public/agent.js";
-import { processCoordinates } from "../utils/coordinateNormalization.js";
+import {
+  isMoonshotModel,
+  processCoordinates,
+} from "../utils/coordinateNormalization.js";
 import { ensureXPath } from "../utils/xpath.js";
 import { waitAndCaptureScreenshot } from "../utils/screenshotHandler.js";
 import { substituteVariables } from "../utils/variables.js";
@@ -19,9 +22,14 @@ export const fillFormVisionTool = (
   modelId?: string,
 ) => {
   const hasVariables = variables && Object.keys(variables).length > 0;
+  const unitScaleCoordinates = isMoonshotModel(modelId);
+  const coordinateSchema = unitScaleCoordinates ? z.number().min(0).max(1) : z.number();
   const valueDescription = hasVariables
     ? `Text to type into the target field. Use %variableName% to substitute a variable value. Available: ${Object.keys(variables).join(", ")}`
     : "Text to type into the target field";
+  const coordinatesDescription = unitScaleCoordinates
+    ? "Coordinates of the target field, normalized to 0..1"
+    : "Coordinates of the target field";
 
   return tool({
     description: `FORM FILL - SPECIALIZED MULTI-FIELD INPUT TOOL
@@ -53,10 +61,10 @@ MANDATORY USE CASES (always use fillFormVision for these):
             value: z.string().describe(valueDescription),
             coordinates: z
               .object({
-                x: z.number(),
-                y: z.number(),
+                x: coordinateSchema,
+                y: coordinateSchema,
               })
-              .describe("Coordinates of the target field"),
+              .describe(coordinatesDescription),
           }),
         )
         .min(2, "Provide at least two fields to fill"),

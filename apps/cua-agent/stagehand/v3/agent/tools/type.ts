@@ -7,16 +7,24 @@ import type {
   ModelOutputContentItem,
   Variables,
 } from "../../types/public/agent.js";
-import { processCoordinates } from "../utils/coordinateNormalization.js";
+import {
+  isMoonshotModel,
+  processCoordinates,
+} from "../utils/coordinateNormalization.js";
 import { ensureXPath } from "../utils/xpath.js";
 import { waitAndCaptureScreenshot } from "../utils/screenshotHandler.js";
 import { substituteVariables } from "../utils/variables.js";
 
 export const typeTool = (v3: V3, provider?: string, variables?: Variables, modelId?: string) => {
   const hasVariables = variables && Object.keys(variables).length > 0;
+  const unitScaleCoordinates = isMoonshotModel(modelId);
+  const coordinateSchema = unitScaleCoordinates ? z.number().min(0).max(1) : z.number();
   const textDescription = hasVariables
     ? `The text to type into the element. Use %variableName% to substitute a variable value. Available: ${Object.keys(variables).join(", ")}`
     : "The text to type into the element";
+  const coordinateDescription = unitScaleCoordinates
+    ? "The (x, y) coordinates to type into the element, normalized to 0..1"
+    : "The (x, y) coordinates to type into the element";
 
   return tool({
     description:
@@ -29,8 +37,8 @@ export const typeTool = (v3: V3, provider?: string, variables?: Variables, model
         ),
       text: z.string().describe(textDescription),
       coordinates: z
-        .array(z.number())
-        .describe("The (x, y) coordinates to type into the element"),
+        .array(coordinateSchema)
+        .describe(coordinateDescription),
     }),
     execute: async ({
       describe,
@@ -68,7 +76,8 @@ export const typeTool = (v3: V3, provider?: string, variables?: Variables, model
           returnXpath: shouldCollectXpath,
         });
 
-        await page.type(actualText);
+        const shouldBulkType = actualText.length > 20;
+        await page.type(actualText, shouldBulkType ? { bulk: true } : undefined);
 
         const screenshotBase64 = await waitAndCaptureScreenshot(page);
 

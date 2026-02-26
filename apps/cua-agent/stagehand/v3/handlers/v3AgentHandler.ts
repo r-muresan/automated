@@ -90,6 +90,46 @@ export class V3AgentHandler {
     this.mode = mode ?? 'dom';
   }
 
+  private async buildInitialContextMessage(initialPageUrl: string): Promise<ModelMessage | null> {
+    const page = await this.v3.context.awaitActivePage();
+    const screenshotResult = await page
+      .screenshot({ fullPage: false, type: 'jpeg', quality: 70 })
+      .then((value) => ({ status: 'fulfilled' as const, value }))
+      .catch((reason) => ({ status: 'rejected' as const, reason }));
+
+    const contentParts: Array<
+      { type: 'text'; text: string } | { type: 'file'; data: string; mediaType: string }
+    > = [
+      {
+        type: 'text',
+        text: `Initial page context before any tool calls. Current URL: ${initialPageUrl}`,
+      },
+    ];
+
+    if (screenshotResult.status === 'fulfilled') {
+      contentParts.push({
+        type: 'file',
+        data: screenshotResult.value.toString('base64'),
+        mediaType: 'image/jpeg',
+      });
+    } else {
+      this.logger({
+        category: 'agent',
+        message: `Warning: Failed to capture initial screenshot: ${getErrorMessage(screenshotResult.reason)}`,
+        level: 1,
+      });
+    }
+
+    if (contentParts.length <= 1) {
+      return null;
+    }
+
+    return {
+      role: 'user',
+      content: contentParts,
+    };
+  }
+
   private async prepareAgent(
     instructionOrOptions: string | AgentExecuteOptionsBase,
   ): Promise<AgentContext> {
@@ -118,10 +158,15 @@ export class V3AgentHandler {
       const tools = this.createTools(options.excludeTools, options.variables);
       const allTools: ToolSet = { ...tools, ...this.mcpTools };
 
-      // Use provided messages for continuation, or start fresh with the instruction
-      const messages: ModelMessage[] = options.messages?.length
-        ? [...options.messages, { role: 'user', content: options.instruction }]
-        : [{ role: 'user', content: options.instruction }];
+      // Use provided messages for continuation, then inject current page screenshot
+      // so each execute() call starts with visual grounding.
+      const messages: ModelMessage[] = options.messages?.length ? [...options.messages] : [];
+
+      const initialContextMessage = await this.buildInitialContextMessage(initialPageUrl);
+      if (initialContextMessage) {
+        messages.push(initialContextMessage);
+      }
+      messages.push({ role: 'user', content: options.instruction });
 
       if (!this.llmClient?.getLanguageModel) {
         throw new MissingLLMConfigurationError();
@@ -268,9 +313,7 @@ export class V3AgentHandler {
             if (args?.taskComplete) {
               const doneReasoning = args.reasoning;
               const allReasoning = state.collectedReasoning.join(' ');
-              state.finalMessage = doneReasoning
-                ? `${allReasoning} ${doneReasoning}`.trim()
-                : allReasoning || 'Task completed successfully';
+              state.finalMessage = doneReasoning || allReasoning || 'Task completed successfully';
             }
           }
           const mappedActions = mapToolResultToActions({
@@ -378,14 +421,19 @@ export class V3AgentHandler {
       });
 
       const allMessages = [...messages, ...(result.response?.messages || [])];
-      const doneResult = await this.ensureDone(
-        state,
-        wrappedModel,
-        allMessages,
-        preparedOptions.instruction,
-        preparedOptions.output,
-        this.logger,
-      );
+      // const doneResult = await this.ensureDone(
+      //   state,
+      //   wrappedModel,
+      //   allMessages,
+      //   preparedOptions.instruction,
+      //   preparedOptions.output,
+      //   this.logger,
+      // );
+
+      const doneResult = {
+        messages: allMessages,
+        output: {},
+      };
 
       return this.consolidateMetricsAndResult(
         startTime,
