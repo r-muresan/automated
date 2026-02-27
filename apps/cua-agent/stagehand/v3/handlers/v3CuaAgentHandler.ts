@@ -27,7 +27,7 @@ export class V3CuaAgentHandler {
   private logger: (message: LogLine) => void;
   private agentClient: AgentClient;
   private options: AgentHandlerOptions;
-  private highlightCursor: boolean;
+  private highlightCursor = false;
 
   constructor(
     v3: V3,

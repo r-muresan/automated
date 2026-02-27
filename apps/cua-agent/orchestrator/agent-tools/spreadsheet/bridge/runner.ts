@@ -488,11 +488,12 @@ export async function runBridge(
       try {
         const nameBoxPayload = await withTimeout(frameLike.evaluate(nameBoxProbeExpression), 2500);
         const parsed = parseBridgePayload(nameBoxPayload);
-        hasVisibleNameBox =
+        hasVisibleNameBox = Boolean(
           'value' in parsed &&
-          parsed.value &&
-          typeof parsed.value === 'object' &&
-          (parsed.value as { hasVisibleNameBox?: unknown }).hasVisibleNameBox === true;
+            parsed.value &&
+            typeof parsed.value === 'object' &&
+            (parsed.value as { hasVisibleNameBox?: unknown }).hasVisibleNameBox === true,
+        );
       } catch {
         // keep default false
       }
@@ -556,11 +557,12 @@ export async function runBridge(
       }> = [];
       const topWorkbookInfo = await executeWorkbookInfoInContext();
       const topNameBoxProbe = await executeBridgeExpressionInContext(nameBoxProbeExpression);
-      const topHasVisibleNameBox =
+      const topHasVisibleNameBox = Boolean(
         'value' in topNameBoxProbe &&
-        topNameBoxProbe.value &&
-        typeof topNameBoxProbe.value === 'object' &&
-        (topNameBoxProbe.value as { hasVisibleNameBox?: unknown }).hasVisibleNameBox === true;
+          topNameBoxProbe.value &&
+          typeof topNameBoxProbe.value === 'object' &&
+          (topNameBoxProbe.value as { hasVisibleNameBox?: unknown }).hasVisibleNameBox === true,
+      );
       rankedCandidates.push({
         contextId: undefined,
         workbookScore: workbookScore(topWorkbookInfo),
@@ -583,11 +585,12 @@ export async function runBridge(
           nameBoxProbeExpression,
           candidate.contextId,
         );
-        candidate.hasVisibleNameBox =
+        candidate.hasVisibleNameBox = Boolean(
           'value' in nameBoxProbe &&
-          nameBoxProbe.value &&
-          typeof nameBoxProbe.value === 'object' &&
-          (nameBoxProbe.value as { hasVisibleNameBox?: unknown }).hasVisibleNameBox === true;
+            nameBoxProbe.value &&
+            typeof nameBoxProbe.value === 'object' &&
+            (nameBoxProbe.value as { hasVisibleNameBox?: unknown }).hasVisibleNameBox === true,
+        );
       }
       rankedCandidates.sort((left, right) => {
         if (left.hasVisibleNameBox !== right.hasVisibleNameBox) {

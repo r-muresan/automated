@@ -140,6 +140,11 @@ export class ExtractHandler {
         "extract() requires an instruction when a schema is provided.",
       );
     }
+    if (!instruction) {
+      throw new StagehandInvalidArgumentError(
+        "extract() requires an instruction.",
+      );
+    }
 
     const focusSelector = selector?.replace(/^xpath=/, "") ?? "";
 
@@ -196,7 +201,7 @@ export class ExtractHandler {
       inference_time_ms,
       ...rest
     } = extractionResponse;
-    let output = rest as InferStagehandSchema<StagehandZodObject>;
+    let output: unknown = rest as InferStagehandSchema<StagehandZodObject>;
 
     // Update EXTRACT metrics from the LLM calls
     this.onMetrics?.(

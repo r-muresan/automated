@@ -41,6 +41,13 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
+function gridDimensions(values: string[][]): { rows: number; cols: number } {
+  return {
+    rows: values.length,
+    cols: values.reduce((max, row) => Math.max(max, row.length), 0),
+  };
+}
+
 function formatTable(values: string[][]): string {
   const rows = values.slice(0, SPREADSHEET_PREVIEW_MAX_ROWS);
   const maxColumns = rows.reduce((acc, row) => Math.max(acc, row.length), 0);
@@ -97,7 +104,15 @@ async function bridgeCall(
   method: string,
   args: unknown[] = [],
 ): Promise<Record<string, unknown>> {
+  const start = Date.now();
+  console.log(
+    `[SPREADSHEET_EXTRACT] bridgeCall:start method=${method} args=${args.length} url="${page.url()}"`,
+  );
   const result = await runBridge(page, method, args);
+  const duration = Date.now() - start;
+  console.log(
+    `[SPREADSHEET_EXTRACT] bridgeCall:end method=${method} duration_ms=${duration} success=${!('error' in result)}`,
+  );
   if ('error' in result) {
     throw new Error(result.error.message);
   }
@@ -120,6 +135,8 @@ async function activateRange(page: CdpPageLike, rangeA1: string): Promise<void> 
 }
 
 async function readRangeViaClipboard(page: CdpPageLike, rangeA1: string): Promise<string[][]> {
+  const start = Date.now();
+  console.log(`[SPREADSHEET_EXTRACT] clipboard-read:start range="${rangeA1}"`);
   await activateRange(page, rangeA1);
 
   const keyCombo = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
@@ -137,7 +154,12 @@ async function readRangeViaClipboard(page: CdpPageLike, rangeA1: string): Promis
 
   const text = typeof clipboardResult.text === 'string' ? clipboardResult.text : '';
   const parsed = await bridgeCall(page, 'parseTsv', [text]);
-  return normalizeStringGrid(parsed.values);
+  const normalized = normalizeStringGrid(parsed.values);
+  const { rows, cols } = gridDimensions(normalized);
+  console.log(
+    `[SPREADSHEET_EXTRACT] clipboard-read:end range="${rangeA1}" duration_ms=${Date.now() - start} rows=${rows} cols=${cols}`,
+  );
+  return normalized;
 }
 
 async function readRangeViaApi(
@@ -145,35 +167,76 @@ async function readRangeViaApi(
   provider: SpreadsheetProvider,
   rangeA1: string,
 ): Promise<string[][]> {
+  const start = Date.now();
   const { sheetName, rangePart } = splitRangeReference(rangeA1);
   const rangeOnly = rangePart || rangeA1;
 
   if (provider === 'google_sheets') {
-    const result = await readRangeViaGviz(page, sheetName, rangeOnly);
-    if (result.ok) return result.values;
-    console.log(`[ORCHESTRATOR] Extraction gviz read failed, falling back to clipboard: ${result}`);
-  } else if (provider === 'excel_web') {
-    const result = await readRangeViaExcelGraph(page, sheetName, rangeOnly);
-    if (result.ok) return result.values;
     console.log(
-      `[ORCHESTRATOR] Extraction Excel Graph API read failed, falling back to clipboard: ${result}`,
+      `[SPREADSHEET_EXTRACT] gviz-read:start sheet="${sheetName || '(active)'}" range="${rangeOnly}"`,
+    );
+    const result = await readRangeViaGviz(page, sheetName, rangeOnly);
+    if (result.ok) {
+      const { rows, cols } = gridDimensions(result.values);
+      console.log(
+        `[SPREADSHEET_EXTRACT] gviz-read:end duration_ms=${Date.now() - start} rows=${rows} cols=${cols}`,
+      );
+      return result.values;
+    }
+    const failureMessage = 'message' in result ? result.message : 'unknown error';
+    console.log(
+      `[SPREADSHEET_EXTRACT] gviz-read:failed duration_ms=${Date.now() - start} message="${failureMessage}" fallback=clipboard`,
+    );
+  } else if (provider === 'excel_web') {
+    console.log(
+      `[SPREADSHEET_EXTRACT] excel-graph-read:start sheet="${sheetName || '(active)'}" range="${rangeOnly}"`,
+    );
+    const result = await readRangeViaExcelGraph(page, sheetName, rangeOnly);
+    if (result.ok) {
+      const { rows, cols } = gridDimensions(result.values);
+      console.log(
+        `[SPREADSHEET_EXTRACT] excel-graph-read:end duration_ms=${Date.now() - start} rows=${rows} cols=${cols}`,
+      );
+      return result.values;
+    }
+    const failureMessage = 'message' in result ? result.message : 'unknown error';
+    console.log(
+      `[SPREADSHEET_EXTRACT] excel-graph-read:failed duration_ms=${Date.now() - start} message="${failureMessage}" fallback=clipboard`,
     );
   }
 
-  return readRangeViaClipboard(page, rangeA1);
+  const values = await readRangeViaClipboard(page, rangeA1);
+  const { rows, cols } = gridDimensions(values);
+  console.log(
+    `[SPREADSHEET_EXTRACT] read-range:clipboard-fallback:end duration_ms=${Date.now() - start} rows=${rows} cols=${cols}`,
+  );
+  return values;
 }
 
 export async function captureSpreadsheetSnapshot(
   stagehand: Stagehand,
 ): Promise<SpreadsheetSnapshot> {
+  const start = Date.now();
+  console.log('[SPREADSHEET_EXTRACT] snapshot:start');
   const state = await getSpreadsheetPageState(stagehand);
   if ('error' in state) {
     throw new Error(state.error.error.message);
   }
+  console.log(
+    `[SPREADSHEET_EXTRACT] snapshot:page-state provider=${state.provider} url="${state.url}"`,
+  );
 
+  const bridgeStart = Date.now();
   await ensureSpreadsheetBridge(state.page);
+  console.log(
+    `[SPREADSHEET_EXTRACT] snapshot:bridge-ready duration_ms=${Date.now() - bridgeStart}`,
+  );
 
+  const workbookStart = Date.now();
   const workbookInfo = await bridgeCall(state.page, 'getWorkbookInfo');
+  console.log(
+    `[SPREADSHEET_EXTRACT] snapshot:workbook-info duration_ms=${Date.now() - workbookStart}`,
+  );
 
   const sheetNames = Array.isArray(workbookInfo.sheet_names)
     ? workbookInfo.sheet_names.filter((entry): entry is string => typeof entry === 'string')
@@ -191,8 +254,15 @@ export async function captureSpreadsheetSnapshot(
       : '';
 
   const sampledRangeA1 = resolveSampledRangeA1(activeSelectionA1, activeSheetName);
+  console.log(
+    `[SPREADSHEET_EXTRACT] snapshot:range activeSelection="${activeSelectionA1 || '(none)'}" sampled="${sampledRangeA1}"`,
+  );
 
   const values = trimEmptyGrid(await readRangeViaApi(state.page, state.provider, sampledRangeA1));
+  const { rows, cols } = gridDimensions(values);
+  console.log(
+    `[SPREADSHEET_EXTRACT] snapshot:end duration_ms=${Date.now() - start} rows=${rows} cols=${cols}`,
+  );
 
   return {
     provider: state.provider,
@@ -245,6 +315,11 @@ export async function extractFromSpreadsheetWithLlm(params: {
   snapshot: SpreadsheetSnapshot;
 }): Promise<unknown> {
   const { llmClient, model, dataExtractionGoal, schema, snapshot } = params;
+  const start = Date.now();
+  const { rows, cols } = gridDimensions(snapshot.values);
+  console.log(
+    `[SPREADSHEET_EXTRACT] llm:start model=${model} schema=${schema ? 'yes' : 'no'} rows=${rows} cols=${cols} sampledRange="${snapshot.sampledRangeA1}"`,
+  );
 
   const prompt =
     `You are extracting data from a spreadsheet snapshot.\n\n` +
@@ -263,6 +338,7 @@ export async function extractFromSpreadsheetWithLlm(params: {
       messages: [{ role: 'user', content: prompt }],
       response_format: zodResponseFormat(zodSchema, 'spreadsheet_extract_response'),
     });
+    console.log(`[SPREADSHEET_EXTRACT] llm:end duration_ms=${Date.now() - start} parsed=true`);
     return response.choices[0]?.message?.parsed ?? {};
   }
 
@@ -277,8 +353,13 @@ export async function extractFromSpreadsheetWithLlm(params: {
   }
 
   try {
-    return parseJsonFromText(raw);
+    const parsed = parseJsonFromText(raw);
+    console.log(`[SPREADSHEET_EXTRACT] llm:end duration_ms=${Date.now() - start} parsed=true`);
+    return parsed;
   } catch {
+    console.log(
+      `[SPREADSHEET_EXTRACT] llm:end duration_ms=${Date.now() - start} parsed=false fallback=snapshot`,
+    );
     return {
       snapshot: {
         provider: snapshot.provider,

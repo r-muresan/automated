@@ -323,13 +323,15 @@ export class OpenAIClient extends LLMClient {
         ];
         response.choices[0].message.content = null;
       } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         logger({
           category: "openai",
           message: "Failed to parse tool call response",
           level: 0,
           auxiliary: {
             error: {
-              value: error.message,
+              value: errorMessage,
               type: "string",
             },
             content: {

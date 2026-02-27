@@ -33,7 +33,7 @@ import { v7 as uuidv7 } from "uuid";
 export class OpenAICUAClient extends AgentClient {
   private apiKey: string;
   private organization?: string;
-  private baseURL: string;
+  private baseURL?: string;
   private client: OpenAI;
   public lastResponseId?: string;
   private currentViewport = { width: 1288, height: 711 };
@@ -414,7 +414,7 @@ export class OpenAICUAClient extends AgentClient {
     return [
       {
         role: "system",
-        content: this.userProvidedInstructions,
+        content: this.userProvidedInstructions ?? "",
       },
       {
         role: "user",
@@ -484,11 +484,13 @@ export class OpenAICUAClient extends AgentClient {
       const response = await this.client.responses.create(requestParams);
       const endTime = Date.now();
       const elapsedMs = endTime - startTime;
+      const inputTokens = response.usage?.input_tokens ?? 0;
+      const outputTokens = response.usage?.output_tokens ?? 0;
 
       // Extract only the input_tokens and output_tokens
       const usage = {
-        input_tokens: response.usage.input_tokens,
-        output_tokens: response.usage.output_tokens,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
         inference_time_ms: elapsedMs,
       };
 
@@ -498,8 +500,8 @@ export class OpenAICUAClient extends AgentClient {
         model: this.modelName,
         operation: "CUA.getAction",
         output: formatCuaResponsePreview(response.output),
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
+        inputTokens,
+        outputTokens,
       });
 
       // Store the response ID for future use
@@ -709,6 +711,10 @@ export class OpenAICUAClient extends AgentClient {
                 level: 1,
               });
 
+              if (typeof tool.execute !== "function") {
+                throw new Error(`Tool "${item.name}" does not implement execute().`);
+              }
+
               const result = await tool.execute(args, {
                 toolCallId: item.call_id,
                 messages: [],
@@ -779,8 +785,8 @@ export class OpenAICUAClient extends AgentClient {
     // Instead of wrapping the action in a params object, spread the action properties directly
     // This ensures properties like x, y, button, etc. are directly accessible on the AgentAction
     return {
-      type: action.type as string,
       ...action, // Spread all properties from the action
+      type: action.type as string,
     };
   }
 

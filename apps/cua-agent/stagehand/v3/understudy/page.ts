@@ -13,7 +13,7 @@ import {
 } from "./a11y/snapshot/index.js";
 import { FrameRegistry } from "./frameRegistry.js";
 import { executionContexts } from "./executionContextRegistry.js";
-import {
+import type {
   LoadState,
   SnapshotResult,
   PageSnapshotOptions,
@@ -54,7 +54,7 @@ import {
   withScreenshotTimeout,
   type ScreenshotCleanup,
 } from "./screenshotUtils.js";
-import { InitScriptSource } from "../types/private/index.js";
+import type { InitScriptSource } from "../types/private/index.js";
 
 /**
  * Page

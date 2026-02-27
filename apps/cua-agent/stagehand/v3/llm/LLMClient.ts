@@ -115,10 +115,10 @@ export interface LLMParsedResponse<T> {
 }
 
 export abstract class LLMClient {
-  public type: "openai" | "anthropic" | "cerebras" | "groq" | (string & {});
+  public type!: "openai" | "anthropic" | "cerebras" | "groq" | (string & {});
   public modelName: AvailableModel | (string & {});
-  public hasVision: boolean;
-  public clientOptions: ClientOptions;
+  public hasVision = false;
+  public clientOptions: ClientOptions = {};
   public userProvidedInstructions?: string;
 
   constructor(modelName: AvailableModel, userProvidedInstructions?: string) {

@@ -176,7 +176,7 @@ export class StagehandAPIClient {
   private apiKey: string;
   private projectId: string;
   private sessionId?: string;
-  private modelApiKey: string;
+  private modelApiKey!: string;
   private modelProvider?: string;
   private region?: BrowserbaseRegion;
   private logger: (message: LogLine) => void;
@@ -845,13 +845,15 @@ export class StagehandAPIClient {
     const defaultHeaders: Record<string, string> = {
       "x-bb-api-key": this.apiKey,
       "x-bb-project-id": this.projectId,
-      "x-bb-session-id": this.sessionId,
       // we want real-time logs, so we stream the response
       "x-stream-response": "true",
       "x-model-api-key": this.modelApiKey,
       "x-language": "typescript",
       "x-sdk-version": STAGEHAND_VERSION,
     };
+    if (this.sessionId) {
+      defaultHeaders["x-bb-session-id"] = this.sessionId;
+    }
 
     // Add cache bypass header if caching is disabled
     if (!this.shouldUseCache(serverCache)) {

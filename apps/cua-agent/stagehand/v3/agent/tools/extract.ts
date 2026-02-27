@@ -92,13 +92,17 @@ export const extractTool = (
         const parsedSchema = schema
           ? jsonSchemaToZod(schema as JsonSchema)
           : undefined;
-        const result = await v3.extract(instruction, parsedSchema, {
-          ...(executionModel ? { model: executionModel } : {}),
-        });
+        const extractOptions = executionModel
+          ? { model: executionModel }
+          : undefined;
+        const result = parsedSchema
+          ? await v3.extract(instruction, parsedSchema, extractOptions)
+          : await v3.extract(instruction, extractOptions);
         return { success: true, result };
       } catch (error) {
-        const err = error as Error;
-        return { success: false, error: err?.message ?? String(error) };
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        return { success: false, error: errorMessage };
       }
     },
   });

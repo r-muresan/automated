@@ -65,6 +65,10 @@ export async function extractWithSharedStrategy(params: {
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
   const activeUrl = page?.url?.() ?? '';
   const spreadsheetProvider = getSpreadsheetProvider(activeUrl);
+  const start = Date.now();
+  console.log(
+    `[EXTRACTION] extractWithSharedStrategy:start provider=${spreadsheetProvider ?? 'none'} schema=${schema ? 'yes' : 'no'} url="${activeUrl}"`,
+  );
 
   const contextualGoal =
     context && context.item != null
@@ -76,7 +80,12 @@ export async function extractWithSharedStrategy(params: {
       : contextualGoal;
 
   if (spreadsheetProvider) {
+    const snapshotStart = Date.now();
     const snapshot = await captureSpreadsheetSnapshot(stagehand);
+    console.log(
+      `[EXTRACTION] spreadsheet:snapshot-ready duration_ms=${Date.now() - snapshotStart} range="${snapshot.sampledRangeA1}"`,
+    );
+    const llmStart = Date.now();
     const spreadsheetResult = await extractFromSpreadsheetWithLlm({
       llmClient,
       model,
@@ -84,6 +93,8 @@ export async function extractWithSharedStrategy(params: {
       schema,
       snapshot,
     });
+    console.log(`[EXTRACTION] spreadsheet:llm-ready duration_ms=${Date.now() - llmStart}`);
+    console.log(`[EXTRACTION] extractWithSharedStrategy:end mode=spreadsheet total_ms=${Date.now() - start}`);
 
     return {
       mode: 'spreadsheet',
@@ -95,11 +106,14 @@ export async function extractWithSharedStrategy(params: {
   }
 
   try {
+    const domStart = Date.now();
     const domResult = await extractFromDom({
       stagehand,
       dataExtractionGoal: goalWithMemory,
       schema,
     });
+    console.log(`[EXTRACTION] dom:success duration_ms=${Date.now() - domStart}`);
+    console.log(`[EXTRACTION] extractWithSharedStrategy:end mode=dom total_ms=${Date.now() - start}`);
 
     return {
       mode: 'dom',
@@ -108,12 +122,17 @@ export async function extractWithSharedStrategy(params: {
     };
   } catch (error) {
     console.warn(
-      '[EXTRACTION] DOM extraction failed; falling back to vision:',
+      `[EXTRACTION] DOM extraction failed after ${Date.now() - start}ms; falling back to vision:`,
       (error as Error).message,
     );
   }
 
+  const screenshotStart = Date.now();
   const screenshotDataUrl = await capturePageScreenshot(stagehand, { fullPage: true });
+  console.log(
+    `[EXTRACTION] vision:screenshot-ready duration_ms=${Date.now() - screenshotStart} chars=${screenshotDataUrl.length}`,
+  );
+  const visionStart = Date.now();
   const visionResult = await extractFromVision({
     llmClient,
     model,
@@ -121,6 +140,8 @@ export async function extractWithSharedStrategy(params: {
     dataExtractionGoal: goalWithMemory,
     schema,
   });
+  console.log(`[EXTRACTION] vision:llm-ready duration_ms=${Date.now() - visionStart}`);
+  console.log(`[EXTRACTION] extractWithSharedStrategy:end mode=vision total_ms=${Date.now() - start}`);
 
   return {
     mode: 'vision',

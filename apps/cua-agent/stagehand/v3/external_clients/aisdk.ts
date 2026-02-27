@@ -40,7 +40,7 @@ export class AISdkClient extends LLMClient {
           }
 
           const contentParts = message.content.map((content) => {
-            if ("image_url" in content) {
+            if ("image_url" in content && content.image_url?.url) {
               const imageContent: ImagePart = {
                 type: "image",
                 image: content.image_url.url,
@@ -49,7 +49,7 @@ export class AISdkClient extends LLMClient {
             } else {
               const textContent: TextPart = {
                 type: "text",
-                text: content.text,
+                text: "text" in content ? (content.text ?? "") : "",
               };
               return textContent;
             }
@@ -102,7 +102,7 @@ export class AISdkClient extends LLMClient {
 
     const tools: Record<string, Tool> = {};
 
-    for (const rawTool of options.tools) {
+    for (const rawTool of options.tools ?? []) {
       tools[rawTool.name] = {
         description: rawTool.description,
         inputSchema: rawTool.parameters,

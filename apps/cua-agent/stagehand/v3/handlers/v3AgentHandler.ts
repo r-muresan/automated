@@ -600,8 +600,9 @@ export class V3AgentHandler {
   ): AgentResult {
     if (!state.finalMessage) {
       const allReasoning = state.collectedReasoning.join(' ').trim();
+      const stepCount = result.steps?.length ?? 0;
 
-      if (!state.completed && maxSteps && result.steps?.length >= maxSteps) {
+      if (!state.completed && maxSteps && stepCount >= maxSteps) {
         this.logger({
           category: 'agent',
           message: `Agent stopped: reached maximum steps (${maxSteps})`,
@@ -690,7 +691,7 @@ export class V3AgentHandler {
       inputMessages: messages,
       instruction,
       outputSchema,
-      logger,
+      logger: logger ?? this.logger,
     });
 
     state.completed = doneResult.taskComplete;

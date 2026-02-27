@@ -74,12 +74,13 @@ export class GoogleClient extends LLMClient {
     clientOptions?: ClientOptions; // Expecting { apiKey: string } here
   }) {
     super(modelName);
-    if (!clientOptions?.apiKey) {
+    const resolvedClientOptions: ClientOptions = clientOptions ?? {};
+    if (!resolvedClientOptions.apiKey) {
       // Try to get the API key from the environment variable GOOGLE_API_KEY
-      clientOptions.apiKey = loadApiKeyFromEnv("google_legacy", logger);
+      resolvedClientOptions.apiKey = loadApiKeyFromEnv("google_legacy", logger);
     }
-    this.clientOptions = clientOptions;
-    this.client = new GoogleGenAI({ apiKey: clientOptions.apiKey });
+    this.clientOptions = resolvedClientOptions;
+    this.client = new GoogleGenAI({ apiKey: resolvedClientOptions.apiKey ?? "" });
     this.modelName = modelName;
     this.logger = logger;
     // Determine vision capability based on model name (adjust as needed)
@@ -228,6 +229,7 @@ export class GoogleClient extends LLMClient {
       top_p,
       maxOutputTokens,
     } = options;
+    const safeRequestId = requestId ?? "";
 
     const formattedMessages = this.formatMessages(options.messages, image);
     const formattedTools = this.formatTools(tools);
@@ -248,7 +250,7 @@ export class GoogleClient extends LLMClient {
       level: 2,
       auxiliary: {
         modelName: { value: this.modelName, type: "string" },
-        requestId: { value: requestId, type: "string" },
+        requestId: { value: safeRequestId, type: "string" },
         requestPayloadSummary: {
           value: `Model: ${this.modelName}, Messages: ${formattedMessages.length}, Config Keys: ${Object.keys(generationConfig).join(", ")}, Tools: ${formattedTools ? formattedTools.length : 0}, Safety Categories: ${safetySettings.map((s) => s.category).join(", ")}`,
           type: "string",
@@ -274,7 +276,7 @@ export class GoogleClient extends LLMClient {
         message: "Full request payload",
         level: 2,
         auxiliary: {
-          requestId: { value: requestId, type: "string" },
+          requestId: { value: safeRequestId, type: "string" },
           fullPayload: {
             value: JSON.stringify(requestPayload),
             type: "object",
@@ -282,13 +284,14 @@ export class GoogleClient extends LLMClient {
         },
       });
     } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
       logger({
         category: "google",
         message: "Failed to stringify full request payload for logging",
         level: 0,
         auxiliary: {
-          requestId: { value: requestId, type: "string" },
-          error: { value: e.message, type: "string" },
+          requestId: { value: safeRequestId, type: "string" },
+          error: { value: errorMessage, type: "string" },
         },
       });
     }
@@ -301,7 +304,7 @@ export class GoogleClient extends LLMClient {
         message: "received response",
         level: 2,
         auxiliary: {
-          requestId: { value: requestId, type: "string" },
+          requestId: { value: safeRequestId, type: "string" },
           response: {
             value: JSON.stringify(result),
             type: "object",
@@ -310,12 +313,12 @@ export class GoogleClient extends LLMClient {
       });
 
       const finishReason = result.candidates?.[0]?.finishReason || "unknown";
-      const toolCalls = result.functionCalls?.map(
+      const toolCalls = (result.functionCalls ?? []).map(
         (fc: FunctionCall, index: number) => ({
-          id: `tool_call_${requestId}_${index}`,
+          id: `tool_call_${safeRequestId}_${index}`,
           type: "function" as const,
           function: {
-            name: fc.name,
+            name: fc.name ?? "",
             arguments: JSON.stringify(fc.args),
           },
         }),
@@ -323,20 +326,21 @@ export class GoogleClient extends LLMClient {
 
       let content: string | null = null;
       try {
-        content = result.text;
+        content = result.text ?? null;
       } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
         logger({
           category: "google",
-          message: `Could not extract text content: ${e.message}`,
+          message: `Could not extract text content: ${errorMessage}`,
           level: 1,
-          auxiliary: { requestId: { value: requestId, type: "string" } },
+          auxiliary: { requestId: { value: safeRequestId, type: "string" } },
         });
         content = null;
       }
 
       // Construct LLMResponse shape
       const llmResponse: LLMResponse = {
-        id: result.candidates?.[0]?.index?.toString() || requestId,
+        id: result.candidates?.[0]?.index?.toString() || safeRequestId,
         object: "chat.completion",
         created: Math.floor(Date.now() / 1000),
         model: this.modelName,
@@ -367,9 +371,10 @@ export class GoogleClient extends LLMClient {
             content?.trim().replace(/^```json\n?|\n?```$/g, "") || "{}";
           parsedData = JSON.parse(potentialJson);
         } catch (e) {
+          const errorMessage = e instanceof Error ? e.message : String(e);
           logger({
             category: "google",
-            message: `Failed to parse JSON response: ${e.message}`,
+            message: `Failed to parse JSON response: ${errorMessage}`,
             level: 0,
             auxiliary: {
               content: { value: content || "null", type: "string" },
@@ -383,7 +388,7 @@ export class GoogleClient extends LLMClient {
             });
           }
           throw new CreateChatCompletionResponseError(
-            `Failed to parse JSON response: ${e.message}`,
+            `Failed to parse JSON response: ${errorMessage}`,
           );
         }
 
@@ -416,16 +421,18 @@ export class GoogleClient extends LLMClient {
 
       return llmResponse as T;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
       logger({
         category: "google",
-        message: `Error during Google AI chat completion: ${error.message}`,
+        message: `Error during Google AI chat completion: ${errorMessage}`,
         level: 0,
         auxiliary: {
           errorDetails: {
-            value: `Message: ${error.message}${error.stack ? "\nStack: " + error.stack : ""}`,
+            value: `Message: ${errorMessage}${errorStack ? "\nStack: " + errorStack : ""}`,
             type: "string",
           },
-          requestId: { value: requestId, type: "string" },
+          requestId: { value: safeRequestId, type: "string" },
         },
       });
 
@@ -451,7 +458,7 @@ export class GoogleClient extends LLMClient {
         throw error;
       }
       throw new StagehandError(
-        `Google AI API request failed: ${error.message}`,
+        `Google AI API request failed: ${errorMessage}`,
       );
     }
   }

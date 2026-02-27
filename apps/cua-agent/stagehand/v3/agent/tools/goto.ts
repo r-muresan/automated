@@ -26,7 +26,9 @@ export const gotoTool = (v3: V3) =>
         v3.recordAgentReplayStep({ type: "goto", url, waitUntil: "load" });
         return { success: true, url };
       } catch (error) {
-        return { success: false, error: error?.message ?? String(error) };
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        return { success: false, error: errorMessage };
       }
     },
   });

@@ -41,6 +41,7 @@ export class CustomOpenAIClient extends LLMClient {
     logger,
   }: CreateChatCompletionOptions): Promise<T> {
     const { image, requestId, ...optionsWithoutImageAndRequestId } = options;
+    const safeRequestId = requestId ?? "";
 
     // TODO: Implement vision support
     if (image) {
@@ -100,7 +101,7 @@ export class CustomOpenAIClient extends LLMClient {
       options.messages.map((message) => {
         if (Array.isArray(message.content)) {
           const contentParts = message.content.map((content) => {
-            if ("image_url" in content) {
+            if ("image_url" in content && content.image_url?.url) {
               const imageContent: ChatCompletionContentPartImage = {
                 image_url: {
                   url: content.image_url.url,
@@ -110,7 +111,7 @@ export class CustomOpenAIClient extends LLMClient {
               return imageContent;
             } else {
               const textContent: ChatCompletionContentPartText = {
-                text: content.text,
+                text: "text" in content ? (content.text ?? "") : "",
                 type: "text",
               };
               return textContent;
@@ -193,7 +194,7 @@ export class CustomOpenAIClient extends LLMClient {
           type: "object",
         },
         requestId: {
-          value: requestId,
+          value: safeRequestId,
           type: "string",
         },
       },
@@ -236,7 +237,7 @@ export class CustomOpenAIClient extends LLMClient {
                 value: `Message: ${e.message}${e.stack ? "\nStack: " + e.stack : ""}`,
                 type: "string",
               },
-              requestId: { value: requestId, type: "string" },
+              requestId: { value: safeRequestId, type: "string" },
             },
           });
           throw new CreateChatCompletionResponseError(e.message);

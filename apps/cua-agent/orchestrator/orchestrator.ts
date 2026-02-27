@@ -554,7 +554,12 @@ export class OrchestratorAgent {
     if (!this.stagehand) throw new Error('Browser session not initialized');
     if (!this.openai) throw new Error('LLM client not initialized');
 
-    console.log(`[EXTRACT] Executing extract: ${step.description}`);
+    const extractStart = Date.now();
+    const activeUrl = this.getActivePageUrl();
+    const provider = getSpreadsheetProvider(activeUrl);
+    console.log(
+      `[EXTRACT] start step_index=${index} provider=${provider ?? 'none'} url="${activeUrl}" description="${step.description}"`,
+    );
 
     console.log(context);
 
@@ -563,11 +568,19 @@ export class OrchestratorAgent {
         ? `Context item: ${JSON.stringify(context.item)}\nInstruction: ${step.description}`
         : step.description;
 
+    const pageReadyStart = Date.now();
     await waitForPageReady(this.stagehand, undefined, this.assertNotAborted.bind(this));
+    console.log(
+      `[EXTRACT] page-ready duration_ms=${Date.now() - pageReadyStart} step_index=${index}`,
+    );
 
     try {
       this.assertNotAborted();
       const schema = parseSchemaMap(step.dataSchema);
+      console.log(
+        `[EXTRACT] schema step_index=${index} fields=${Object.keys(schema ?? {}).length}`,
+      );
+      const sharedStrategyStart = Date.now();
       const result = await extractWithSharedStrategy({
         stagehand: this.stagehand,
         llmClient: this.openai,
@@ -577,6 +590,9 @@ export class OrchestratorAgent {
         context,
         extractedVariables: this.extractedVariables,
       });
+      console.log(
+        `[EXTRACT] shared-strategy:end step_index=${index} mode=${result.mode} duration_ms=${Date.now() - sharedStrategyStart}`,
+      );
 
       const output = result.scraped_data;
       const map: Record<string, string> = {};
@@ -605,9 +621,15 @@ export class OrchestratorAgent {
         success: true,
         output: JSON.stringify(output ?? {}),
       });
+      console.log(
+        `[EXTRACT] end step_index=${index} success=true total_duration_ms=${Date.now() - extractStart}`,
+      );
       this.emit({ type: 'step:end', step, index, success: true });
     } catch (error: any) {
-      console.error(`[ORCHESTRATOR] Extract failed:`, error.message ?? error);
+      console.error(
+        `[ORCHESTRATOR] Extract failed after ${Date.now() - extractStart}ms:`,
+        error.message ?? error,
+      );
       this.stepResults.push({
         instruction: step.description,
         success: false,

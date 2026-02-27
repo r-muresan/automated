@@ -89,7 +89,9 @@ export class GoogleCUAClient extends AgentClient {
       clientOptions?.environment &&
       typeof clientOptions.environment === "string"
     ) {
-      this.environment = clientOptions.environment as typeof this.environment;
+      this.environment = clientOptions.environment as
+        | "ENVIRONMENT_BROWSER"
+        | "ENVIRONMENT_DESKTOP";
     }
 
     this.generateContentConfig = {
@@ -696,7 +698,8 @@ export class GoogleCUAClient extends AgentClient {
     });
 
     // Process all parts - Google can send multiple function calls
-    for (const part of candidate.content.parts) {
+    const candidateParts = candidate.content?.parts ?? [];
+    for (const part of candidateParts) {
       if (part.text) {
         message += part.text + "\n";
         logger({
@@ -778,7 +781,8 @@ export class GoogleCUAClient extends AgentClient {
     // Check if task is completed
     const completed =
       functionCalls.length === 0 ||
-      (candidate.finishReason && candidate.finishReason !== "STOP");
+      (candidate.finishReason !== undefined &&
+        candidate.finishReason !== "STOP");
 
     return {
       actions,

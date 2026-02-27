@@ -32,6 +32,10 @@ export async function executeGoogleCustomTool(
     });
 
     const tool = tools[toolName];
+    if (!tool || typeof tool.execute !== "function") {
+      throw new Error(`Tool "${toolName}" does not implement execute().`);
+    }
+
     const toolResult = await tool.execute(toolArgs, {
       toolCallId: `tool_${Date.now()}`,
       messages: [],

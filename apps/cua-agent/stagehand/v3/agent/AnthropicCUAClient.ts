@@ -400,7 +400,7 @@ export class AnthropicCUAClient extends AgentClient {
     return [
       {
         role: "system",
-        content: this.userProvidedInstructions,
+        content: this.userProvidedInstructions ?? "",
       },
       {
         role: "user",
@@ -647,6 +647,10 @@ export class AnthropicCUAClient extends AgentClient {
                 message: `Executing tool call: ${item.name} with args: ${JSON.stringify(item.input)}`,
                 level: 1,
               });
+
+              if (typeof tool.execute !== "function") {
+                throw new Error(`Tool "${item.name}" does not implement execute().`);
+              }
 
               const result = await tool.execute(item.input, {
                 toolCallId: item.id,

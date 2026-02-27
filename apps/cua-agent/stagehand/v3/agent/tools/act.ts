@@ -60,7 +60,9 @@ export const actTool = (
         }
         return response;
       } catch (error) {
-        return { success: false, error: error?.message ?? String(error) };
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        return { success: false, error: errorMessage };
       }
     },
   });

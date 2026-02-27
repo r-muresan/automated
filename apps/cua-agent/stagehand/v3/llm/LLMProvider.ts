@@ -162,7 +162,7 @@ export function getAISDKLanguageModel(
         Object.keys(AISDKProvidersWithAPIKey),
       );
     }
-    const provider = creator(clientOptions);
+    const provider = creator(clientOptions!);
     // Get the specific model from the provider
     return provider(subModelName);
   } else {

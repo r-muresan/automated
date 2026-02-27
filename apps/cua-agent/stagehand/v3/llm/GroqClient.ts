@@ -42,6 +42,8 @@ export class GroqClient extends LLMClient {
     retries,
     logger,
   }: CreateChatCompletionOptions): Promise<T> {
+    const safeRequestId = options.requestId ?? "";
+    const modelNameForApi = this.modelName.split("groq-")[1] ?? this.modelName;
     const optionsWithoutImage = { ...options };
     delete optionsWithoutImage.image;
 
@@ -66,7 +68,7 @@ export class GroqClient extends LLMClient {
             : Array.isArray(msg.content) &&
                 msg.content.length > 0 &&
                 "text" in msg.content[0]
-              ? msg.content[0].text
+              ? (msg.content[0].text ?? "")
               : "",
       };
 
@@ -124,7 +126,7 @@ export class GroqClient extends LLMClient {
     try {
       // Use OpenAI client with Groq API
       const apiResponse = await this.client.chat.completions.create({
-        model: this.modelName.split("groq-")[1],
+        model: modelNameForApi,
         messages: [
           ...formattedMessages,
           // Add explicit instruction to return JSON if we have a response model
@@ -174,7 +176,7 @@ export class GroqClient extends LLMClient {
         id: apiResponse.id,
         object: "chat.completion",
         created: Date.now(),
-        model: this.modelName.split("groq-")[1],
+        model: modelNameForApi,
         choices: [
           {
             index: 0,
@@ -203,7 +205,7 @@ export class GroqClient extends LLMClient {
             type: "object",
           },
           requestId: {
-            value: options.requestId,
+            value: safeRequestId,
             type: "string",
           },
         },
@@ -225,13 +227,14 @@ export class GroqClient extends LLMClient {
           };
           return finalResponse as T;
         } catch (e) {
+          const errorMessage = e instanceof Error ? e.message : String(e);
           logger({
             category: "groq",
             message: "failed to parse tool call arguments as JSON, retrying",
             level: 0,
             auxiliary: {
               error: {
-                value: e.message,
+                value: errorMessage,
                 type: "string",
               },
             },
@@ -254,13 +257,14 @@ export class GroqClient extends LLMClient {
             return finalResponse as T;
           }
         } catch (e) {
+          const errorMessage = e instanceof Error ? e.message : String(e);
           logger({
             category: "groq",
             message: "failed to parse content as JSON",
             level: 0,
             auxiliary: {
               error: {
-                value: e.message,
+                value: errorMessage,
                 type: "string",
               },
             },
@@ -279,17 +283,18 @@ export class GroqClient extends LLMClient {
 
       throw new CreateChatCompletionResponseError("Invalid response schema");
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       logger({
         category: "groq",
         message: "error creating chat completion",
         level: 0,
         auxiliary: {
           error: {
-            value: error.message,
+            value: errorMessage,
             type: "string",
           },
           requestId: {
-            value: options.requestId,
+            value: safeRequestId,
             type: "string",
           },
         },

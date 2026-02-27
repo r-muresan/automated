@@ -1,4 +1,4 @@
-import Anthropic, { ClientOptions } from "@anthropic-ai/sdk";
+import Anthropic, { ClientOptions as AnthropicApiClientOptions } from "@anthropic-ai/sdk";
 import {
   ImageBlockParam,
   MessageParam,
@@ -9,6 +9,7 @@ import { LogLine } from "../types/public/logs.js";
 import {
   AnthropicJsonSchemaObject,
   AvailableModel,
+  ClientOptions as StagehandClientOptions,
 } from "../types/public/model.js";
 import {
   CreateChatCompletionOptions,
@@ -21,7 +22,6 @@ import { toJsonSchema } from "../zodCompat.js";
 export class AnthropicClient extends LLMClient {
   public type = "anthropic" as const;
   private client: Anthropic;
-  declare public clientOptions: ClientOptions;
 
   constructor({
     modelName,
@@ -30,13 +30,16 @@ export class AnthropicClient extends LLMClient {
   }: {
     logger: (message: LogLine) => void;
     modelName: AvailableModel;
-    clientOptions?: ClientOptions;
+    clientOptions?: AnthropicApiClientOptions;
     userProvidedInstructions?: string;
   }) {
     super(modelName);
     this.client = new Anthropic(clientOptions);
     this.modelName = modelName;
-    this.clientOptions = clientOptions;
+    this.clientOptions = {
+      apiKey: clientOptions?.apiKey ?? undefined,
+      baseURL: clientOptions?.baseURL ?? undefined,
+    } as StagehandClientOptions;
     this.userProvidedInstructions = userProvidedInstructions;
   }
 
@@ -45,6 +48,7 @@ export class AnthropicClient extends LLMClient {
     retries,
     logger,
   }: CreateChatCompletionOptions): Promise<T> {
+    const safeRequestId = options.requestId ?? "";
     const optionsWithoutImage = { ...options };
     delete optionsWithoutImage.image;
 
@@ -85,7 +89,7 @@ export class AnthropicClient extends LLMClient {
         return {
           role: msg.role as "user" | "assistant",
           content: msg.content.map((content) => {
-            if ("image_url" in content) {
+            if ("image_url" in content && content.image_url?.url) {
               const formattedContent: ImageBlockParam = {
                 type: "image",
                 source: {
@@ -97,7 +101,10 @@ export class AnthropicClient extends LLMClient {
 
               return formattedContent;
             } else {
-              return { type: "text", text: content.text };
+              return {
+                type: "text",
+                text: "text" in content ? (content.text ?? "") : "",
+              };
             }
           }),
         };
@@ -131,7 +138,7 @@ export class AnthropicClient extends LLMClient {
       formattedMessages.push(screenshotMessage);
     }
 
-    let anthropicTools: Tool[] = options.tools?.map((tool) => {
+    let anthropicTools: Tool[] = (options.tools ?? []).map((tool) => {
       return {
         name: tool.name,
         description: tool.description,
@@ -186,7 +193,7 @@ export class AnthropicClient extends LLMClient {
           type: "object",
         },
         requestId: {
-          value: options.requestId,
+          value: safeRequestId,
           type: "string",
         },
       },
@@ -222,7 +229,7 @@ export class AnthropicClient extends LLMClient {
                 },
               })),
           },
-          finish_reason: response.stop_reason,
+          finish_reason: response.stop_reason ?? "stop",
         },
       ],
       usage: usageData,
@@ -238,7 +245,7 @@ export class AnthropicClient extends LLMClient {
           type: "object",
         },
         requestId: {
-          value: options.requestId,
+          value: safeRequestId,
           type: "string",
         },
       },
@@ -269,7 +276,7 @@ export class AnthropicClient extends LLMClient {
           level: 0,
           auxiliary: {
             requestId: {
-              value: options.requestId,
+              value: safeRequestId,
               type: "string",
             },
           },

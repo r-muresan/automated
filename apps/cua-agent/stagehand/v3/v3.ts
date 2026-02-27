@@ -33,7 +33,7 @@ import {
 import { cleanupLocalBrowser } from "./shutdown/cleanupLocal.js";
 import { startShutdownSupervisor } from "./shutdown/supervisorClient.js";
 import { resolveTools } from "./mcp/utils.js";
-import {
+import type {
   ActHandlerParams,
   ExtractHandlerParams,
   ObserveHandlerParams,
@@ -46,23 +46,31 @@ import type {
   ShutdownSupervisorHandle,
 } from "./types/private/shutdown.js";
 import {
+  AVAILABLE_CUA_MODELS,
+  defaultExtractSchema,
+  pageTextSchema,
+  V3FunctionName,
+  CuaModelRequiredError,
+  StagehandInvalidArgumentError,
+  StagehandNotInitializedError,
+  MissingEnvironmentVariableError,
+  StagehandInitError,
+} from "./types/public/index.js";
+import type {
   AgentConfig,
   AgentExecuteCallbacks,
   AgentExecuteOptions,
+  NonStreamingAgentInstance,
   AgentStreamExecuteOptions,
   AgentResult,
-  AVAILABLE_CUA_MODELS,
   LogLine,
   StagehandMetrics,
   Action,
   ActOptions,
   ActResult,
-  defaultExtractSchema,
   ExtractOptions,
   HistoryEntry,
   ObserveOptions,
-  pageTextSchema,
-  V3FunctionName,
   AvailableModel,
   ClientOptions,
   ModelConfiguration,
@@ -72,12 +80,8 @@ import {
   PatchrightPage,
   PlaywrightPage,
   PuppeteerPage,
-  CuaModelRequiredError,
-  StagehandInvalidArgumentError,
-  StagehandNotInitializedError,
-  MissingEnvironmentVariableError,
-  StagehandInitError,
   AgentStreamResult,
+  StreamingAgentInstance,
 } from "./types/public/index.js";
 import { V3Context } from "./understudy/context.js";
 import { Page } from "./understudy/page.js";
@@ -1747,24 +1751,11 @@ export class V3 {
    * @overload When stream: true, returns a streaming agent where execute() returns AgentStreamResult
    * @overload When stream is false/undefined, returns a non-streaming agent where execute() returns AgentResult
    */
-  agent(options: AgentConfig & { stream: true }): {
-    execute: (
-      instructionOrOptions: string | AgentStreamExecuteOptions,
-    ) => Promise<AgentStreamResult>;
-  };
-  agent(options?: AgentConfig & { stream?: false }): {
-    execute: (
-      instructionOrOptions: string | AgentExecuteOptions,
-    ) => Promise<AgentResult>;
-  };
-  agent(options?: AgentConfig): {
-    execute: (
-      instructionOrOptions:
-        | string
-        | AgentExecuteOptions
-        | AgentStreamExecuteOptions,
-    ) => Promise<AgentResult | AgentStreamResult>;
-  } {
+  agent(options: AgentConfig & { stream: true }): StreamingAgentInstance;
+  agent(options?: AgentConfig & { stream?: false }): NonStreamingAgentInstance;
+  agent(
+    options?: AgentConfig,
+  ): StreamingAgentInstance | NonStreamingAgentInstance {
     const agentConfig: AgentConfig = options ?? {};
 
     // Determine if CUA mode is enabled (via mode: "cua" or deprecated cua: true)
@@ -1830,7 +1821,9 @@ export class V3 {
       const agentConfigSignature =
         this.agentCache.buildConfigSignature(agentConfig);
       return {
-        execute: async (instructionOrOptions: string | AgentExecuteOptions) =>
+        execute: async (
+          instructionOrOptions: string | AgentExecuteOptions,
+        ) =>
           withInstanceLogContext(this.instanceId, async () => {
             validateExperimentalFeatures({
               isExperimental: this.experimental,
@@ -1953,30 +1946,26 @@ export class V3 {
     const agentConfigSignature = this.agentCache.buildConfigSignature(agentConfig);
     const isStreaming = agentConfig.stream ?? false;
 
-    return {
-      execute: async (
-        instructionOrOptions:
-          | string
-          | AgentExecuteOptions
-          | AgentStreamExecuteOptions,
-      ): Promise<AgentResult | AgentStreamResult> =>
-        withInstanceLogContext(this.instanceId, async () => {
-          validateExperimentalFeatures({
-            isExperimental: this.experimental,
-            agentConfig,
-            executeOptions:
-              typeof instructionOrOptions === "object"
-                ? instructionOrOptions
-                : null,
-            isStreaming,
-          });
-          SessionFileLogger.logAgentTaskStarted({
-            invocation: "Agent.execute",
-            args: [instructionOrOptions],
-          });
+    if (isStreaming) {
+      return {
+        execute: async (
+          instructionOrOptions: string | AgentStreamExecuteOptions,
+        ): Promise<AgentStreamResult> =>
+          withInstanceLogContext(this.instanceId, async () => {
+            validateExperimentalFeatures({
+              isExperimental: this.experimental,
+              agentConfig,
+              executeOptions:
+                typeof instructionOrOptions === "object"
+                  ? instructionOrOptions
+                  : null,
+              isStreaming: true,
+            });
+            SessionFileLogger.logAgentTaskStarted({
+              invocation: "Agent.execute",
+              args: [instructionOrOptions],
+            });
 
-          // Streaming mode
-          if (isStreaming) {
             const { handler, resolvedOptions, cacheContext, llmClient } =
               await this.prepareAgentExecution(
                 agentConfig,
@@ -2015,9 +2004,29 @@ export class V3 {
             // Log completion when stream is returned (stream completes asynchronously)
             SessionFileLogger.logAgentTaskCompleted();
             return streamResult;
-          }
+          }),
+      };
+    }
 
-          // Non-streaming mode (default)
+    return {
+      execute: async (
+        instructionOrOptions: string | AgentExecuteOptions,
+      ): Promise<AgentResult> =>
+        withInstanceLogContext(this.instanceId, async () => {
+          validateExperimentalFeatures({
+            isExperimental: this.experimental,
+            agentConfig,
+            executeOptions:
+              typeof instructionOrOptions === "object"
+                ? instructionOrOptions
+                : null,
+            isStreaming: false,
+          });
+          SessionFileLogger.logAgentTaskStarted({
+            invocation: "Agent.execute",
+            args: [instructionOrOptions],
+          });
+
           const { handler, resolvedOptions, cacheContext, llmClient } =
             await this.prepareAgentExecution(
               agentConfig,

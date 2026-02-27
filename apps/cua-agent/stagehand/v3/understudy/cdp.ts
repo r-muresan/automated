@@ -129,7 +129,7 @@ export class CdpConnection implements CDPSessionLike {
     const stack = new Error().stack?.split("\n").slice(1, 4).join("\n");
     const p = new Promise<R>((resolve, reject) => {
       this.inflight.set(id, {
-        resolve,
+        resolve: resolve as (v: unknown) => void,
         reject,
         sessionId: null,
         method,
@@ -273,7 +273,7 @@ export class CdpConnection implements CDPSessionLike {
 
     const p = new Promise<R>((resolve, reject) => {
       this.inflight.set(id, {
-        resolve,
+        resolve: resolve as (v: unknown) => void,
         reject,
         sessionId,
         method,

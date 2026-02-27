@@ -87,7 +87,7 @@ export class AISdkClient extends LLMClient {
           }
 
           const contentParts = message.content.map((content) => {
-            if ("image_url" in content) {
+            if ("image_url" in content && content.image_url?.url) {
               const imageContent: ImagePart = {
                 type: "image",
                 image: content.image_url.url,
@@ -96,7 +96,7 @@ export class AISdkClient extends LLMClient {
             } else {
               const textContent: TextPart = {
                 type: "text",
-                text: content.text,
+                text: "text" in content ? (content.text ?? "") : "",
               };
               return textContent;
             }
@@ -127,6 +127,7 @@ export class AISdkClient extends LLMClient {
         };
       },
     );
+    const safeRequestId = options.requestId ?? "";
 
     let objectResponse: Awaited<ReturnType<typeof generateObject>>;
     const isGPT5 = this.model.modelId.includes("gpt-5");
@@ -227,7 +228,7 @@ You must respond in JSON format. respond WITH JSON. Do not include any other tex
                 type: "string",
               },
               requestId: {
-                value: options.requestId,
+                value: safeRequestId,
                 type: "string",
               },
             },
@@ -274,7 +275,7 @@ You must respond in JSON format. respond WITH JSON. Do not include any other tex
             type: "object",
           },
           requestId: {
-            value: options.requestId,
+            value: safeRequestId,
             type: "string",
           },
         },
@@ -401,7 +402,7 @@ You must respond in JSON format. respond WITH JSON. Do not include any other tex
           type: "object",
         },
         requestId: {
-          value: options.requestId,
+          value: safeRequestId,
           type: "string",
         },
       },
