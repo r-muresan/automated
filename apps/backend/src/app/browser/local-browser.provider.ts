@@ -273,7 +273,7 @@ export class LocalBrowserProvider extends BrowserProvider {
   }
 
   async uploadSessionFile(_sessionId: string, _file: SessionUploadFile): Promise<void> {
-    throw new Error('File uploads are only supported for Browserbase sessions');
+    throw new Error('File uploads are only supported for managed browser sessions');
   }
 
   /** Get the debug port for a session (used by CDP proxy) */

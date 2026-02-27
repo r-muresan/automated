@@ -64,8 +64,7 @@ Create a `.env` file in the project root:
 OPENROUTER_API_KEY=your_openrouter_api_key
 
 # Optional — Cloud browser automation (if not using local browser)
-BROWSERBASE_API_KEY=your_browserbase_api_key
-BROWSERBASE_PROJECT_ID=your_project_id
+HYPERBROWSER_API_KEY=your_hyperbrowser_api_key
 
 # Optional — Email triggers via Resend
 RESEND_API_KEY=your_resend_api_key
@@ -137,8 +136,7 @@ Data is persisted via a `./data` volume mount. To switch to PostgreSQL, update `
 | ------------------------ | -------- | ------------------------------------------- |
 | `OPENROUTER_API_KEY`     | Yes      | LLM API key for AI workflow execution       |
 | `DATABASE_URL`           | No       | Database connection (default: local SQLite) |
-| `BROWSERBASE_API_KEY`    | No       | Cloud browser provider API key              |
-| `BROWSERBASE_PROJECT_ID` | No       | Browserbase project identifier              |
+| `HYPERBROWSER_API_KEY`   | No       | Hyperbrowser API key                        |
 | `RESEND_API_KEY`         | No       | Email service for email-triggered workflows |
 
 ## Local Development

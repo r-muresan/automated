@@ -18,6 +18,7 @@ import {
   useStopRecordingKeepalive,
 } from '../../hooks/api';
 import { Navbar } from '../components/Navbar';
+import { VNCBrowser } from '../components/Browser/VNCBrowser';
 
 export default function NewWorkflow() {
   const router = useRouter();
@@ -76,6 +77,7 @@ export default function NewWorkflow() {
     reloadCurrentTab,
     focusUrlBar,
     cdpWsUrlTemplate,
+    liveViewUrl,
   } = useBrowser();
 
   const {
@@ -923,7 +925,13 @@ export default function NewWorkflow() {
         overflow="hidden"
       >
         <Box height="100%" overflow="hidden" width="full" borderRadius="2xl">
-          <BrowserContainer
+          <VNCBrowser
+            contentRef={contentRef}
+            sessionId={sessionId}
+            liveViewUrl={liveViewUrl}
+            isLoading={isLoading}
+          />
+          {/* <BrowserContainer
             containerRef={containerRef}
             contentRef={contentRef}
             sessionId={sessionId}
@@ -944,7 +952,7 @@ export default function NewWorkflow() {
             showLoadSkeleton={true}
             minimalOverlay={true}
             cdpWsUrlTemplate={cdpWsUrlTemplate}
-          />
+          /> */}
         </Box>
       </Box>
 

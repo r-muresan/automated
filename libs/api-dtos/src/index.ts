@@ -24,11 +24,13 @@ export interface BrowserSessionCreateResponse {
   sessionId: string;
   pages: BrowserbasePage[];
   cdpWsUrlTemplate?: string;
+  liveViewUrl?: string;
 }
 
 export interface BrowserSessionDebugResponse extends Record<string, unknown> {
   pages: BrowserbasePage[];
   cdpWsUrlTemplate?: string;
+  liveViewUrl?: string;
 }
 
 export interface BrowserSessionPingResponse {

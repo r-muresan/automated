@@ -57,6 +57,7 @@ interface BrowserContextType {
   goForwardCurrentTab: () => Promise<void>;
   reloadCurrentTab: () => Promise<void>;
   cdpWsUrlTemplate: string | null;
+  liveViewUrl: string | null;
 }
 
 const BrowserContext = createContext<BrowserContextType | undefined>(undefined);
@@ -71,6 +72,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   const [focusUrlBarTrigger, setFocusUrlBarTrigger] = useState(0);
   const lastInteractionRef = useRef<number>(Date.now());
   const [cdpWsUrlTemplate, setCdpWsUrlTemplate] = useState<string | null>(null);
+  const [liveViewUrl, setLiveViewUrl] = useState<string | null>(null);
 
   // React Query mutations
   const createSessionMutation = useCreateSession();
@@ -257,6 +259,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
       const sid = data.sessionId;
       console.log('[FRONTEND] Session recreated:', sid);
       setCdpWsUrlTemplate(data.cdpWsUrlTemplate || null);
+      setLiveViewUrl(data.liveViewUrl || null);
       setSessionId(sid);
       sessionCreatedAtRef.current = Date.now();
 
@@ -281,6 +284,12 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
     async (sid: string) => {
       try {
         const data = await refreshPagesMutation.mutateAsync(sid);
+        if (data.cdpWsUrlTemplate) {
+          setCdpWsUrlTemplate(data.cdpWsUrlTemplate);
+        }
+        if (data.liveViewUrl) {
+          setLiveViewUrl(data.liveViewUrl);
+        }
         if (data.pages) {
           setPages((prev) => {
             // Build a map of server pages for quick lookup
@@ -338,6 +347,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         const sid = data.sessionId;
         console.log('[FRONTEND] Session created:', sid);
         setCdpWsUrlTemplate(data.cdpWsUrlTemplate || null);
+        setLiveViewUrl(data.liveViewUrl || null);
         setSessionId(sid);
         sessionCreatedAtRef.current = Date.now();
 
@@ -386,6 +396,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
       setPages([]);
       setActivePageIndex(0);
       setCdpWsUrlTemplate(null);
+      setLiveViewUrl(null);
       deletedTabIds.current = []; // Reset deleted tabs when session is stopped
     }
   }, [sessionId, stopSessionMutation, deleteSessionMutation]);
@@ -924,6 +935,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         goForwardCurrentTab,
         reloadCurrentTab,
         cdpWsUrlTemplate,
+        liveViewUrl,
       }}
     >
       {children}

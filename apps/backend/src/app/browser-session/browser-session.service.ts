@@ -3,10 +3,9 @@ import { PrismaService } from '../prisma.service';
 import {
   BrowserProvider,
   BrowserHandle,
-  PageInfo,
   SessionUploadFile,
 } from '../browser/browser-provider.interface';
-import { BrowserbaseBrowserProvider } from '../browser/browserbase-browser.provider';
+import { HyperbrowserBrowserProvider } from '../browser/hyperbrowser-browser.provider';
 import {
   acquireBrowserbaseSessionCreateLease,
   registerBrowserbaseSession,
@@ -14,15 +13,28 @@ import {
 } from 'apps/cua-agent';
 
 const BROWSER_MINUTES_CAP = 10000;
-const isUsingBrowserbase = !!process.env.BROWSERBASE_API_KEY;
+const isUsingManagedBrowser = !!process.env.HYPERBROWSER_API_KEY;
 
-function buildCdpWsUrlTemplate(connectUrl: string | null | undefined, sessionId: string): string | undefined {
+function buildCdpWsUrlTemplate(
+  connectUrl: string | null | undefined,
+  sessionId: string,
+): string | undefined {
   if (!connectUrl) return undefined;
+
+  // Hyperbrowser provides a browser-level endpoint that requires auth headers the browser
+  // WebSocket API can't supply. Route through the local CDP proxy instead.
+  if (!connectUrl.includes('browserbase.com')) {
+    const wsBase = (
+      process.env.BACKEND_WS_URL || `ws://localhost:${process.env.PORT || 8080}`
+    ).replace(/\/$/, '');
+    return `${wsBase}/api/cdp-proxy/${sessionId}`;
+  }
+
   try {
     const url = new URL(connectUrl);
     return `${url.protocol}//${url.host}/debug/${sessionId}/devtools/page/{pageId}`;
   } catch {
-    return undefined;
+    return connectUrl;
   }
 }
 
@@ -60,7 +72,7 @@ export class BrowserSessionService implements OnModuleInit {
   }
 
   async assertBrowserMinutesRemaining(userId: string) {
-    if (!isUsingBrowserbase) return;
+    if (!isUsingManagedBrowser) return;
     const user = await this.prisma.user.findUnique({ where: { email: userId } });
     if (user && user.browserMinutesUsed >= BROWSER_MINUTES_CAP) {
       throw new ForbiddenException(
@@ -70,7 +82,7 @@ export class BrowserSessionService implements OnModuleInit {
   }
 
   async addBrowserMinutesForSession(sessionId: string) {
-    if (!isUsingBrowserbase) return;
+    if (!isUsingManagedBrowser) return;
     const session = await this.prisma.browserSession.findFirst({
       where: { browserbaseSessionId: sessionId },
       include: { user: true },
@@ -106,10 +118,10 @@ export class BrowserSessionService implements OnModuleInit {
     });
 
     if (!userContext) {
-      // Only create Browserbase context if using BrowserbaseBrowserProvider
-      if (this.browserProvider instanceof BrowserbaseBrowserProvider) {
+      // Only create managed-browser profile context when using Hyperbrowser provider
+      if (this.browserProvider instanceof HyperbrowserBrowserProvider) {
         const contextId = await (
-          this.browserProvider as BrowserbaseBrowserProvider
+          this.browserProvider as HyperbrowserBrowserProvider
         ).createContext();
 
         userContext = await this.prisma.userContext.upsert({
@@ -156,12 +168,18 @@ export class BrowserSessionService implements OnModuleInit {
 
           console.log('Loaded existing session with ID:', existingSession.browserbaseSessionId);
 
-          if (sessionInfo && sessionInfo.status === 'RUNNING') {
+          if (sessionInfo && ['RUNNING', 'active'].includes(String(sessionInfo.status))) {
             registerBrowserbaseSession(existingSession.browserbaseSessionId);
             return {
               id: existingSession.browserbaseSessionId,
               pages: debugInfo.pages,
-              cdpWsUrlTemplate: buildCdpWsUrlTemplate(existingSession.connectUrl, existingSession.browserbaseSessionId),
+              cdpWsUrlTemplate:
+                debugInfo.cdpWsUrlTemplate ??
+                buildCdpWsUrlTemplate(
+                  existingSession.connectUrl,
+                  existingSession.browserbaseSessionId,
+                ),
+              liveViewUrl: debugInfo.liveViewUrl,
             };
           }
         } catch (error) {
@@ -195,28 +213,39 @@ export class BrowserSessionService implements OnModuleInit {
       createLease.confirmCreated(session.id);
       leaseConfirmed = true;
 
+      const resolvedConnectUrl = session.connectUrl ?? session.wsEndpoint ?? null;
+
       this.prisma.browserSession
         .create({
           data: {
             user: { connect: { email: userId } },
             browserbaseSessionId: session.id,
-            connectUrl: session.connectUrl ?? null,
+            connectUrl: resolvedConnectUrl,
             lastUsedAt: new Date(),
           },
         })
         .catch((err) => console.error('Error storing session in DB:', err));
 
+      if (typeof session.profileId === 'string' && session.profileId.length > 0) {
+        await this.updateUserContextId(userId, session.profileId);
+      }
+
       const pages = await this.browserProvider.initializeSession(session.id, {
         colorScheme,
         width,
         height,
-        connectUrl: session.connectUrl,
+        connectUrl: resolvedConnectUrl ?? undefined,
       });
+      const debugInfo = await this.browserProvider.getDebugInfo(session.id).catch(() => null);
 
       return {
         ...session,
         pages,
-        cdpWsUrlTemplate: buildCdpWsUrlTemplate(session.connectUrl, session.id),
+        cdpWsUrlTemplate:
+          session.cdpWsUrlTemplate ??
+          debugInfo?.cdpWsUrlTemplate ??
+          buildCdpWsUrlTemplate(resolvedConnectUrl, session.id),
+        liveViewUrl: session.liveUrl ?? session.liveViewUrl ?? debugInfo?.liveViewUrl,
       };
     } catch (error) {
       if (!leaseConfirmed) {
@@ -231,6 +260,17 @@ export class BrowserSessionService implements OnModuleInit {
   async getDebugUrl(sessionId: string) {
     this.updateLastUsed(sessionId).catch((err) => console.error('Error updating lastUsedAt:', err));
     return this.browserProvider.getDebugInfo(sessionId);
+  }
+
+  private async updateUserContextId(email: string, contextId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) return;
+
+    await this.prisma.userContext.upsert({
+      where: { userId: user.id },
+      update: { browserbaseContextId: contextId },
+      create: { userId: user.id, browserbaseContextId: contextId },
+    });
   }
 
   async stopSession(sessionId: string, deleteFromDb = true) {

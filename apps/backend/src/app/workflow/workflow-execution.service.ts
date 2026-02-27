@@ -231,10 +231,11 @@ export class WorkflowExecutionService {
       return { success: false, message: 'Workflow has no steps to execute' };
     }
 
-    if (requireBrowserbase && !process.env.BROWSERBASE_API_KEY) {
+    if (requireBrowserbase && !process.env.HYPERBROWSER_API_KEY) {
       return {
         success: false,
-        message: 'Browserbase is required for this run, but BROWSERBASE_API_KEY is not configured.',
+        message:
+          'Managed browser is required for this run, but HYPERBROWSER_API_KEY is not configured.',
       };
     }
 
@@ -296,9 +297,9 @@ export class WorkflowExecutionService {
       message: 'Workflow started',
     });
 
-    // Create local browser session if not using Browserbase
+    // Create local browser session only when managed browser is not configured
     let localCdpUrl: string | undefined;
-    if (!process.env.BROWSERBASE_API_KEY) {
+    if (!process.env.HYPERBROWSER_API_KEY) {
       const session = await this.browserProvider.createSession({
         contextId: browserbaseContextId,
       });
@@ -315,7 +316,6 @@ export class WorkflowExecutionService {
 
     const localSessionId = this.workflowLocalSessions.get(workflowId);
     const orchestrator = new OrchestratorAgent({
-      browserbaseProjectId: process.env.BROWSERBASE_PROJECT_ID,
       browserbaseContextId,
       localCdpUrl,
       localSessionId: localSessionId ?? undefined,

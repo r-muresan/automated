@@ -1,6 +1,7 @@
 import * as dotenv from 'dotenv';
 import OpenAI from 'openai';
 import { Stagehand } from '../stagehand/v3';
+import { Hyperbrowser } from '@hyperbrowser/sdk';
 import { z } from 'zod';
 import type {
   Workflow,
@@ -53,6 +54,8 @@ const DEFAULT_MODELS = {
 export class OrchestratorAgent {
   private openai: OpenAI | null = null;
   private stagehand: Stagehand | null = null;
+  private hyperbrowserClient: Hyperbrowser | null = null;
+  private hyperbrowserSessionId: string | null = null;
   private activeSessionId: string | null = null;
   private aborted = false;
   private aborting = false;
@@ -119,7 +122,7 @@ export class OrchestratorAgent {
   }
 
   getSessionId(): string | null {
-    return this.stagehand?.browserbaseSessionID ?? null;
+    return this.activeSessionId ?? this.stagehand?.browserbaseSessionID ?? null;
   }
 
   async runWorkflow(workflow: Workflow): Promise<WorkflowResult> {
@@ -260,7 +263,7 @@ export class OrchestratorAgent {
     if (this.options.localCdpUrl) {
       await this.initLocal(startingUrl);
     } else {
-      await this.initBrowserbase(startingUrl);
+      await this.initHyperbrowser(startingUrl);
     }
   }
 
@@ -298,53 +301,60 @@ export class OrchestratorAgent {
     }
   }
 
-  private async initBrowserbase(startingUrl?: string): Promise<void> {
+  private async initHyperbrowser(startingUrl?: string): Promise<void> {
     const models = this.resolveModels();
-    const projectId = this.options.browserbaseProjectId ?? process.env.BROWSERBASE_PROJECT_ID ?? '';
-    if (!projectId) {
-      throw new Error('Missing BROWSERBASE_PROJECT_ID for Browserbase');
+    const hyperbrowserApiKey = process.env.HYPERBROWSER_API_KEY;
+    if (!hyperbrowserApiKey) {
+      throw new Error('Missing HYPERBROWSER_API_KEY for Hyperbrowser');
     }
 
-    const contextId =
-      this.options.browserbaseContextId ?? process.env.BROWSERBASE_CONTEXT_ID ?? undefined;
+    const profileId =
+      this.options.browserbaseContextId ??
+      process.env.HYPERBROWSER_PROFILE_ID ??
+      process.env.BROWSERBASE_CONTEXT_ID ??
+      undefined;
 
     const createLease = await acquireBrowserbaseSessionCreateLease('orchestrator:init');
     let leaseConfirmed = false;
 
     try {
+      this.hyperbrowserClient = new Hyperbrowser({ apiKey: hyperbrowserApiKey });
+      const hyperbrowserSession = await this.hyperbrowserClient.sessions.create({
+        timeoutMinutes: 60,
+        enableWebRecording: true,
+        enableVideoWebRecording: true,
+        profile: profileId
+          ? {
+              id: profileId,
+              persistChanges: true,
+            }
+          : undefined,
+      });
+
       this.stagehand = new Stagehand({
-        env: 'BROWSERBASE',
+        env: 'LOCAL',
         verbose: 1,
         model: {
           modelName: models.extract,
           apiKey: process.env.OPENROUTER_API_KEY,
           baseURL: OPENROUTER_BASE_URL,
         },
-        browserbaseSessionCreateParams: {
-          projectId,
-          browserSettings: {
-            blockAds: true,
-            context: contextId
-              ? {
-                  id: contextId,
-                  persist: true,
-                }
-              : undefined,
-          },
+        localBrowserLaunchOptions: {
+          cdpUrl: hyperbrowserSession.wsEndpoint,
         },
         experimental: true,
         disableAPI: true,
       });
 
       await this.stagehand.init();
-      const sessionId = this.stagehand.browserbaseSessionID!;
+      const sessionId = hyperbrowserSession.id;
       createLease.confirmCreated(sessionId);
       leaseConfirmed = true;
       this.activeSessionId = sessionId;
+      this.hyperbrowserSessionId = sessionId;
 
       this.assertNotAborted();
-      const liveViewUrl = `https://browserbase.com/sessions/${sessionId}`;
-      console.log(liveViewUrl);
+      const liveViewUrl = hyperbrowserSession.liveUrl ?? '';
       this.emit({ type: 'session:ready', sessionId, liveViewUrl });
 
       // Only navigate if a starting URL is provided; otherwise the first navigate step will handle it
@@ -362,7 +372,7 @@ export class OrchestratorAgent {
   }
 
   private async close(): Promise<void> {
-    const sessionId = this.stagehand?.browserbaseSessionID ?? this.activeSessionId;
+    const sessionId = this.hyperbrowserSessionId ?? this.activeSessionId;
     const isLocal = !!this.options.localCdpUrl;
 
     if (this.stagehand) {
@@ -375,9 +385,16 @@ export class OrchestratorAgent {
     }
 
     if (sessionId && !isLocal) {
+      if (this.hyperbrowserClient) {
+        await this.hyperbrowserClient.sessions.stop(sessionId).catch((error) => {
+          console.warn(`[ORCHESTRATOR] Failed to stop Hyperbrowser session ${sessionId}:`, error);
+        });
+      }
       releaseBrowserbaseSession(sessionId);
     }
     this.activeSessionId = null;
+    this.hyperbrowserSessionId = null;
+    this.hyperbrowserClient = null;
   }
 
   /**

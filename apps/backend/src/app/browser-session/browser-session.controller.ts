@@ -38,12 +38,12 @@ export class BrowserSessionController {
     const email = user?.email;
     const dbUser = email ? await this.prisma.user.findUnique({ where: { email } }) : null;
     const minutesUsed = dbUser?.browserMinutesUsed ?? 0;
-    const isUsingBrowserbase = !!process.env.BROWSERBASE_API_KEY;
-    const minutesCap = isUsingBrowserbase ? 60 : Infinity;
+    const isUsingManagedBrowser = !!process.env.HYPERBROWSER_API_KEY;
+    const minutesCap = isUsingManagedBrowser ? 60 : Infinity;
     return {
       minutesUsed: Math.round(minutesUsed * 100) / 100,
       minutesCap,
-      minutesRemaining: isUsingBrowserbase
+      minutesRemaining: isUsingManagedBrowser
         ? Math.max(0, Math.round((60 - minutesUsed) * 100) / 100)
         : Infinity,
     };
@@ -72,6 +72,7 @@ export class BrowserSessionController {
       sessionId: session.id,
       pages: session.pages,
       cdpWsUrlTemplate: session.cdpWsUrlTemplate,
+      liveViewUrl: session.liveViewUrl,
     };
   }
 
@@ -85,6 +86,7 @@ export class BrowserSessionController {
       ...debugInfo,
       pages: debugInfo.pages || [],
       cdpWsUrlTemplate: debugInfo.cdpWsUrlTemplate,
+      liveViewUrl: debugInfo.liveViewUrl,
     };
   }
 
