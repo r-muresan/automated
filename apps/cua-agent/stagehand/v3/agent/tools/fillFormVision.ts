@@ -75,21 +75,24 @@ MANDATORY USE CASES (always use fillFormVision for these):
 
         // Process coordinates and substitute variables for each field
         // Keep original values (with %tokens%) for logging/caching, substituted values for typing
-        const processedFields = fields.map((field) => {
-          const processed = processCoordinates(
-            field.coordinates.x,
-            field.coordinates.y,
-            provider,
-            v3,
-            modelId,
-          );
-          return {
-            ...field,
-            originalValue: field.value, // Keep original with %tokens% for cache
-            value: substituteVariables(field.value, variables),
-            coordinates: { x: processed.x, y: processed.y },
-          };
-        });
+        const processedFields = await Promise.all(
+          fields.map(async (field) => {
+            const processed = await processCoordinates(
+              field.coordinates.x,
+              field.coordinates.y,
+              provider,
+              v3,
+              modelId,
+              page,
+            );
+            return {
+              ...field,
+              originalValue: field.value, // Keep original with %tokens% for cache
+              value: substituteVariables(field.value, variables),
+              coordinates: { x: processed.x, y: processed.y },
+            };
+          }),
+        );
 
         v3.logger({
           category: "agent",

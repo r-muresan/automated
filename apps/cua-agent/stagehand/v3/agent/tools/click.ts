@@ -1,60 +1,50 @@
-import { tool } from "ai";
-import { z } from "zod";
-import type { V3 } from "../../v3.js";
-import type { Action } from "../../types/public/methods.js";
-import type {
-  ClickToolResult,
-  ModelOutputContentItem,
-} from "../../types/public/agent.js";
-import {
-  isMoonshotModel,
-  processCoordinates,
-} from "../utils/coordinateNormalization.js";
-import { ensureXPath } from "../utils/xpath.js";
-import { waitAndCaptureScreenshot } from "../utils/screenshotHandler.js";
+import { tool } from 'ai';
+import { z } from 'zod';
+import type { V3 } from '../../v3.js';
+import type { Action } from '../../types/public/methods.js';
+import type { ClickToolResult, ModelOutputContentItem } from '../../types/public/agent.js';
+import { isMoonshotModel, processCoordinates } from '../utils/coordinateNormalization.js';
+import { ensureXPath } from '../utils/xpath.js';
+import { waitAndCaptureScreenshot } from '../utils/screenshotHandler.js';
 
-export const clickTool = (v3: V3, provider?: string, modelId?: string) =>
-  {
-    const unitScaleCoordinates = isMoonshotModel(modelId);
-    const coordinateSchema = unitScaleCoordinates
-      ? z.number().min(0).max(1)
-      : z.number();
-    const coordinateDescription = unitScaleCoordinates
-      ? "The (x, y) coordinates to click on, normalized to 0..1"
-      : "The (x, y) coordinates to click on";
+export const clickTool = (v3: V3, provider?: string, modelId?: string) => {
+  const unitScaleCoordinates = isMoonshotModel(modelId);
+  const coordinateSchema = unitScaleCoordinates ? z.number().min(0).max(1) : z.number();
+  const coordinateDescription = unitScaleCoordinates
+    ? 'The (x, y) coordinates to click on, normalized to 0..1'
+    : 'The (x, y) coordinates to click on';
 
-    return tool({
+  return tool({
     description:
-      "Click on an element using its coordinates (this is the most reliable way to click on an element, always use this over act, unless the element is not visible in the screenshot, but shown in ariaTree)",
+      'Click on an element using its coordinates (this is the most reliable way to click on an element, always use this over act, unless the element is not visible in the screenshot, but shown in ariaTree)',
     inputSchema: z.object({
       describe: z
         .string()
         .describe(
-          "Describe the element to click on in a short, specific phrase that mentions the element type and a good visual description",
+          'Describe the element to click on in a short, specific phrase that mentions the element type and a good visual description',
         ),
-      coordinates: z
-        .array(coordinateSchema)
-        .describe(coordinateDescription),
+      coordinates: z.array(coordinateSchema).describe(coordinateDescription),
     }),
     execute: async ({ describe, coordinates }): Promise<ClickToolResult> => {
       try {
         const page = await v3.context.awaitActivePage();
-        const processed = processCoordinates(
+        const processed = await processCoordinates(
           coordinates[0],
           coordinates[1],
           provider,
           v3,
           modelId,
+          page,
         );
 
         v3.logger({
-          category: "agent",
+          category: 'agent',
           message: `Agent calling tool: click`,
           level: 1,
           auxiliary: {
             arguments: {
               value: JSON.stringify({ describe }),
-              type: "object",
+              type: 'object',
             },
           },
         });
@@ -62,7 +52,6 @@ export const clickTool = (v3: V3, provider?: string, modelId?: string) =>
         // Only request XPath when caching is enabled to avoid unnecessary computation
         const shouldCollectXpath = v3.isAgentReplayActive();
         const xpath = await page.click(processed.x, processed.y, {
-          captureDebugScreenshot: true,
           returnXpath: shouldCollectXpath,
         });
 
@@ -75,11 +64,11 @@ export const clickTool = (v3: V3, provider?: string, modelId?: string) =>
             const action: Action = {
               selector: normalizedXpath,
               description: describe,
-              method: "click",
+              method: 'click',
               arguments: [],
             };
             v3.recordAgentReplayStep({
-              type: "act",
+              type: 'act',
               instruction: describe,
               actions: [action],
               actionDescription: describe,
@@ -104,7 +93,7 @@ export const clickTool = (v3: V3, provider?: string, modelId?: string) =>
       if (result.success) {
         const content: ModelOutputContentItem[] = [
           {
-            type: "text",
+            type: 'text',
             text: JSON.stringify({
               success: result.success,
               describe: result.describe,
@@ -114,18 +103,18 @@ export const clickTool = (v3: V3, provider?: string, modelId?: string) =>
         ];
         if (result.screenshotBase64) {
           content.push({
-            type: "media",
-            mediaType: "image/png",
+            type: 'media',
+            mediaType: 'image/png',
             data: result.screenshotBase64,
           });
         }
-        return { type: "content", value: content };
+        return { type: 'content', value: content };
       }
       return {
-        type: "content",
+        type: 'content',
         value: [
           {
-            type: "text",
+            type: 'text',
             text: JSON.stringify({
               success: result.success,
               error: result.error,

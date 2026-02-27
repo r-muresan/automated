@@ -1,4 +1,5 @@
 import type { V3 } from '../../v3.js';
+import type { Page } from '../../understudy/page.js';
 
 // Default viewport for advancedStealth mode
 const STEALTH_VIEWPORT = { width: 1288, height: 711 };
@@ -44,17 +45,75 @@ export function normalizeMoonshotCoordinates(
   };
 }
 
-export function processCoordinates(
+async function getLiveViewport(
+  page: Page,
+): Promise<{ width: number; height: number } | undefined> {
+  try {
+    const viewport = await page.mainFrame().evaluate<{
+      width: number;
+      height: number;
+    }>(`(() => {
+      const visual = window.visualViewport;
+      const width = Math.round(
+        visual?.width ??
+          window.innerWidth ??
+          document.documentElement?.clientWidth ??
+          0,
+      );
+      const height = Math.round(
+        visual?.height ??
+          window.innerHeight ??
+          document.documentElement?.clientHeight ??
+          0,
+      );
+      return { width, height };
+    })()`);
+
+    if (viewport.width > 0 && viewport.height > 0) {
+      return viewport;
+    }
+  } catch {
+    // Fall back to configured viewport below.
+  }
+
+  return undefined;
+}
+
+async function getViewportForCoordinateNormalization(
+  v3?: V3,
+  page?: Page,
+): Promise<{ width: number; height: number } | undefined> {
+  if (v3?.isAdvancedStealth) {
+    return STEALTH_VIEWPORT;
+  }
+
+  const activePage = page ?? (v3 ? await v3.context.awaitActivePage() : undefined);
+  if (activePage) {
+    const liveViewport = await getLiveViewport(activePage);
+    if (liveViewport) {
+      return liveViewport;
+    }
+  }
+
+  if (v3) {
+    return v3.configuredViewport;
+  }
+
+  return undefined;
+}
+
+export async function processCoordinates(
   x: number,
   y: number,
   provider?: string,
   v3?: V3,
   modelId?: string,
-): { x: number; y: number } {
+  page?: Page,
+): Promise<{ x: number; y: number }> {
   console.log({ x, y });
 
-  if (v3) {
-    const viewport = v3.isAdvancedStealth ? STEALTH_VIEWPORT : v3.configuredViewport;
+  const viewport = await getViewportForCoordinateNormalization(v3, page);
+  if (viewport) {
     if (isGoogleProvider(provider)) {
       return normalizeGoogleCoordinates(x, y, viewport);
     }

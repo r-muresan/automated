@@ -36,12 +36,13 @@ export const clickAndHoldTool = (v3: V3, provider?: string, modelId?: string) =>
     execute: async ({ describe, coordinates, duration }) => {
       try {
         const page = await v3.context.awaitActivePage();
-        const processed = processCoordinates(
+        const processed = await processCoordinates(
           coordinates[0],
           coordinates[1],
           provider,
           v3,
           modelId,
+          page,
         );
 
         v3.logger({
