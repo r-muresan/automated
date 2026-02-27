@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server";
 
-const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const clerkEnabled = false; // !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 export default async function middleware(request: NextRequest, event: NextFetchEvent) {
   if (!clerkEnabled) {

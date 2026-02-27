@@ -3,7 +3,7 @@
 import { ClerkProvider, useAuth, useUser, useClerk } from '@clerk/nextjs';
 import type { ReactNode } from 'react';
 
-export const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+export const clerkEnabled = false; // !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   if (clerkEnabled) {
