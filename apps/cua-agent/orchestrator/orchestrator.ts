@@ -308,11 +308,7 @@ export class OrchestratorAgent {
       throw new Error('Missing HYPERBROWSER_API_KEY for Hyperbrowser');
     }
 
-    const profileId =
-      this.options.browserbaseContextId ??
-      process.env.HYPERBROWSER_PROFILE_ID ??
-      process.env.BROWSERBASE_CONTEXT_ID ??
-      undefined;
+    const profileId = this.options.hyperbrowserProfileId ?? process.env.HYPERBROWSER_PROFILE_ID;
 
     const createLease = await acquireBrowserSessionCreateLease('orchestrator:init');
     let leaseConfirmed = false;

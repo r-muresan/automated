@@ -187,6 +187,7 @@ export interface OrchestratorOptions {
   models?: OrchestratorModels;
   browserbaseProjectId?: string;
   browserbaseContextId?: string;
+  hyperbrowserProfileId?: string;
   /** CDP WebSocket URL to connect to an existing local browser session instead of Browserbase */
   localCdpUrl?: string;
   /** The local browser session ID (used for session:ready event so frontend can connect) */

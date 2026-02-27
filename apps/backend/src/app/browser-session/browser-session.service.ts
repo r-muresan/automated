@@ -42,6 +42,11 @@ interface RecordingSession {
   connectUrl?: string;
 }
 
+interface UserBrowserIdentity {
+  browserbaseContextId: string | null;
+  hyperbrowserProfileId: string | null;
+}
+
 @Injectable()
 export class BrowserSessionService implements OnModuleInit {
   private activeRecordingSessions = new Map<string, RecordingSession>();
@@ -105,7 +110,7 @@ export class BrowserSessionService implements OnModuleInit {
     return data;
   }
 
-  async getOrCreateUserContext(email: string): Promise<string | null> {
+  async getOrCreateUserBrowserIdentity(email: string): Promise<UserBrowserIdentity | null> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) return null;
 
@@ -116,14 +121,18 @@ export class BrowserSessionService implements OnModuleInit {
     if (!userContext) {
       // Only create managed-browser profile context when using Hyperbrowser provider
       if (this.browserProvider instanceof HyperbrowserBrowserProvider) {
-        const contextId = await (
+        const profileId = await (
           this.browserProvider as HyperbrowserBrowserProvider
         ).createContext();
 
         userContext = await this.prisma.userContext.upsert({
           where: { userId: user.id },
-          update: { browserbaseContextId: contextId },
-          create: { userId: user.id, browserbaseContextId: contextId },
+          update: { hyperbrowserProfileId: profileId },
+          create: {
+            userId: user.id,
+            browserbaseContextId: String(user.id),
+            hyperbrowserProfileId: profileId,
+          },
         });
       } else {
         // For local provider, use user ID as context identifier
@@ -133,9 +142,24 @@ export class BrowserSessionService implements OnModuleInit {
           create: { userId: user.id, browserbaseContextId: String(user.id) },
         });
       }
+    } else if (
+      this.browserProvider instanceof HyperbrowserBrowserProvider &&
+      !userContext.hyperbrowserProfileId
+    ) {
+      const profileId = await (
+        this.browserProvider as HyperbrowserBrowserProvider
+      ).createContext();
+
+      userContext = await this.prisma.userContext.update({
+        where: { userId: user.id },
+        data: { hyperbrowserProfileId: profileId },
+      });
     }
 
-    return userContext.browserbaseContextId;
+    return {
+      browserbaseContextId: userContext.browserbaseContextId,
+      hyperbrowserProfileId: userContext.hyperbrowserProfileId ?? null,
+    };
   }
 
   async createSession(
@@ -149,10 +173,14 @@ export class BrowserSessionService implements OnModuleInit {
   ) {
     await this.assertBrowserMinutesRemaining(userId);
 
-    const [contextId, createLease] = await Promise.all([
-      this.getOrCreateUserContext(userId),
+    const [userBrowserIdentity, createLease] = await Promise.all([
+      this.getOrCreateUserBrowserIdentity(userId),
       acquireBrowserSessionCreateLease('backend:createSession'),
     ]);
+    const contextId =
+      this.browserProvider instanceof HyperbrowserBrowserProvider
+        ? userBrowserIdentity?.hyperbrowserProfileId ?? undefined
+        : userBrowserIdentity?.browserbaseContextId ?? undefined;
 
     let leaseConfirmed = false;
     let createdSessionId: string | undefined;
@@ -193,7 +221,7 @@ export class BrowserSessionService implements OnModuleInit {
         .catch((err) => console.error('Error storing session in DB:', err));
 
       if (typeof session.profileId === 'string' && session.profileId.length > 0) {
-        await this.updateUserContextId(userId, session.profileId);
+        await this.updateHyperbrowserProfileId(userId, session.profileId);
       }
 
       const initResult = await this.browserProvider.initializeSession(session.id, {
@@ -227,14 +255,18 @@ export class BrowserSessionService implements OnModuleInit {
     return this.browserProvider.getDebugInfo(sessionId);
   }
 
-  private async updateUserContextId(email: string, contextId: string): Promise<void> {
+  private async updateHyperbrowserProfileId(email: string, profileId: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) return;
 
     await this.prisma.userContext.upsert({
       where: { userId: user.id },
-      update: { browserbaseContextId: contextId },
-      create: { userId: user.id, browserbaseContextId: contextId },
+      update: { hyperbrowserProfileId: profileId },
+      create: {
+        userId: user.id,
+        browserbaseContextId: String(user.id),
+        hyperbrowserProfileId: profileId,
+      },
     });
   }
 

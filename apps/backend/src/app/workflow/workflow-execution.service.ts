@@ -246,6 +246,7 @@ export class WorkflowExecutionService {
 
     // Get user context if email is provided
     let browserbaseContextId: string | undefined;
+    let hyperbrowserProfileId: string | undefined;
     if (email) {
       const user = await this.prisma.user.findUnique({ where: { email } });
       if (user) {
@@ -253,6 +254,7 @@ export class WorkflowExecutionService {
           where: { userId: user.id },
         });
         browserbaseContextId = userContext?.browserbaseContextId;
+        hyperbrowserProfileId = userContext?.hyperbrowserProfileId ?? undefined;
       }
     }
 
@@ -317,6 +319,7 @@ export class WorkflowExecutionService {
     const localSessionId = this.workflowLocalSessions.get(workflowId);
     const orchestrator = new OrchestratorAgent({
       browserbaseContextId,
+      hyperbrowserProfileId,
       localCdpUrl,
       localSessionId: localSessionId ?? undefined,
       onEvent: (event) => this.handleOrchestratorEvent(workflowId, event),
