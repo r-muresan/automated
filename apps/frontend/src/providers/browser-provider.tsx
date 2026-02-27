@@ -92,6 +92,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   // which come from useBrowserCDP, but cdpCallbacks is passed into useBrowserCDP.
   const sendToPageRef = useRef<((targetId: string, method: string, params?: any) => Promise<any>) | null>(null);
   const activateTargetRef = useRef<((targetId: string) => Promise<any>) | null>(null);
+  const addInteractionRef = useRef<((type: Interaction['type'], element: Interaction['element'], pageId: string, data?: any) => void) | null>(null);
 
   // Callbacks for useBrowserCDP
   const cdpCallbacks = useCallback((): InteractionCallbacks => ({
@@ -127,7 +128,19 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
       if (suppressNewTabDetection.current) {
         return;
       }
+      addInteractionRef.current?.(
+        'tab_navigation',
+        {
+          tagName: 'NEW_TAB',
+          text: 'Open new tab',
+          href: url,
+        },
+        targetId,
+        { type: 'new_tab', url },
+      );
+
       // Add the new page if we don't already have it
+      let newIndex = -1;
       setPages((prev) => {
         if (prev.some((p) => p.id === targetId)) return prev;
         const newPage: BrowserPage = {
@@ -135,16 +148,12 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
           url,
           title: 'Loading...',
         };
+        newIndex = prev.length;
         return [...prev, newPage];
       });
-      // Set the new tab as active
-      setPages((prev) => {
-        const newIndex = prev.findIndex((p) => p.id === targetId);
-        if (newIndex !== -1) {
-          setActivePageIndex(newIndex);
-        }
-        return prev;
-      });
+      if (newIndex !== -1) {
+        setActivePageIndex(newIndex);
+      }
 
       // Apply viewport override and activate the new tab so the screencast
       // frame dimensions match the container (prevents white gap).
@@ -209,6 +218,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   // Keep refs in sync so onNewTabDetected can access these functions
   sendToPageRef.current = sendToPage;
   activateTargetRef.current = activateTarget;
+  addInteractionRef.current = addInteraction;
 
   const deletedTabIds = useRef<string[]>([]);
   const suppressNewTabDetection = useRef(false);

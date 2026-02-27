@@ -231,7 +231,7 @@ export default function NewWorkflow() {
     }
   }, [videoRecordingStartTime]);
 
-  // Filter interactions to show clicks, typing, and tab navigations after recording started
+  // Filter interactions to show clicks, typing, tab navigations, and page navigations after recording started
   const filteredInteractions = useMemo(() => {
     // Don't show any interactions until recording has actually started
     if (!videoRecordingStartTime) {
@@ -242,11 +242,12 @@ export default function NewWorkflow() {
       // Only show interactions after recording started
       if (i.timestamp < videoRecordingStartTime) return false;
 
-      // Include clicks, typing, key presses, and tab navigations
+      // Include clicks, typing, key presses, tab navigations, and page navigations
       if (i.data?.type === 'click') return true;
       if (i.data?.type === 'keydown') return true;
       if (i.data?.type === 'keypress') return true;
       if (i.type === 'tab_navigation') return true;
+      if (i.type === 'frame_navigation') return true;
 
       return false;
     });

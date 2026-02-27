@@ -134,6 +134,9 @@ export class WorkflowGenerationService {
         parts.push(`  Type: Key Press`);
         if (interaction.data?.combo) parts.push(`  Keys: ${interaction.data.combo}`);
         else if (interaction.element?.text) parts.push(`  Keys: ${interaction.element.text}`);
+      } else if (interaction.type === 'frame_navigation') {
+        parts.push(`  Type: Navigate`);
+        parts.push(`  URL: ${interaction.data?.url || interaction.element?.href || 'unknown'}`);
       } else if (interaction.type === 'tab_navigation') {
         parts.push(`  Type: Tab Navigation`);
         if (interaction.data?.url) parts.push(`  URL: ${interaction.data.url}`);
