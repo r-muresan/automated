@@ -880,6 +880,7 @@ export class OrchestratorAgent {
         .execute({
           instruction: instruction,
           maxSteps: 50,
+          highlightCursor: false,
           callbacks: {
             prepareStep,
             onStepFinish,

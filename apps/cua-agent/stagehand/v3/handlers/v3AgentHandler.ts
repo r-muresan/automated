@@ -150,7 +150,7 @@ export class V3AgentHandler {
         executionInstruction: options.instruction,
         mode: this.mode,
         systemInstructions: this.systemInstructions,
-        isBrowserbase: this.v3.isBrowserbase,
+        isBrowserbase: true,
         excludeTools: options.excludeTools,
         variables: options.variables,
       });

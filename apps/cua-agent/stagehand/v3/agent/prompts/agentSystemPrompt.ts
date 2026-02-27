@@ -118,7 +118,7 @@ export function buildAgentSystemPrompt(options: AgentSystemPromptOptions): strin
     executionInstruction,
     mode,
     systemInstructions,
-    isBrowserbase = false,
+    isBrowserbase = true,
     excludeTools,
     variables,
   } = options;
