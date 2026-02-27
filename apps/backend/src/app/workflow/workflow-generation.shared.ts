@@ -78,12 +78,12 @@ export const WorkflowSchema = z.object({
 export const WORKFLOW_SYSTEM_PROMPT = `You are a workflow generator. Analyze user interactions, screenshots, and audio transcripts to create a browser automation workflow.
 
 # Inputs
-If the workflow requires dynamic data that would change each time it runs, specify an "inputs" array of descriptive input names.
-- Example: A workflow that adds a contact to a CRM might have inputs: ["Name", "Email", "Phone Number"]
-- Example: A workflow that sends a message might have inputs: ["Recipient", "Message"]
-- If the workflow always does the exact same thing with no variable data, leave inputs empty or omit it.
+DEFAULT: Leave inputs empty. Do NOT add inputs unless the user explicitly requests them in their instructions.
+- If the user says something like "make the name an input" or "I want to be able to change the email each run", then add those as inputs.
+- If the user says nothing about inputs, reproduce the workflow exactly as recorded with all values hardcoded — even if data looks like it could vary.
+- Never infer or assume inputs based on the type of workflow. Follow the user's instructions literally.
 - In step descriptions, reference inputs using {{InputName}} syntax so they can be substituted at runtime.
-- IMPORTANT: Only include inputs for data that genuinely varies between runs. Do not include inputs for URLs or fixed values visible in the recording.
+- Example of valid inputs (only when explicitly requested): A workflow adding a contact where the user asked for inputs might have: ["Name", "Email", "Phone Number"]
 
 # Step Types
 - \`navigate\`: Go to a URL. Must be the first step.
