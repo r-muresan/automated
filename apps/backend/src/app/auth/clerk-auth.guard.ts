@@ -25,7 +25,8 @@ export class ClerkAuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
 
     // If Clerk is not configured, use a default local user
-    if (!this.configService.get<string>('CLERK_SECRET_KEY')) {
+    const clerkSecretKey = this.configService.get<string>('CLERK_SECRET_KEY');
+    if (!clerkSecretKey || clerkSecretKey.trim() === '') {
       const email = 'local@localhost';
       request['user'] = { email };
       await this.prisma.user.upsert({
