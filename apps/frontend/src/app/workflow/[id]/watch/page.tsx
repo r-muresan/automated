@@ -253,9 +253,7 @@ export default function WatchWorkflowPage() {
           <Heading size="xl" fontWeight="semibold" color="app.snow">
             Workflow is not running
           </Heading>
-          <Text color="app.muted">
-            Start the workflow to watch it live.
-          </Text>
+          <Text color="app.muted">Start the workflow to watch it live.</Text>
           <Button
             onClick={() => router.push('/')}
             bg="app.primary"
@@ -306,7 +304,6 @@ export default function WatchWorkflowPage() {
           <Box flex={1} minH={0}>
             <VNCBrowser
               contentRef={contentRef}
-              sessionId={sessionId}
               liveViewUrl={stableLiveViewUrl}
               isLoading={!stableLiveViewUrl}
               readOnly={!canUserControlBrowser}
