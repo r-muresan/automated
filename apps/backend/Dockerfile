@@ -9,7 +9,6 @@ RUN apt-get update -y \
 ARG DB_PROVIDER=postgres
 
 COPY package.json package-lock.json ./
-COPY patches ./patches
 COPY nx.json tsconfig.base.json ./
 COPY apps ./apps
 COPY libs ./libs
