@@ -7,17 +7,25 @@ function readPositiveIntegerEnv(value: string | undefined, fallback: number): nu
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export interface BrowserbaseSessionCreateLease {
+function readSessionLimiterEnv(
+  primary: string,
+  legacy: string,
+  fallback: number,
+): number {
+  return readPositiveIntegerEnv(process.env[primary] ?? process.env[legacy], fallback);
+}
+
+export interface BrowserSessionCreateLease {
   confirmCreated: (sessionId: string) => void;
   cancel: () => void;
 }
 
 type QueueItem = {
   source: string;
-  resolve: (lease: BrowserbaseSessionCreateLease) => void;
+  resolve: (lease: BrowserSessionCreateLease) => void;
 };
 
-class BrowserbaseSessionLimiter {
+class BrowserSessionLimiter {
   private readonly maxCreatesPerMinute: number;
   private readonly maxConcurrentSessions: number;
 
@@ -30,21 +38,23 @@ class BrowserbaseSessionLimiter {
   constructor(options?: { maxCreatesPerMinute?: number; maxConcurrentSessions?: number }) {
     this.maxCreatesPerMinute =
       options?.maxCreatesPerMinute ??
-      readPositiveIntegerEnv(
-        process.env.BROWSERBASE_MAX_SESSIONS_PER_MINUTE,
+      readSessionLimiterEnv(
+        'BROWSER_MAX_SESSIONS_PER_MINUTE',
+        'BROWSERBASE_MAX_SESSIONS_PER_MINUTE',
         DEFAULT_MAX_CREATES_PER_MINUTE,
       );
 
     this.maxConcurrentSessions =
       options?.maxConcurrentSessions ??
-      readPositiveIntegerEnv(
-        process.env.BROWSERBASE_MAX_CONCURRENT_SESSIONS,
+      readSessionLimiterEnv(
+        'BROWSER_MAX_CONCURRENT_SESSIONS',
+        'BROWSERBASE_MAX_CONCURRENT_SESSIONS',
         DEFAULT_MAX_CONCURRENT_SESSIONS,
       );
   }
 
-  async acquireCreateLease(source: string): Promise<BrowserbaseSessionCreateLease> {
-    return await new Promise<BrowserbaseSessionCreateLease>((resolve) => {
+  async acquireCreateLease(source: string): Promise<BrowserSessionCreateLease> {
+    return await new Promise<BrowserSessionCreateLease>((resolve) => {
       this.queue.push({ source, resolve });
       this.logStats(`Queued create request from ${source}`);
       this.processQueue();
@@ -101,7 +111,7 @@ class BrowserbaseSessionLimiter {
     }
   }
 
-  private createLease(source: string): BrowserbaseSessionCreateLease {
+  private createLease(source: string): BrowserSessionCreateLease {
     let finalized = false;
 
     const finalize = (sessionId?: string) => {
@@ -122,7 +132,7 @@ class BrowserbaseSessionLimiter {
     return {
       confirmCreated: (sessionId: string) => {
         if (!sessionId) {
-          console.warn(`[BROWSERBASE_LIMITER] Empty session id for source ${source}`);
+          console.warn(`[BROWSER_SESSION_LIMITER] Empty session id for source ${source}`);
           finalize();
           return;
         }
@@ -179,41 +189,41 @@ class BrowserbaseSessionLimiter {
     this.pruneCreateTimestamps();
     const trackedConcurrent = this.activeSessionIds.size + this.pendingReservations;
     console.log(
-      `[BROWSERBASE_LIMITER] ${message} | createsLast60s=${this.createTimestamps.length}/${this.maxCreatesPerMinute} active=${this.activeSessionIds.size} pending=${this.pendingReservations} trackedConcurrent=${trackedConcurrent}/${this.maxConcurrentSessions} queued=${this.queue.length}`,
+      `[BROWSER_SESSION_LIMITER] ${message} | createsLast60s=${this.createTimestamps.length}/${this.maxCreatesPerMinute} active=${this.activeSessionIds.size} pending=${this.pendingReservations} trackedConcurrent=${trackedConcurrent}/${this.maxConcurrentSessions} queued=${this.queue.length}`,
     );
   }
 }
 
-const GLOBAL_LIMITER_KEY = '__automatedBrowserbaseSessionLimiter__';
+const GLOBAL_LIMITER_KEY = '__automatedBrowserSessionLimiter__';
 
 type GlobalLimiterHost = typeof globalThis & {
-  [GLOBAL_LIMITER_KEY]?: BrowserbaseSessionLimiter;
+  [GLOBAL_LIMITER_KEY]?: BrowserSessionLimiter;
 };
 
-function getLimiter(): BrowserbaseSessionLimiter {
+function getLimiter(): BrowserSessionLimiter {
   const host = globalThis as GlobalLimiterHost;
-  host[GLOBAL_LIMITER_KEY] ??= new BrowserbaseSessionLimiter();
+  host[GLOBAL_LIMITER_KEY] ??= new BrowserSessionLimiter();
   return host[GLOBAL_LIMITER_KEY];
 }
 
-export async function acquireBrowserbaseSessionCreateLease(
+export async function acquireBrowserSessionCreateLease(
   source: string,
-): Promise<BrowserbaseSessionCreateLease> {
+): Promise<BrowserSessionCreateLease> {
   return await getLimiter().acquireCreateLease(source);
 }
 
-export function registerBrowserbaseSession(sessionId: string): void {
+export function registerBrowserSession(sessionId: string): void {
   getLimiter().registerActiveSession(sessionId);
 }
 
-export function releaseBrowserbaseSession(sessionId: string): void {
+export function releaseBrowserSession(sessionId: string): void {
   getLimiter().releaseActiveSession(sessionId);
   const stats = getLimiter().getStats();
   console.log(
-    `[BROWSERBASE_LIMITER] Released session ${sessionId} | createsLast60s=${stats.createsInCurrentWindow}/${stats.maxCreatesPerMinute} active=${stats.activeSessions} pending=${stats.pendingReservations} trackedConcurrent=${stats.trackedConcurrentSessions}/${stats.maxConcurrentSessions} queued=${stats.queuedRequests}`,
+    `[BROWSER_SESSION_LIMITER] Released session ${sessionId} | createsLast60s=${stats.createsInCurrentWindow}/${stats.maxCreatesPerMinute} active=${stats.activeSessions} pending=${stats.pendingReservations} trackedConcurrent=${stats.trackedConcurrentSessions}/${stats.maxConcurrentSessions} queued=${stats.queuedRequests}`,
   );
 }
 
-export function getBrowserbaseSessionLimiterStats() {
+export function getBrowserSessionLimiterStats() {
   return getLimiter().getStats();
 }

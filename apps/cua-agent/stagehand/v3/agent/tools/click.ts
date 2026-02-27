@@ -62,6 +62,7 @@ export const clickTool = (v3: V3, provider?: string, modelId?: string) =>
         // Only request XPath when caching is enabled to avoid unnecessary computation
         const shouldCollectXpath = v3.isAgentReplayActive();
         const xpath = await page.click(processed.x, processed.y, {
+          captureDebugScreenshot: true,
           returnXpath: shouldCollectXpath,
         });
 

@@ -1,11 +1,11 @@
 export { OrchestratorAgent } from './orchestrator';
 export {
-  acquireBrowserbaseSessionCreateLease,
-  getBrowserbaseSessionLimiterStats,
-  registerBrowserbaseSession,
-  releaseBrowserbaseSession,
-} from './browserbase-session-limiter';
-export type { BrowserbaseSessionCreateLease } from './browserbase-session-limiter';
+  acquireBrowserSessionCreateLease,
+  getBrowserSessionLimiterStats,
+  registerBrowserSession,
+  releaseBrowserSession,
+} from './browser-session-limiter';
+export type { BrowserSessionCreateLease } from './browser-session-limiter';
 export type {
   OrchestratorEvent,
   OrchestratorOptions,

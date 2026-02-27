@@ -8,7 +8,9 @@ import {
   CreateBrowserSessionOptions,
   BrowserSessionResult,
   InitSessionOptions,
+  InitSessionResult,
   PageInfo,
+  SessionDebugInfoResult,
   SessionUploadFile,
 } from './browser-provider.interface';
 
@@ -172,6 +174,15 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
     }
   }
 
+  async getSessionDebugInfo(sessionId: string): Promise<SessionDebugInfoResult> {
+    const [session, debugInfo] = await Promise.all([
+      this.getSession(sessionId),
+      this.getDebugInfo(sessionId),
+    ]);
+
+    return { session, debugInfo };
+  }
+
   async getDebugInfo(sessionId: string): Promise<any> {
     try {
       const response = await axios.get(`${this.apiUrl}/sessions/${sessionId}/debug`, {
@@ -189,7 +200,10 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
     }
   }
 
-  async initializeSession(sessionId: string, options?: InitSessionOptions): Promise<PageInfo[]> {
+  async initializeSession(
+    sessionId: string,
+    options?: InitSessionOptions,
+  ): Promise<InitSessionResult> {
     try {
       const { colorScheme, width, height, connectUrl } = options ?? {};
       console.log(`[BrowserbaseBrowserProvider] Initializing session ${sessionId}...`);
@@ -198,6 +212,9 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
         connectUrl ?? `wss://connect.browserbase.com?apiKey=${this.apiKey}&sessionId=${sessionId}`;
       const browser = await chromium.connectOverCDP(wsUrl);
       const defaultContext = browser.contexts()[0];
+      if (!defaultContext) {
+        return { pages: [] };
+      }
 
       await this.injectInitScript(defaultContext);
 
@@ -220,10 +237,13 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
       page.goto('https://www.google.com', { waitUntil: 'commit' }).catch(() => {});
 
       console.log(`[BrowserbaseBrowserProvider] Session ${sessionId} initialized successfully`);
-      return [{ id: tabId, url: 'https://www.google.com', title: 'Google' }];
+      return {
+        pages: [{ id: tabId, url: 'https://www.google.com', title: 'Google' }],
+        cdpWsUrlTemplate: `wss://connect.browserbase.com/debug/${sessionId}/devtools/page/{pageId}`,
+      };
     } catch (error) {
       console.error('[BrowserbaseBrowserProvider] Error initializing session:', error);
-      return [];
+      return { pages: [] };
     }
   }
 

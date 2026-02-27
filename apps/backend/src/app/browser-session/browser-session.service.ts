@@ -6,11 +6,7 @@ import {
   SessionUploadFile,
 } from '../browser/browser-provider.interface';
 import { HyperbrowserBrowserProvider } from '../browser/hyperbrowser-browser.provider';
-import {
-  acquireBrowserbaseSessionCreateLease,
-  registerBrowserbaseSession,
-  releaseBrowserbaseSession,
-} from 'apps/cua-agent';
+import { acquireBrowserSessionCreateLease, releaseBrowserSession } from 'apps/cua-agent';
 
 const BROWSER_MINUTES_CAP = 10000;
 const isUsingManagedBrowser = !!process.env.HYPERBROWSER_API_KEY;
@@ -153,53 +149,23 @@ export class BrowserSessionService implements OnModuleInit {
   ) {
     await this.assertBrowserMinutesRemaining(userId);
 
-    if (reuseExisting && userId) {
-      const existingSession = await this.prisma.browserSession.findFirst({
-        where: { user: { email: userId } },
-        orderBy: { lastUsedAt: 'desc' },
-      });
-
-      if (existingSession) {
-        try {
-          const [sessionInfo, debugInfo] = await Promise.all([
-            this.browserProvider.getSession(existingSession.browserbaseSessionId),
-            this.browserProvider.getDebugInfo(existingSession.browserbaseSessionId),
-          ]);
-
-          console.log('Loaded existing session with ID:', existingSession.browserbaseSessionId);
-
-          if (sessionInfo && ['RUNNING', 'active'].includes(String(sessionInfo.status))) {
-            registerBrowserbaseSession(existingSession.browserbaseSessionId);
-            return {
-              id: existingSession.browserbaseSessionId,
-              pages: debugInfo.pages,
-              cdpWsUrlTemplate:
-                debugInfo.cdpWsUrlTemplate ??
-                buildCdpWsUrlTemplate(
-                  existingSession.connectUrl,
-                  existingSession.browserbaseSessionId,
-                ),
-              liveViewUrl: debugInfo.liveViewUrl,
-            };
-          }
-        } catch (error) {
-          console.log('Existing session not valid, creating new one');
-          await this.prisma.browserSession.deleteMany({
-            where: { browserbaseSessionId: existingSession.browserbaseSessionId },
-          });
-        }
-      }
-    }
-
     const [contextId, createLease] = await Promise.all([
       this.getOrCreateUserContext(userId),
-      acquireBrowserbaseSessionCreateLease('backend:createSession'),
+      acquireBrowserSessionCreateLease('backend:createSession'),
     ]);
 
     let leaseConfirmed = false;
     let createdSessionId: string | undefined;
 
     try {
+      if (reuseExisting) {
+        console.log(
+          '[BrowserSessionService] Ignoring reuseExisting and recreating browser session',
+        );
+      }
+
+      await this.stopExistingUserSessions(userId);
+
       const session = await this.browserProvider.createSession({
         colorScheme,
         width,
@@ -230,22 +196,21 @@ export class BrowserSessionService implements OnModuleInit {
         await this.updateUserContextId(userId, session.profileId);
       }
 
-      const pages = await this.browserProvider.initializeSession(session.id, {
+      const initResult = await this.browserProvider.initializeSession(session.id, {
         colorScheme,
         width,
         height,
         connectUrl: resolvedConnectUrl ?? undefined,
       });
-      const debugInfo = await this.browserProvider.getDebugInfo(session.id).catch(() => null);
 
       return {
         ...session,
-        pages,
+        pages: initResult.pages,
         cdpWsUrlTemplate:
           session.cdpWsUrlTemplate ??
-          debugInfo?.cdpWsUrlTemplate ??
+          initResult.cdpWsUrlTemplate ??
           buildCdpWsUrlTemplate(resolvedConnectUrl, session.id),
-        liveViewUrl: session.liveUrl ?? session.liveViewUrl ?? debugInfo?.liveViewUrl,
+        liveViewUrl: session.liveUrl ?? session.liveViewUrl ?? initResult.liveViewUrl,
       };
     } catch (error) {
       if (!leaseConfirmed) {
@@ -273,6 +238,24 @@ export class BrowserSessionService implements OnModuleInit {
     });
   }
 
+  private async stopExistingUserSessions(userId: string): Promise<void> {
+    const existingSessions = await this.prisma.browserSession.findMany({
+      where: {
+        user: { email: userId },
+        workflowId: null,
+      },
+      select: { browserbaseSessionId: true },
+    });
+
+    for (const existingSession of existingSessions) {
+      console.log(
+        `[BrowserSessionService] Recreating session, stopping existing session ${existingSession.browserbaseSessionId}`,
+      );
+      this.stopRecordingKeepalive(existingSession.browserbaseSessionId);
+      this.stopSession(existingSession.browserbaseSessionId);
+    }
+  }
+
   async stopSession(sessionId: string, deleteFromDb = true) {
     try {
       console.log(`[BrowserSessionService] Stopping session ${sessionId}`);
@@ -285,7 +268,7 @@ export class BrowserSessionService implements OnModuleInit {
         });
       }
 
-      releaseBrowserbaseSession(sessionId);
+      releaseBrowserSession(sessionId);
       console.log(`[BrowserSessionService] Session ${sessionId} stopped successfully`);
       return result;
     } catch (error) {
@@ -410,7 +393,10 @@ export class BrowserSessionService implements OnModuleInit {
         } else {
           // Try to reconnect
           try {
-            const browser = await this.browserProvider.connectForKeepalive(sessionId, recordingSession.connectUrl);
+            const browser = await this.browserProvider.connectForKeepalive(
+              sessionId,
+              recordingSession.connectUrl,
+            );
             recordingSession.browser = browser;
             recordingSession.lastPingTime = now;
           } catch (reconnectError) {

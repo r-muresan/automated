@@ -1,5 +1,7 @@
 import { Protocol } from "devtools-protocol";
 import { promises as fs } from "fs";
+import { tmpdir } from "os";
+import path from "path";
 import { v3Logger } from "../logger.js";
 import { logAction } from "../flowLogger.js";
 import type { CDPSessionLike } from "./cdp.js";
@@ -75,6 +77,9 @@ const LIFECYCLE_NAME: Record<LoadState, string> = {
   domcontentloaded: "DOMContentLoaded",
   networkidle: "networkIdle",
 };
+
+const CLICK_DEBUG_MARKER_ID = "__v3_click_debug_marker__";
+const CLICK_DEBUG_DIR = path.join(tmpdir(), "cua-click-debug");
 
 export class Page {
   /** Every CDP child session this page owns (top-level + adopted OOPIF sessions). */
@@ -275,6 +280,121 @@ export class Page {
       });
     } catch {
       //
+    }
+  }
+
+  private async installClickDebugMarker(x: number, y: number): Promise<boolean> {
+    try {
+      const roundedX = Math.round(x);
+      const roundedY = Math.round(y);
+      await this.evaluate(
+        ({
+          id,
+          x,
+          y,
+        }: {
+          id: string;
+          x: number;
+          y: number;
+        }) => {
+          const existing = document.getElementById(id);
+          existing?.remove();
+
+          const marker = document.createElement("div");
+          marker.id = id;
+          marker.setAttribute("aria-hidden", "true");
+          marker.style.position = "fixed";
+          marker.style.left = `${x}px`;
+          marker.style.top = `${y}px`;
+          marker.style.width = "28px";
+          marker.style.height = "28px";
+          marker.style.transform = "translate(-50%, -50%)";
+          marker.style.border = "3px solid #ff3b30";
+          marker.style.borderRadius = "9999px";
+          marker.style.background = "rgba(255, 59, 48, 0.18)";
+          marker.style.boxShadow =
+            "0 0 0 2px rgba(255,255,255,0.95), 0 0 0 6px rgba(255, 59, 48, 0.28)";
+          marker.style.pointerEvents = "none";
+          marker.style.zIndex = "2147483647";
+          marker.style.userSelect = "none";
+          marker.style.contain = "layout style paint";
+
+          const dot = document.createElement("div");
+          dot.style.position = "absolute";
+          dot.style.left = "50%";
+          dot.style.top = "50%";
+          dot.style.width = "6px";
+          dot.style.height = "6px";
+          dot.style.transform = "translate(-50%, -50%)";
+          dot.style.borderRadius = "9999px";
+          dot.style.background = "#ff3b30";
+
+          marker.appendChild(dot);
+          (document.body ?? document.documentElement)?.appendChild(marker);
+          return true;
+        },
+        { id: CLICK_DEBUG_MARKER_ID, x: roundedX, y: roundedY },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async removeClickDebugMarker(): Promise<void> {
+    try {
+      await this.evaluate((id: string) => {
+        document.getElementById(id)?.remove();
+      }, CLICK_DEBUG_MARKER_ID);
+    } catch {
+      // Best-effort cleanup only.
+    }
+  }
+
+  private async captureClickDebugScreenshot(x: number, y: number): Promise<void> {
+    const roundedX = Math.round(x);
+    const roundedY = Math.round(y);
+    const filePath = path.join(
+      CLICK_DEBUG_DIR,
+      `click-${Date.now()}-${roundedX}-${roundedY}.png`,
+    );
+    let markerInstalled = false;
+
+    try {
+      await fs.mkdir(CLICK_DEBUG_DIR, { recursive: true });
+      markerInstalled = await this.installClickDebugMarker(roundedX, roundedY);
+      if (markerInstalled) {
+        await this.waitForTimeout(25);
+      }
+      await this.screenshot({ fullPage: false, path: filePath });
+      v3Logger({
+        category: "page",
+        message: "click debug screenshot saved",
+        level: 1,
+        auxiliary: {
+          path: { value: filePath, type: "string" },
+          x: { value: String(roundedX), type: "integer" },
+          y: { value: String(roundedY), type: "integer" },
+        },
+      });
+    } catch (error) {
+      v3Logger({
+        category: "page",
+        message: "failed to save click debug screenshot",
+        level: 1,
+        auxiliary: {
+          error: {
+            value: error instanceof Error ? error.message : String(error),
+            type: "string",
+          },
+          x: { value: String(roundedX), type: "integer" },
+          y: { value: String(roundedY), type: "integer" },
+        },
+      });
+    } finally {
+      if (markerInstalled) {
+        await this.removeClickDebugMarker();
+      }
     }
   }
 
@@ -1348,11 +1468,16 @@ export class Page {
     options?: {
       button?: "left" | "right" | "middle";
       clickCount?: number;
+      captureDebugScreenshot?: boolean;
       returnXpath?: boolean;
     },
   ): Promise<string> {
     const button = options?.button ?? "left";
     const clickCount = options?.clickCount ?? 1;
+
+    if (options?.captureDebugScreenshot) {
+      await this.captureClickDebugScreenshot(x, y);
+    }
 
     let xpathResult: string | undefined;
     if (options?.returnXpath) {

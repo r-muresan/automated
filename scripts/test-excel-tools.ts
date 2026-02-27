@@ -14,9 +14,9 @@ import { getSpreadsheetProvider } from '../apps/cua-agent/orchestrator/agent-too
 import type { CdpPageLike } from '../apps/cua-agent/orchestrator/agent-tools/types';
 import type { SpreadsheetProvider } from '../apps/cua-agent/orchestrator/agent-tools/types';
 import {
-  acquireBrowserbaseSessionCreateLease,
-  releaseBrowserbaseSession,
-} from '../apps/cua-agent/browserbase-session-limiter';
+  acquireBrowserSessionCreateLease,
+  releaseBrowserSession,
+} from '../apps/cua-agent/browser-session-limiter';
 
 const DEFAULT_EMAIL = 'robert.victor.muresan@gmail.com';
 const DEFAULT_EXCEL_HOME_URL = 'https://excel.office.com/';
@@ -536,7 +536,7 @@ async function main() {
   let stagehandContext: StagehandContextAdapter | null = null;
   let sessionId: string | null = null;
   let leaseConfirmed = false;
-  const createLease = await acquireBrowserbaseSessionCreateLease('scripts:test-excel-tools');
+  const createLease = await acquireBrowserSessionCreateLease('scripts:test-excel-tools');
 
   try {
     const user = await prisma.user.findUnique({
@@ -721,7 +721,7 @@ async function main() {
           `[WARN] Failed to request Browserbase release for ${sessionId}: ${error?.message ?? error}`,
         );
       }
-      releaseBrowserbaseSession(sessionId);
+      releaseBrowserSession(sessionId);
     } else if (!leaseConfirmed) {
       createLease.cancel();
     }

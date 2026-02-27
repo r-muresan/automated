@@ -36,9 +36,9 @@ import {
 import { extractWithSharedStrategy, parseSchemaMap } from './extraction';
 import { executeLoopStep, type LoopDeps } from './loop';
 import {
-  acquireBrowserbaseSessionCreateLease,
-  releaseBrowserbaseSession,
-} from '../browserbase-session-limiter';
+  acquireBrowserSessionCreateLease,
+  releaseBrowserSession,
+} from '../browser-session-limiter';
 
 dotenv.config();
 
@@ -314,7 +314,7 @@ export class OrchestratorAgent {
       process.env.BROWSERBASE_CONTEXT_ID ??
       undefined;
 
-    const createLease = await acquireBrowserbaseSessionCreateLease('orchestrator:init');
+    const createLease = await acquireBrowserSessionCreateLease('orchestrator:init');
     let leaseConfirmed = false;
 
     try {
@@ -390,7 +390,7 @@ export class OrchestratorAgent {
           console.warn(`[ORCHESTRATOR] Failed to stop Hyperbrowser session ${sessionId}:`, error);
         });
       }
-      releaseBrowserbaseSession(sessionId);
+      releaseBrowserSession(sessionId);
     }
     this.activeSessionId = null;
     this.hyperbrowserSessionId = null;

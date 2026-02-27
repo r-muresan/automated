@@ -1,20 +1,24 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import WebSocket from 'ws';
 import { Hyperbrowser } from '@hyperbrowser/sdk';
 import type { SessionRegion } from '@hyperbrowser/sdk/types';
+import { chromium } from 'playwright-core';
 import {
   BrowserProvider,
   BrowserHandle,
   CreateBrowserSessionOptions,
   BrowserSessionResult,
   InitSessionOptions,
+  InitSessionResult,
   PageInfo,
+  SessionDebugInfoResult,
   SessionUploadFile,
 } from './browser-provider.interface';
 
 type HyperbrowserRegion = SessionRegion;
 
 const DEFAULT_HYPERBROWSER_REGION: HyperbrowserRegion = 'us-east';
+const DEFAULT_INITIAL_PAGE_URL = 'https://www.google.com';
+const DEFAULT_INITIAL_PAGE_TITLE = 'Google';
 const REGION_UTC_OFFSET_HOURS: Record<HyperbrowserRegion, number> = {
   'us-east': -5,
   'us-west': -8,
@@ -166,22 +170,39 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
     }
   }
 
+  async getSessionDebugInfo(sessionId: string): Promise<SessionDebugInfoResult> {
+    const client = this.requireClient();
+
+    try {
+      const session = await client.sessions.get(sessionId, { liveViewTtlSeconds: 3600 });
+
+      return {
+        session,
+        debugInfo: {
+          ...session,
+          pages: [],
+          cdpWsUrlTemplate: session.wsEndpoint,
+          liveViewUrl: session.liveUrl,
+        },
+      };
+    } catch {
+      return {
+        session: null,
+        debugInfo: null,
+      };
+    }
+  }
+
   async getDebugInfo(sessionId: string): Promise<any> {
     const client = this.requireClient();
 
     try {
       const session = await client.sessions.get(sessionId, { liveViewTtlSeconds: 3600 });
-      // fetchPages may fail if the session is still starting up — don't let it block the proxy URL.
-      const pages = await this.fetchPages(session.wsEndpoint, sessionId).catch(() => []);
-
-      const wsBase = (
-        process.env.BACKEND_WS_URL || `ws://localhost:${process.env.PORT || 8080}`
-      ).replace(/\/$/, '');
 
       return {
         ...session,
-        pages,
-        cdpWsUrlTemplate: `${wsBase}/api/cdp-proxy/${sessionId}`,
+        pages: [],
+        cdpWsUrlTemplate: '',
         liveViewUrl: session.liveUrl,
       };
     } catch {
@@ -189,7 +210,10 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
     }
   }
 
-  async initializeSession(sessionId: string, options?: InitSessionOptions): Promise<PageInfo[]> {
+  async initializeSession(
+    sessionId: string,
+    options?: InitSessionOptions,
+  ): Promise<InitSessionResult> {
     const client = this.requireClient();
     const { width, height, connectUrl } = options ?? {};
 
@@ -198,17 +222,59 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
 
       const session = await client.sessions.get(sessionId);
       const wsUrl = connectUrl ?? session.wsEndpoint;
+      const browser = await chromium.connectOverCDP(wsUrl);
+      const defaultContext = browser.contexts()[0];
+      if (!defaultContext) {
+        return { pages: [] };
+      }
+
+      await this.injectInitScript(defaultContext);
+
+      const page = defaultContext.pages()[0] || (await defaultContext.newPage());
+
+      const [tabId] = await Promise.all([
+        this.getTargetId(page),
+        (async () => {
+          if (width && height) {
+            await page.setViewportSize({ width: Math.round(width), height: Math.round(height) });
+          }
+        })(),
+      ]);
+
+      page.goto(DEFAULT_INITIAL_PAGE_URL, { waitUntil: 'commit' }).catch(() => {});
 
       console.log(`[HyperbrowserBrowserProvider] Session ${sessionId} initialized successfully`);
-      return [];
+      return {
+        pages: [
+          {
+            id: tabId ?? 'page-0',
+            url: DEFAULT_INITIAL_PAGE_URL,
+            title: DEFAULT_INITIAL_PAGE_TITLE,
+          },
+        ],
+        cdpWsUrlTemplate: session.wsEndpoint,
+        liveViewUrl: session.liveUrl,
+      };
     } catch (error) {
       console.error('[HyperbrowserBrowserProvider] Error initializing session:', error);
-      return [];
+      return { pages: [] };
     }
   }
 
   async connectForKeepalive(sessionId: string, connectUrl?: string): Promise<BrowserHandle | null> {
-    return null;
+    const client = this.requireClient();
+
+    try {
+      const session = await client.sessions.get(sessionId);
+      const wsUrl = connectUrl ?? session.wsEndpoint;
+      return await chromium.connectOverCDP(wsUrl);
+    } catch (error) {
+      console.error(
+        `[HyperbrowserBrowserProvider] Failed to connect for keepalive: ${sessionId}`,
+        error,
+      );
+      return null;
+    }
   }
 
   async uploadSessionFile(sessionId: string, file: SessionUploadFile): Promise<void> {
@@ -262,12 +328,19 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
     }
   }
 
-  /**
-   * Fetch pages by sending Target.getTargets over a temporary raw WebSocket.
-   * The keepalive WS keeps the session alive while this temporary connection exists.
-   */
-  private async fetchPages(connectUrl: string, sessionId?: string): Promise<PageInfo[]> {
-    return [];
+  private async injectInitScript(context: any): Promise<void> {
+    await context.addInitScript(INIT_SCRIPT);
+  }
+
+  private async getTargetId(page: any): Promise<string | undefined> {
+    try {
+      const cdpSession = await page.context().newCDPSession(page);
+      const { targetInfo } = await cdpSession.send('Target.getTargetInfo');
+      await cdpSession.detach().catch(() => {});
+      return targetInfo.targetId;
+    } catch {
+      return undefined;
+    }
   }
 }
 
