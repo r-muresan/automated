@@ -9,6 +9,7 @@ type CDPResult = Record<string, unknown>;
 
 interface CDPMessage {
   id: number;
+  sessionId?: string;
   method?: CDPMethod;
   params?: CDPParams;
   result?: CDPResult;
@@ -162,6 +163,9 @@ export function useBrowserCDP(
   callbacks?: InteractionCallbacks,
   cdpWsUrlTemplate?: string | null,
 ): UseBrowserCDPReturn {
+  const usesBrowserLevelCdp = Boolean(
+    cdpWsUrlTemplate && !cdpWsUrlTemplate.includes('{pageId}'),
+  );
   const [state, setState] = useState<BrowserCDPState>({
     isConnected: false,
     error: null,
@@ -188,6 +192,9 @@ export function useBrowserCDP(
   const messageIdRef = useRef(1);
   const pendingRequestsRef = useRef<Map<number, PendingRequest>>(new Map());
   const pageSessionsRef = useRef<Map<string, WebSocket>>(new Map());
+  const pageTargetSessionIdsRef = useRef<Map<string, string>>(new Map());
+  const targetPageIdsBySessionRef = useRef<Map<string, string>>(new Map());
+  const pendingTargetAttachmentRef = useRef<Map<string, Promise<string>>>(new Map());
   const knownPageIdsRef = useRef<Set<string>>(new Set());
   const injectedPagesRef = useRef<Set<string>>(new Set());
   const lastRawScreenshotByPageRef = useRef<
@@ -212,16 +219,76 @@ export function useBrowserCDP(
   const handleKeydownRef = useRef<((eventData: any, pageId?: string) => void) | null>(null);
 
   const queryPageMetadata = useCallback(
-    (
-      ws: WebSocket,
+    async (
       pageId: string,
       options?: { includeUrl?: boolean; includeTitle?: boolean; includeFavicon?: boolean },
     ) => {
-      if (ws.readyState !== WebSocket.OPEN) return;
-
       const includeUrl = options?.includeUrl ?? true;
       const includeTitle = options?.includeTitle ?? true;
       const includeFavicon = options?.includeFavicon ?? true;
+
+      if (usesBrowserLevelCdp) {
+        try {
+          const attachedSessionId = await attachToTargetSession(pageId);
+          const requests: Array<Promise<void>> = [];
+
+          if (includeUrl) {
+            requests.push(
+              sendToAttachedTarget<{ result?: { result?: { value?: string } } }>(
+                attachedSessionId,
+                'Runtime.evaluate',
+                { expression: 'window.location.href', returnByValue: true },
+              ).then((response) => {
+                const url = response.result?.result?.value;
+                if (typeof url === 'string' && url && callbacksRef.current?.onFrameNavigation) {
+                  callbacksRef.current.onFrameNavigation(url, pageId, pageId);
+                }
+              }),
+            );
+          }
+
+          if (includeTitle) {
+            requests.push(
+              sendToAttachedTarget<{ result?: { result?: { value?: string } } }>(
+                attachedSessionId,
+                'Runtime.evaluate',
+                { expression: 'document.title', returnByValue: true },
+              ).then((response) => {
+                const title = response.result?.result?.value;
+                if (title && callbacksRef.current?.onTitleUpdate) {
+                  callbacksRef.current.onTitleUpdate(title, pageId);
+                }
+              }),
+            );
+          }
+
+          if (includeFavicon) {
+            requests.push(
+              sendToAttachedTarget<{ result?: { result?: { value?: string } } }>(
+                attachedSessionId,
+                'Runtime.evaluate',
+                {
+                  expression: `(function() { var link = document.querySelector('link[rel~="icon"]'); return link ? link.href : (location.origin + '/favicon.ico'); })()`,
+                  returnByValue: true,
+                },
+              ).then((response) => {
+                const faviconUrl = response.result?.result?.value;
+                if (faviconUrl && callbacksRef.current?.onFaviconUpdate) {
+                  callbacksRef.current.onFaviconUpdate(faviconUrl, pageId);
+                }
+              }),
+            );
+          }
+
+          await Promise.allSettled(requests);
+        } catch (error) {
+          console.warn('[CDP] Failed to query page metadata over browser-level CDP:', error);
+        }
+        return;
+      }
+
+      const ws = pageSessionsRef.current.get(pageId);
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
       const urlMsgId = includeUrl ? messageIdRef.current++ : null;
       const titleMsgId = includeTitle ? messageIdRef.current++ : null;
@@ -292,7 +359,7 @@ export function useBrowserCDP(
         );
       }
     },
-    [],
+    [usesBrowserLevelCdp],
   );
 
   const connectToPage = useCallback(
@@ -300,6 +367,17 @@ export function useBrowserCDP(
       if (!sessionId) return;
 
       knownPageIdsRef.current.add(pageId);
+
+      if (usesBrowserLevelCdp) {
+        void attachToTargetSession(pageId)
+          .then(() => {
+            void queryPageMetadata(pageId);
+          })
+          .catch((error) => {
+            console.warn(`[CDP] Failed to attach to target ${pageId}:`, error);
+          });
+        return;
+      }
 
       const existingWs = pageSessionsRef.current.get(pageId);
       if (
@@ -358,7 +436,7 @@ export function useBrowserCDP(
         // Ensure URL/title/favicon are populated even if Page.frameNavigated
         // fired before this WebSocket listener was attached.
         setTimeout(() => {
-          queryPageMetadata(ws, pageId);
+          void queryPageMetadata(pageId);
         }, 250);
       };
 
@@ -448,7 +526,7 @@ export function useBrowserCDP(
             console.log(
               `[CDP] ${message.method} fired for page ${pageId}, querying URL/title/favicon`,
             );
-            queryPageMetadata(ws, pageId);
+            void queryPageMetadata(pageId);
           }
 
           // Handle frame navigation events
@@ -487,7 +565,7 @@ export function useBrowserCDP(
                   console.log(
                     `[CDP] 500ms fast-path: querying URL/title/favicon for page ${pageId}`,
                   );
-                  queryPageMetadata(ws, pageId);
+                  void queryPageMetadata(pageId);
                 }, 500);
               }
             }
@@ -497,7 +575,7 @@ export function useBrowserCDP(
         }
       };
     },
-    [sessionId, cdpWsUrlTemplate, queryPageMetadata],
+    [sessionId, cdpWsUrlTemplate, queryPageMetadata, usesBrowserLevelCdp],
   );
 
   const ensurePageConnections = useCallback(
@@ -508,6 +586,10 @@ export function useBrowserCDP(
 
       pageIds.forEach((pageId) => {
         knownPageIdsRef.current.add(pageId);
+        if (usesBrowserLevelCdp) {
+          connectToPage(pageId);
+          return;
+        }
         const existingWs = pageSessionsRef.current.get(pageId);
         const isConnected =
           existingWs?.readyState === WebSocket.OPEN ||
@@ -522,6 +604,21 @@ export function useBrowserCDP(
       );
       removedPages.forEach((pageId) => {
         knownPageIdsRef.current.delete(pageId);
+        const attachedSessionId = pageTargetSessionIdsRef.current.get(pageId);
+        if (attachedSessionId) {
+          pageTargetSessionIdsRef.current.delete(pageId);
+          targetPageIdsBySessionRef.current.delete(attachedSessionId);
+          pendingTargetAttachmentRef.current.delete(pageId);
+          if (usesBrowserLevelCdp && wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(
+              JSON.stringify({
+                id: messageIdRef.current++,
+                method: 'Target.detachFromTarget',
+                params: { sessionId: attachedSessionId },
+              }),
+            );
+          }
+        }
         const ws = pageSessionsRef.current.get(pageId);
         if (ws) {
           ws.close();
@@ -529,7 +626,7 @@ export function useBrowserCDP(
         }
       });
     },
-    [sessionId, connectToPage],
+    [sessionId, connectToPage, usesBrowserLevelCdp],
   );
 
   const connect = useCallback(
@@ -575,6 +672,9 @@ export function useBrowserCDP(
           setState({ isConnected: false, error: null });
           wsRef.current = null;
           currentPageIdRef.current = null;
+          pageTargetSessionIdsRef.current.clear();
+          targetPageIdsBySessionRef.current.clear();
+          pendingTargetAttachmentRef.current.clear();
 
           // If this wasn't a clean close, trigger disconnect callback
           if (event.code !== 1000 && callbacksRef.current?.onWebSocketDisconnected) {
@@ -605,6 +705,97 @@ export function useBrowserCDP(
             }
           }
 
+          if (usesBrowserLevelCdp && typeof message.sessionId === 'string') {
+            const targetPageId = targetPageIdsBySessionRef.current.get(message.sessionId) || '';
+
+            if (
+              message.method === 'Runtime.bindingCalled' &&
+              (message.params as Record<string, unknown>)?.name === '__cdpEvent'
+            ) {
+              try {
+                const eventData = JSON.parse(
+                  ((message.params as Record<string, unknown>)?.payload as string) || '{}',
+                );
+                const now = Date.now();
+
+                if (eventData.type === 'keydown') {
+                  handleKeydownRef.current?.(eventData, targetPageId);
+                } else if (eventData.type === 'click') {
+                  if (now - lastClickTimestampRef.current < 100) {
+                    return;
+                  }
+                  lastClickTimestampRef.current = now;
+                  addInteractionRef.current?.(
+                    'user_event',
+                    eventData.target || {
+                      tagName: 'CLICK',
+                      text: 'click',
+                      selector: 'unknown',
+                    },
+                    targetPageId,
+                    eventData,
+                  );
+                }
+              } catch (e) {
+                console.warn('[CDP] Failed to parse binding event:', e);
+              }
+              return;
+            }
+
+            if (
+              message.method === 'Page.loadEventFired' ||
+              message.method === 'Page.domContentEventFired'
+            ) {
+              if (targetPageId) {
+                console.log(
+                  `[CDP] ${message.method} fired for page ${targetPageId}, querying URL/title/favicon`,
+                );
+                void queryPageMetadata(targetPageId);
+              }
+              return;
+            }
+
+            if (message.method === 'Page.frameNavigated') {
+              const frame = (message.params as any)?.frame;
+              if (frame && !frame.parentId && targetPageId) {
+                const now = Date.now();
+                const lastNavigationAt =
+                  lastNavigationRefreshByPageRef.current.get(targetPageId) || 0;
+                if (now - lastNavigationAt > 1000) {
+                  lastNavigationRefreshByPageRef.current.set(targetPageId, now);
+                  addInteractionRef.current?.(
+                    'frame_navigation',
+                    {
+                      tagName: 'FRAME_NAVIGATION',
+                      text: `Navigated to ${frame.url}`,
+                      selector: frame.id,
+                      href: frame.url,
+                    },
+                    targetPageId,
+                    {
+                      url: frame.url,
+                      frameId: frame.id,
+                      name: frame.name,
+                      pageId: targetPageId,
+                    },
+                  );
+
+                  if (callbacksRef.current?.onFrameNavigation) {
+                    callbacksRef.current.onFrameNavigation(frame.url, frame.id, targetPageId);
+                  }
+
+                  setTimeout(() => {
+                    console.log(
+                      `[CDP] 500ms fast-path: querying URL/title/favicon for page ${targetPageId}`,
+                    );
+                    void queryPageMetadata(targetPageId);
+                  }, 500);
+                }
+              }
+              return;
+            }
+          }
+
           // Detect new tabs opened via target="_blank" or window.open
           if (message.method === 'Target.targetCreated') {
             const targetInfo = (message.params as any)?.targetInfo;
@@ -626,12 +817,15 @@ export function useBrowserCDP(
       // Note: connectToPage is called separately via ensurePageConnections
       // to avoid duplicate connections
     },
-    [sessionId, cdpWsUrlTemplate],
+    [sessionId, cdpWsUrlTemplate, queryPageMetadata, usesBrowserLevelCdp],
   );
 
   const disconnect = useCallback(() => {
     pageSessionsRef.current.forEach((ws) => ws.close());
     pageSessionsRef.current.clear();
+    pageTargetSessionIdsRef.current.clear();
+    targetPageIdsBySessionRef.current.clear();
+    pendingTargetAttachmentRef.current.clear();
 
     if (wsRef.current) {
       wsRef.current.close();
@@ -693,8 +887,102 @@ export function useBrowserCDP(
     });
   }, []);
 
+  const sendToAttachedTarget = useCallback(
+    async <T = CDPResult>(
+      targetSessionId: string,
+      method: CDPMethod,
+      params?: CDPParams,
+    ): Promise<T> => {
+      return new Promise((resolve, reject) => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+          reject(new Error('Main WebSocket not connected'));
+          return;
+        }
+
+        const id = messageIdRef.current++;
+        const message: CDPMessage = { id, sessionId: targetSessionId, method, params };
+
+        pendingRequestsRef.current.set(id, {
+          resolve: resolve as (result: CDPResult) => void,
+          reject,
+        });
+
+        setTimeout(() => {
+          if (pendingRequestsRef.current.has(id)) {
+            pendingRequestsRef.current.delete(id);
+            reject(new Error(`CDP target command timeout: ${method}`));
+          }
+        }, 30000);
+
+        wsRef.current.send(JSON.stringify(message));
+      });
+    },
+    [],
+  );
+
+  const attachToTargetSession = useCallback(
+    async (targetId: string): Promise<string> => {
+      if (!usesBrowserLevelCdp) {
+        return targetId;
+      }
+
+      const existingSessionId = pageTargetSessionIdsRef.current.get(targetId);
+      if (existingSessionId) {
+        return existingSessionId;
+      }
+
+      const pendingAttachment = pendingTargetAttachmentRef.current.get(targetId);
+      if (pendingAttachment) {
+        return pendingAttachment;
+      }
+
+      const attachmentPromise = (async () => {
+        const response = await send<{ sessionId?: string }>('Target.attachToTarget', {
+          targetId,
+          flatten: true,
+        });
+        const attachedSessionId = response.sessionId;
+        if (!attachedSessionId) {
+          throw new Error(`Target.attachToTarget did not return a sessionId for ${targetId}`);
+        }
+
+        pageTargetSessionIdsRef.current.set(targetId, attachedSessionId);
+        targetPageIdsBySessionRef.current.set(attachedSessionId, targetId);
+
+        await sendToAttachedTarget(attachedSessionId, 'Page.enable');
+        await sendToAttachedTarget(attachedSessionId, 'Runtime.enable');
+        await sendToAttachedTarget(attachedSessionId, 'Runtime.addBinding', {
+          name: '__cdpEvent',
+        });
+
+        if (!injectedPagesRef.current.has(targetId)) {
+          await sendToAttachedTarget(attachedSessionId, 'Page.addScriptToEvaluateOnNewDocument', {
+            source: EVENT_TRACKING_SCRIPT,
+          });
+          await sendToAttachedTarget(attachedSessionId, 'Runtime.evaluate', {
+            expression: EVENT_TRACKING_SCRIPT,
+          });
+          injectedPagesRef.current.add(targetId);
+        }
+
+        return attachedSessionId;
+      })().finally(() => {
+        pendingTargetAttachmentRef.current.delete(targetId);
+      });
+
+      pendingTargetAttachmentRef.current.set(targetId, attachmentPromise);
+      return attachmentPromise;
+    },
+    [send, sendToAttachedTarget, usesBrowserLevelCdp],
+  );
+
   const sendToPage = useCallback(
     async <T = CDPResult>(targetId: string, method: CDPMethod, params?: CDPParams): Promise<T> => {
+      if (usesBrowserLevelCdp) {
+        const attachedSessionId = await attachToTargetSession(targetId);
+        return sendToAttachedTarget<T>(attachedSessionId, method, params);
+      }
+
       return new Promise((resolve, reject) => {
         if (!sessionId) {
           reject(new Error('No session ID'));
@@ -760,7 +1048,7 @@ export function useBrowserCDP(
         }
       });
     },
-    [sessionId, connectToPage],
+    [attachToTargetSession, connectToPage, sendToAttachedTarget, sessionId, usesBrowserLevelCdp],
   );
 
   const getLatestScreencastFrame = useCallback((pageId: string): string | null => {
@@ -947,6 +1235,12 @@ export function useBrowserCDP(
   const closeTarget = useCallback(
     async (targetId: string): Promise<Protocol.Target.CloseTargetResponse> => {
       knownPageIdsRef.current.delete(targetId);
+      const attachedSessionId = pageTargetSessionIdsRef.current.get(targetId);
+      if (attachedSessionId) {
+        pageTargetSessionIdsRef.current.delete(targetId);
+        targetPageIdsBySessionRef.current.delete(attachedSessionId);
+        pendingTargetAttachmentRef.current.delete(targetId);
+      }
 
       const pageWs = pageSessionsRef.current.get(targetId);
       if (pageWs) {
@@ -1340,10 +1634,7 @@ export function useBrowserCDP(
       if (msg.type === 'screencast:page-loaded') {
         const pageId = msg.pageId || '';
         if (pageId) {
-          const ws = pageSessionsRef.current.get(pageId);
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            queryPageMetadata(ws, pageId);
-          }
+          void queryPageMetadata(pageId);
         }
       }
     };
@@ -1358,6 +1649,9 @@ export function useBrowserCDP(
       setInteractions([]);
       typingBufferRef.current = null;
       injectedPagesRef.current.clear();
+      pageTargetSessionIdsRef.current.clear();
+      targetPageIdsBySessionRef.current.clear();
+      pendingTargetAttachmentRef.current.clear();
       lastNavigationRefreshByPageRef.current.clear();
       lastRawScreenshotByPageRef.current.clear();
       pendingRawScreenshotByPageRef.current.clear();

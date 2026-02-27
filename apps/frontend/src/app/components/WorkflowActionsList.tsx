@@ -32,6 +32,7 @@ interface SubStepView {
   stepType?: string;
   instruction?: string;
   message?: string;
+  reasoning?: string;
   status: StepStatus;
   error?: string;
   startedAt?: ApiDate;
@@ -51,6 +52,7 @@ interface StepActionView {
   stepType?: string;
   instruction?: string;
   message?: string;
+  reasoning?: string;
   startedAt?: ApiDate;
   finishedAt?: ApiDate;
   status: StepStatus;
@@ -196,6 +198,52 @@ const buildActionViews = (actions: WorkflowAction[]): StepActionView[] => {
           byIndex.set(slotKey, existing);
         }
       }
+      continue;
+    }
+
+    if (action.eventType === 'step:reasoning' && typeof stepIndex === 'number') {
+      const reasoningDelta =
+        typeof action.data?.reasoningDelta === 'string' ? action.data.reasoningDelta : '';
+      if (!reasoningDelta) continue;
+
+      let parentLoopIndex: number | undefined;
+      for (const loopIdx of loopStepIndices) {
+        const iter = currentIteration.get(loopIdx);
+        if (iter !== undefined) {
+          parentLoopIndex = loopIdx;
+          break;
+        }
+      }
+
+      if (parentLoopIndex !== undefined) {
+        const loopView = byIndex.get(parentLoopIndex);
+        const iter = currentIteration.get(parentLoopIndex);
+        if (loopView?.iterations && iter !== undefined) {
+          const iterView = loopView.iterations.find((it) => it.iteration === iter);
+          if (iterView && iterView.subSteps.length > 0) {
+            const targetSubStep =
+              [...iterView.subSteps].reverse().find((sub) => sub.status === 'running') ??
+              iterView.subSteps[iterView.subSteps.length - 1];
+            targetSubStep.reasoning = reasoningDelta;
+          }
+        }
+        continue;
+      }
+
+      const slotKey = findStepSlotKey(stepIndex, true) ?? findStepSlotKey(stepIndex) ?? stepIndex;
+      const existing =
+        byIndex.get(slotKey) ??
+        ({
+          key: `step-${slotKey}`,
+          stepIndex,
+          status: 'running',
+        } satisfies StepActionView);
+
+      existing.stepType = existing.stepType ?? stepType;
+      existing.instruction = existing.instruction ?? instruction;
+      existing.message = existing.message ?? action.message;
+      existing.reasoning = reasoningDelta;
+      byIndex.set(slotKey, existing);
       continue;
     }
 
@@ -505,6 +553,11 @@ export const WorkflowActionsList = ({
                                     {sub.error}
                                   </Text>
                                 )}
+                                {sub.reasoning && (
+                                  <Text fontSize="11px" color="gray.500" mt={0.5} whiteSpace="pre-wrap">
+                                    {sub.reasoning}
+                                  </Text>
+                                )}
                                 {!sub.instruction && sub.message && (
                                   <Text fontSize="11px" color="gray.500">
                                     {sub.message}
@@ -565,6 +618,11 @@ export const WorkflowActionsList = ({
                 >
                   {view.instruction}
                 </Code>
+              )}
+              {view.reasoning && (
+                <Text fontSize="11px" color="gray.500" mt={1} ml={5} whiteSpace="pre-wrap">
+                  {view.reasoning}
+                </Text>
               )}
               {view.error && (
                 <Text fontSize="11px" color="red.500" mt={1} ml={5}>

@@ -138,6 +138,12 @@ export type OrchestratorEvent =
   | { type: 'session:ready'; sessionId: string; liveViewUrl: string }
   | { type: 'step:start'; step: Step; index: number; instruction: string }
   | {
+      type: 'step:reasoning';
+      step: Step;
+      index: number;
+      delta: string;
+    }
+  | {
       type: 'step:end';
       step: Step;
       index: number;
@@ -145,14 +151,29 @@ export type OrchestratorEvent =
       error?: string;
       savedFile?: SaveStepOutput;
     }
-  | { type: 'loop:iteration:start'; step: LoopStep; index: number; iteration: number; totalItems: number; item: unknown }
-  | { type: 'loop:iteration:end'; step: LoopStep; index: number; iteration: number; totalItems: number; success: boolean; error?: string }
+  | {
+      type: 'loop:iteration:start';
+      step: LoopStep;
+      index: number;
+      iteration: number;
+      totalItems: number;
+      item: unknown;
+    }
+  | {
+      type: 'loop:iteration:end';
+      step: LoopStep;
+      index: number;
+      iteration: number;
+      totalItems: number;
+      success: boolean;
+      error?: string;
+    }
   | { type: 'log'; level: 'info' | 'warn' | 'error'; message: string; data?: any };
 
 export interface OrchestratorModels {
   /** Model for data extraction steps (default: google/gemini-2.5-flash) */
   extract?: string;
-  /** Model for agent/browser steps (default: moonshotai/kimi-k2.5) */
+  /** Model for agent/browser steps (default: anthropic/claude-sonnet-4.6) */
   agent?: string;
   /** Model for conditional evaluation (default: google/gemini-3-flash-preview) */
   conditional?: string;
@@ -166,6 +187,7 @@ export interface OrchestratorOptions {
   models?: OrchestratorModels;
   browserbaseProjectId?: string;
   browserbaseContextId?: string;
+  hyperbrowserProfileId?: string;
   /** CDP WebSocket URL to connect to an existing local browser session instead of Browserbase */
   localCdpUrl?: string;
   /** The local browser session ID (used for session:ready event so frontend can connect) */

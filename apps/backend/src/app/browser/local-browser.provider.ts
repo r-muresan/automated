@@ -12,7 +12,9 @@ import {
   CreateBrowserSessionOptions,
   BrowserSessionResult,
   InitSessionOptions,
+  InitSessionResult,
   PageInfo,
+  SessionDebugInfoResult,
   SessionUploadFile,
 } from './browser-provider.interface';
 import { LocalStorageService } from '../storage/local-storage.service';
@@ -167,6 +169,30 @@ export class LocalBrowserProvider extends BrowserProvider {
     };
   }
 
+  async getSessionDebugInfo(sessionId: string): Promise<SessionDebugInfoResult> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return {
+        session: null,
+        debugInfo: {
+          debuggerFullscreenUrl: '',
+          debuggerUrl: '',
+          wsUrl: '',
+          pages: [],
+          cdpWsUrlTemplate: '',
+        },
+      };
+    }
+
+    return {
+      session: {
+        id: sessionId,
+        status: session.context.browser()?.isConnected() ? 'RUNNING' : 'DISCONNECTED',
+      },
+      debugInfo: await this.getDebugInfo(sessionId),
+    };
+  }
+
   async getDebugInfo(sessionId: string): Promise<any> {
     const session = this.sessions.get(sessionId);
     if (!session) {
@@ -224,9 +250,20 @@ export class LocalBrowserProvider extends BrowserProvider {
     };
   }
 
-  async initializeSession(sessionId: string, options?: InitSessionOptions): Promise<PageInfo[]> {
+  async initializeSession(
+    sessionId: string,
+    options?: InitSessionOptions,
+  ): Promise<InitSessionResult> {
     const session = this.sessions.get(sessionId);
-    if (!session) return [];
+    if (!session) {
+      return {
+        debuggerFullscreenUrl: '',
+        debuggerUrl: '',
+        wsUrl: '',
+        pages: [],
+        cdpWsUrlTemplate: '',
+      };
+    }
 
     try {
       await this.injectInitScript(session.context);
@@ -253,17 +290,29 @@ export class LocalBrowserProvider extends BrowserProvider {
           console.log(
             `[LocalBrowserProvider] Session ${sessionId} initialized with target ${mainPage.id}`,
           );
-          return [{ id: mainPage.id, url: 'https://www.google.com', title: 'Google' }];
+          return {
+            ...(await this.getDebugInfo(sessionId)),
+            pages: [{ id: mainPage.id, url: 'https://www.google.com', title: 'Google' }],
+          };
         }
       } catch (error) {
         console.warn(`[LocalBrowserProvider] Could not query /json during init:`, error);
       }
 
       console.log(`[LocalBrowserProvider] Session ${sessionId} initialized (fallback)`);
-      return [{ id: 'page-0', url: 'https://www.google.com', title: 'Google' }];
+      return {
+        ...(await this.getDebugInfo(sessionId)),
+        pages: [{ id: 'page-0', url: 'https://www.google.com', title: 'Google' }],
+      };
     } catch (error) {
       console.error('[LocalBrowserProvider] Error initializing session:', error);
-      return [];
+      return {
+        debuggerFullscreenUrl: '',
+        debuggerUrl: '',
+        wsUrl: '',
+        pages: [],
+        cdpWsUrlTemplate: '',
+      };
     }
   }
 
@@ -273,7 +322,7 @@ export class LocalBrowserProvider extends BrowserProvider {
   }
 
   async uploadSessionFile(_sessionId: string, _file: SessionUploadFile): Promise<void> {
-    throw new Error('File uploads are only supported for Browserbase sessions');
+    throw new Error('File uploads are only supported for managed browser sessions');
   }
 
   /** Get the debug port for a session (used by CDP proxy) */

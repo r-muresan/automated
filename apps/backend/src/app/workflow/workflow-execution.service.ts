@@ -26,6 +26,7 @@ const LOG_LIMIT = 500;
 const ACTION_EVENT_TYPES = [
   'step:start',
   'step:end',
+  'step:reasoning',
   'loop:iteration:start',
   'loop:iteration:end',
   'credential:request',
@@ -204,6 +205,7 @@ export class WorkflowExecutionService {
     workflowId: string,
     email?: string,
     inputValues?: Record<string, string>,
+    requireBrowserbase = false,
   ): Promise<WorkflowExecutionCommandResponse> {
     // Check if already running
     const currentState = this.executionStates.get(workflowId);
@@ -229,6 +231,14 @@ export class WorkflowExecutionService {
       return { success: false, message: 'Workflow has no steps to execute' };
     }
 
+    if (requireBrowserbase && !process.env.HYPERBROWSER_API_KEY) {
+      return {
+        success: false,
+        message:
+          'Managed browser is required for this run, but HYPERBROWSER_API_KEY is not configured.',
+      };
+    }
+
     // Check browser minutes cap before starting
     if (email) {
       await this.browserSessionService.assertBrowserMinutesRemaining(email);
@@ -236,6 +246,7 @@ export class WorkflowExecutionService {
 
     // Get user context if email is provided
     let browserbaseContextId: string | undefined;
+    let hyperbrowserProfileId: string | undefined;
     if (email) {
       const user = await this.prisma.user.findUnique({ where: { email } });
       if (user) {
@@ -243,6 +254,7 @@ export class WorkflowExecutionService {
           where: { userId: user.id },
         });
         browserbaseContextId = userContext?.browserbaseContextId;
+        hyperbrowserProfileId = userContext?.hyperbrowserProfileId ?? undefined;
       }
     }
 
@@ -287,9 +299,9 @@ export class WorkflowExecutionService {
       message: 'Workflow started',
     });
 
-    // Create local browser session if not using Browserbase
+    // Create local browser session only when managed browser is not configured
     let localCdpUrl: string | undefined;
-    if (!process.env.BROWSERBASE_API_KEY) {
+    if (!process.env.HYPERBROWSER_API_KEY) {
       const session = await this.browserProvider.createSession({
         contextId: browserbaseContextId,
       });
@@ -306,8 +318,8 @@ export class WorkflowExecutionService {
 
     const localSessionId = this.workflowLocalSessions.get(workflowId);
     const orchestrator = new OrchestratorAgent({
-      browserbaseProjectId: process.env.BROWSERBASE_PROJECT_ID,
       browserbaseContextId,
+      hyperbrowserProfileId,
       localCdpUrl,
       localSessionId: localSessionId ?? undefined,
       onEvent: (event) => this.handleOrchestratorEvent(workflowId, event),
@@ -775,6 +787,24 @@ export class WorkflowExecutionService {
         });
         break;
       }
+      case 'step:reasoning': {
+        this.addLog(
+          workflowId,
+          {
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            message: 'Step reasoning update',
+            eventType: 'step:reasoning',
+            data: {
+              stepIndex: event.index,
+              stepType: event.step.type,
+              reasoningDelta: event.delta,
+            },
+          },
+          { persist: false },
+        );
+        break;
+      }
       case 'loop:iteration:start': {
         this.addLog(workflowId, {
           timestamp: new Date().toISOString(),
@@ -868,7 +898,11 @@ export class WorkflowExecutionService {
     }
   }
 
-  private addLog(workflowId: string, entry: WorkflowLogEntry) {
+  private addLog(
+    workflowId: string,
+    entry: WorkflowLogEntry,
+    options?: { persist?: boolean },
+  ) {
     const logs = this.executionLogs.get(workflowId) ?? [];
     logs.push(entry);
     if (logs.length > LOG_LIMIT) {
@@ -892,7 +926,9 @@ export class WorkflowExecutionService {
       });
     }
 
-    void this.persistRunLog(runId, entry);
+    if (options?.persist !== false) {
+      void this.persistRunLog(runId, entry);
+    }
   }
 
   private persistRunUpdate(runId: string | undefined, data: Prisma.WorkflowRunUpdateInput) {

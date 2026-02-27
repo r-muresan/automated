@@ -3,26 +3,34 @@ import { PrismaService } from '../prisma.service';
 import {
   BrowserProvider,
   BrowserHandle,
-  PageInfo,
   SessionUploadFile,
 } from '../browser/browser-provider.interface';
-import { BrowserbaseBrowserProvider } from '../browser/browserbase-browser.provider';
-import {
-  acquireBrowserbaseSessionCreateLease,
-  registerBrowserbaseSession,
-  releaseBrowserbaseSession,
-} from 'apps/cua-agent';
+import { HyperbrowserBrowserProvider } from '../browser/hyperbrowser-browser.provider';
+import { acquireBrowserSessionCreateLease, releaseBrowserSession } from 'apps/cua-agent';
 
 const BROWSER_MINUTES_CAP = 10000;
-const isUsingBrowserbase = !!process.env.BROWSERBASE_API_KEY;
+const isUsingManagedBrowser = !!process.env.HYPERBROWSER_API_KEY;
 
-function buildCdpWsUrlTemplate(connectUrl: string | null | undefined, sessionId: string): string | undefined {
+function buildCdpWsUrlTemplate(
+  connectUrl: string | null | undefined,
+  sessionId: string,
+): string | undefined {
   if (!connectUrl) return undefined;
+
+  // Hyperbrowser provides a browser-level endpoint that requires auth headers the browser
+  // WebSocket API can't supply. Route through the local CDP proxy instead.
+  if (!connectUrl.includes('browserbase.com')) {
+    const wsBase = (
+      process.env.BACKEND_WS_URL || `ws://localhost:${process.env.PORT || 8080}`
+    ).replace(/\/$/, '');
+    return `${wsBase}/api/cdp-proxy/${sessionId}`;
+  }
+
   try {
     const url = new URL(connectUrl);
     return `${url.protocol}//${url.host}/debug/${sessionId}/devtools/page/{pageId}`;
   } catch {
-    return undefined;
+    return connectUrl;
   }
 }
 
@@ -32,6 +40,11 @@ interface RecordingSession {
   browser: BrowserHandle | null;
   lastPingTime: number;
   connectUrl?: string;
+}
+
+interface UserBrowserIdentity {
+  browserbaseContextId: string | null;
+  hyperbrowserProfileId: string | null;
 }
 
 @Injectable()
@@ -60,7 +73,7 @@ export class BrowserSessionService implements OnModuleInit {
   }
 
   async assertBrowserMinutesRemaining(userId: string) {
-    if (!isUsingBrowserbase) return;
+    if (!isUsingManagedBrowser) return;
     const user = await this.prisma.user.findUnique({ where: { email: userId } });
     if (user && user.browserMinutesUsed >= BROWSER_MINUTES_CAP) {
       throw new ForbiddenException(
@@ -70,7 +83,7 @@ export class BrowserSessionService implements OnModuleInit {
   }
 
   async addBrowserMinutesForSession(sessionId: string) {
-    if (!isUsingBrowserbase) return;
+    if (!isUsingManagedBrowser) return;
     const session = await this.prisma.browserSession.findFirst({
       where: { browserbaseSessionId: sessionId },
       include: { user: true },
@@ -97,7 +110,7 @@ export class BrowserSessionService implements OnModuleInit {
     return data;
   }
 
-  async getOrCreateUserContext(email: string): Promise<string | null> {
+  async getOrCreateUserBrowserIdentity(email: string): Promise<UserBrowserIdentity | null> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) return null;
 
@@ -106,16 +119,20 @@ export class BrowserSessionService implements OnModuleInit {
     });
 
     if (!userContext) {
-      // Only create Browserbase context if using BrowserbaseBrowserProvider
-      if (this.browserProvider instanceof BrowserbaseBrowserProvider) {
-        const contextId = await (
-          this.browserProvider as BrowserbaseBrowserProvider
+      // Only create managed-browser profile context when using Hyperbrowser provider
+      if (this.browserProvider instanceof HyperbrowserBrowserProvider) {
+        const profileId = await (
+          this.browserProvider as HyperbrowserBrowserProvider
         ).createContext();
 
         userContext = await this.prisma.userContext.upsert({
           where: { userId: user.id },
-          update: { browserbaseContextId: contextId },
-          create: { userId: user.id, browserbaseContextId: contextId },
+          update: { hyperbrowserProfileId: profileId },
+          create: {
+            userId: user.id,
+            browserbaseContextId: String(user.id),
+            hyperbrowserProfileId: profileId,
+          },
         });
       } else {
         // For local provider, use user ID as context identifier
@@ -125,9 +142,24 @@ export class BrowserSessionService implements OnModuleInit {
           create: { userId: user.id, browserbaseContextId: String(user.id) },
         });
       }
+    } else if (
+      this.browserProvider instanceof HyperbrowserBrowserProvider &&
+      !userContext.hyperbrowserProfileId
+    ) {
+      const profileId = await (
+        this.browserProvider as HyperbrowserBrowserProvider
+      ).createContext();
+
+      userContext = await this.prisma.userContext.update({
+        where: { userId: user.id },
+        data: { hyperbrowserProfileId: profileId },
+      });
     }
 
-    return userContext.browserbaseContextId;
+    return {
+      browserbaseContextId: userContext.browserbaseContextId,
+      hyperbrowserProfileId: userContext.hyperbrowserProfileId ?? null,
+    };
   }
 
   async createSession(
@@ -141,47 +173,27 @@ export class BrowserSessionService implements OnModuleInit {
   ) {
     await this.assertBrowserMinutesRemaining(userId);
 
-    if (reuseExisting && userId) {
-      const existingSession = await this.prisma.browserSession.findFirst({
-        where: { user: { email: userId } },
-        orderBy: { lastUsedAt: 'desc' },
-      });
-
-      if (existingSession) {
-        try {
-          const [sessionInfo, debugInfo] = await Promise.all([
-            this.browserProvider.getSession(existingSession.browserbaseSessionId),
-            this.browserProvider.getDebugInfo(existingSession.browserbaseSessionId),
-          ]);
-
-          console.log('Loaded existing session with ID:', existingSession.browserbaseSessionId);
-
-          if (sessionInfo && sessionInfo.status === 'RUNNING') {
-            registerBrowserbaseSession(existingSession.browserbaseSessionId);
-            return {
-              id: existingSession.browserbaseSessionId,
-              pages: debugInfo.pages,
-              cdpWsUrlTemplate: buildCdpWsUrlTemplate(existingSession.connectUrl, existingSession.browserbaseSessionId),
-            };
-          }
-        } catch (error) {
-          console.log('Existing session not valid, creating new one');
-          await this.prisma.browserSession.deleteMany({
-            where: { browserbaseSessionId: existingSession.browserbaseSessionId },
-          });
-        }
-      }
-    }
-
-    const [contextId, createLease] = await Promise.all([
-      this.getOrCreateUserContext(userId),
-      acquireBrowserbaseSessionCreateLease('backend:createSession'),
+    const [userBrowserIdentity, createLease] = await Promise.all([
+      this.getOrCreateUserBrowserIdentity(userId),
+      acquireBrowserSessionCreateLease('backend:createSession'),
     ]);
+    const contextId =
+      this.browserProvider instanceof HyperbrowserBrowserProvider
+        ? userBrowserIdentity?.hyperbrowserProfileId ?? undefined
+        : userBrowserIdentity?.browserbaseContextId ?? undefined;
 
     let leaseConfirmed = false;
     let createdSessionId: string | undefined;
 
     try {
+      if (reuseExisting) {
+        console.log(
+          '[BrowserSessionService] Ignoring reuseExisting and recreating browser session',
+        );
+      }
+
+      await this.stopExistingUserSessions(userId);
+
       const session = await this.browserProvider.createSession({
         colorScheme,
         width,
@@ -195,28 +207,38 @@ export class BrowserSessionService implements OnModuleInit {
       createLease.confirmCreated(session.id);
       leaseConfirmed = true;
 
+      const resolvedConnectUrl = session.connectUrl ?? session.wsEndpoint ?? null;
+
       this.prisma.browserSession
         .create({
           data: {
             user: { connect: { email: userId } },
             browserbaseSessionId: session.id,
-            connectUrl: session.connectUrl ?? null,
+            connectUrl: resolvedConnectUrl,
             lastUsedAt: new Date(),
           },
         })
         .catch((err) => console.error('Error storing session in DB:', err));
 
-      const pages = await this.browserProvider.initializeSession(session.id, {
+      if (typeof session.profileId === 'string' && session.profileId.length > 0) {
+        await this.updateHyperbrowserProfileId(userId, session.profileId);
+      }
+
+      const initResult = await this.browserProvider.initializeSession(session.id, {
         colorScheme,
         width,
         height,
-        connectUrl: session.connectUrl,
+        connectUrl: resolvedConnectUrl ?? undefined,
       });
 
       return {
         ...session,
-        pages,
-        cdpWsUrlTemplate: buildCdpWsUrlTemplate(session.connectUrl, session.id),
+        pages: initResult.pages,
+        cdpWsUrlTemplate:
+          session.cdpWsUrlTemplate ??
+          initResult.cdpWsUrlTemplate ??
+          buildCdpWsUrlTemplate(resolvedConnectUrl, session.id),
+        liveViewUrl: session.liveUrl ?? session.liveViewUrl ?? initResult.liveViewUrl,
       };
     } catch (error) {
       if (!leaseConfirmed) {
@@ -233,6 +255,39 @@ export class BrowserSessionService implements OnModuleInit {
     return this.browserProvider.getDebugInfo(sessionId);
   }
 
+  private async updateHyperbrowserProfileId(email: string, profileId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) return;
+
+    await this.prisma.userContext.upsert({
+      where: { userId: user.id },
+      update: { hyperbrowserProfileId: profileId },
+      create: {
+        userId: user.id,
+        browserbaseContextId: String(user.id),
+        hyperbrowserProfileId: profileId,
+      },
+    });
+  }
+
+  private async stopExistingUserSessions(userId: string): Promise<void> {
+    const existingSessions = await this.prisma.browserSession.findMany({
+      where: {
+        user: { email: userId },
+        workflowId: null,
+      },
+      select: { browserbaseSessionId: true },
+    });
+
+    for (const existingSession of existingSessions) {
+      console.log(
+        `[BrowserSessionService] Recreating session, stopping existing session ${existingSession.browserbaseSessionId}`,
+      );
+      this.stopRecordingKeepalive(existingSession.browserbaseSessionId);
+      this.stopSession(existingSession.browserbaseSessionId);
+    }
+  }
+
   async stopSession(sessionId: string, deleteFromDb = true) {
     try {
       console.log(`[BrowserSessionService] Stopping session ${sessionId}`);
@@ -245,7 +300,7 @@ export class BrowserSessionService implements OnModuleInit {
         });
       }
 
-      releaseBrowserbaseSession(sessionId);
+      releaseBrowserSession(sessionId);
       console.log(`[BrowserSessionService] Session ${sessionId} stopped successfully`);
       return result;
     } catch (error) {
@@ -370,7 +425,10 @@ export class BrowserSessionService implements OnModuleInit {
         } else {
           // Try to reconnect
           try {
-            const browser = await this.browserProvider.connectForKeepalive(sessionId, recordingSession.connectUrl);
+            const browser = await this.browserProvider.connectForKeepalive(
+              sessionId,
+              recordingSession.connectUrl,
+            );
             recordingSession.browser = browser;
             recordingSession.lastPingTime = now;
           } catch (reconnectError) {

@@ -1,13 +1,17 @@
 import OpenAI from 'openai';
-import type { Stagehand } from '@browserbasehq/stagehand';
+import type { Stagehand } from '../stagehand/v3';
 import type { LoopStep, Step, OrchestratorEvent, LoopContext } from '../types';
 import {
-  identifyItemsFromVision,
+  capturePageScreenshot,
   checkForMoreItemsFromVision,
-  type VisionItem,
+  identifyItemsWithSharedStrategy,
+  type ExtractionMode,
+  type ExtractionItem,
 } from './extraction';
 import {
+  buildHybridActiveToolsForUrl,
   createBrowserTabTools,
+  getSpreadsheetProvider,
   type CredentialHandoffRequest,
   type CredentialHandoffResult,
 } from './agent-tools';
@@ -23,7 +27,6 @@ export interface LoopDeps {
   models: { extract: string; agent: string };
   openrouterApiKey: string;
   openrouterBaseUrl: string;
-  providerOrder: string[];
   emit: (event: OrchestratorEvent) => void;
   assertNotAborted: () => void;
   executeSteps: (steps: Step[], context?: LoopContext) => Promise<void>;
@@ -34,15 +37,18 @@ export interface LoopDeps {
   ) => Promise<CredentialHandoffResult>;
 }
 
-// ---------------------------------------------------------------------------
-// Page utilities (no DOM, no page.evaluate)
-// ---------------------------------------------------------------------------
+const CUA_MODEL_ALIASES: Record<string, string> = {
+  'anthropic/claude-sonnet-4.6': 'anthropic/claude-sonnet-4.6',
+  'anthropic/claude-opus-4.6': 'anthropic/claude-opus-4.6',
+};
 
-/** Viewport screenshot as a base64 data URL. Uses CDP — not DOM. */
-export async function capturePageScreenshot(stagehand: Stagehand): Promise<string> {
-  const page = stagehand.context.activePage() || stagehand.context.pages()[0];
-  const screenshot = await page.screenshot({ fullPage: false });
-  return `data:image/png;base64,${Buffer.from(screenshot).toString('base64')}`;
+function resolveCuaModelName(modelName: string): string {
+  return CUA_MODEL_ALIASES[modelName] ?? modelName;
+}
+
+function resolveOpenRouterModelName(modelName: string): string {
+  const normalized = resolveCuaModelName(modelName);
+  return normalized.startsWith('openai/') ? normalized : `openai/${normalized}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,19 +90,30 @@ Perform exactly the action described. Do not do anything else.`,
     ),
     stream: false,
     model: {
-      modelName: deps.models.agent,
+      modelName: resolveOpenRouterModelName(deps.models.agent),
       apiKey: deps.openrouterApiKey,
       baseURL: deps.openrouterBaseUrl,
-      provider: {
-        order: deps.providerOrder,
-        allow_fallbacks: false,
-      },
     },
-    mode: 'cua',
+    mode: 'hybrid',
   });
 
   try {
-    await agent.execute({ instruction, maxSteps: 10 });
+    await agent.execute({
+      instruction,
+      maxSteps: 10,
+      callbacks: {
+        prepareStep: async ({ stepNumber }: { stepNumber: number }) => {
+          const page = deps.stagehand.context.activePage() ?? deps.stagehand.context.pages()[0];
+          const activeUrl = page?.url?.() ?? '';
+          const provider = getSpreadsheetProvider(activeUrl);
+          const activeTools = buildHybridActiveToolsForUrl(activeUrl);
+          console.log(
+            `[VISION_LOOP] Tool activation step=${stepNumber}: provider=${provider ?? 'none'} spreadsheetTools=${provider ? 'enabled' : 'disabled'} activeTools=${JSON.stringify(activeTools)}`,
+          );
+          return { activeTools };
+        },
+      },
+    });
   } catch (error: any) {
     console.warn(`[VISION_LOOP] Navigation agent error (continuing): ${error.message}`);
   }
@@ -137,24 +154,28 @@ export async function executeLoopStep(
       deps.assertNotAborted();
       pageCount++;
 
-      // ── 1. Screenshot (pure vision, no DOM) ────────────────────────────
-      const screenshot = await capturePageScreenshot(deps.stagehand);
-
-      // ── 2. Identify new items via vision LLM ───────────────────────────
-      const visionItems: VisionItem[] = await identifyItemsFromVision({
+      // ── 1. Identify new items via shared extraction strategy ────────────
+      const {
+        mode: extractionMode,
+        items,
+      }: {
+        mode: ExtractionMode;
+        items: ExtractionItem[];
+      } = await identifyItemsWithSharedStrategy({
+        stagehand: deps.stagehand,
         llmClient: deps.openai,
         model: deps.models.extract,
-        screenshotDataUrl: screenshot,
         description: step.description,
         knownFingerprints: processedFingerprints,
       });
 
       console.log(
-        `[VISION_LOOP] Page ${pageCount}: ${visionItems.length} new item(s) ` +
+        `[VISION_LOOP] Page ${pageCount}: ${items.length} new item(s) ` +
+          `via ${extractionMode} extraction ` +
           `(${processedFingerprints.size} already processed)`,
       );
 
-      if (visionItems.length === 0) {
+      if (items.length === 0) {
         consecutiveEmpty++;
         console.log(`[VISION_LOOP] Empty page ${consecutiveEmpty}/${MAX_CONSECUTIVE_EMPTY}`);
         if (consecutiveEmpty >= MAX_CONSECUTIVE_EMPTY) {
@@ -166,24 +187,22 @@ export async function executeLoopStep(
       }
 
       // ── 3. Process each new item ────────────────────────────────────────
-      for (const visionItem of visionItems) {
+      for (const item of items) {
         if (totalProcessed >= MAX_TOTAL_ITEMS) break;
         deps.assertNotAborted();
 
         // Register fingerprint before executing so a re-visit won't reprocess
-        processedFingerprints.add(visionItem.fingerprint);
+        processedFingerprints.add(item.fingerprint);
 
-        console.log(
-          `[VISION_LOOP] Processing item ${totalProcessed + 1}: "${visionItem.fingerprint}"`,
-        );
+        console.log(`[VISION_LOOP] Processing item ${totalProcessed + 1}: "${item.fingerprint}"`);
 
         deps.emit({
           type: 'loop:iteration:start',
           step,
           index,
           iteration: totalProcessed + 1,
-          totalItems: Math.max(totalProcessed + visionItems.length, totalProcessed + 1),
-          item: visionItem.data,
+          totalItems: Math.max(totalProcessed + items.length, totalProcessed + 1),
+          item: item.data,
         });
 
         let iterationSuccess = true;
@@ -191,13 +210,13 @@ export async function executeLoopStep(
 
         try {
           await deps.executeSteps(step.steps, {
-            item: visionItem.data,
+            item: item.data,
             itemIndex: totalProcessed + 1,
           });
         } catch (error: any) {
           iterationSuccess = false;
           iterationError = error?.message ?? 'Iteration failed';
-          console.warn(`[VISION_LOOP] Item "${visionItem.fingerprint}" failed: ${iterationError}`);
+          console.warn(`[VISION_LOOP] Item "${item.fingerprint}" failed: ${iterationError}`);
         }
 
         totalProcessed++;
@@ -226,6 +245,13 @@ export async function executeLoopStep(
       }
 
       // ── 4. Check for more items (vision, no DOM) ────────────────────────
+      if (extractionMode === 'spreadsheet') {
+        console.log(
+          '[VISION_LOOP] Spreadsheet extraction mode has no pagination search — stopping',
+        );
+        break;
+      }
+
       const freshScreenshot = await capturePageScreenshot(deps.stagehand);
       const pagination = await checkForMoreItemsFromVision({
         llmClient: deps.openai,

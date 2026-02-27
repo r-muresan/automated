@@ -1,6 +1,7 @@
 import * as dotenv from 'dotenv';
 import OpenAI from 'openai';
-import { Stagehand } from '@browserbasehq/stagehand';
+import { Stagehand } from '../stagehand/v3';
+import { Hyperbrowser } from '@hyperbrowser/sdk';
 import { z } from 'zod';
 import type {
   Workflow,
@@ -23,16 +24,21 @@ import type {
 } from '../types';
 
 import { AGENT_TIMEOUT_MS } from './constants';
-import { withTimeout, DEFAULT_PROVIDER_ORDER } from './utils';
+import { withTimeout } from './utils';
 import { waitForPageReady } from './page-ready';
 import { buildSystemPrompt } from './system-prompt';
-import { createBrowserTabTools, type CredentialHandoffRequest } from './agent-tools';
-import { extractWithLlm, normalizeLoopItems, parseSchemaMap } from './extraction';
+import {
+  buildHybridActiveToolsForUrl,
+  createBrowserTabTools,
+  getSpreadsheetProvider,
+  type CredentialHandoffRequest,
+} from './agent-tools';
+import { extractWithSharedStrategy, parseSchemaMap } from './extraction';
 import { executeLoopStep, type LoopDeps } from './loop';
 import {
-  acquireBrowserbaseSessionCreateLease,
-  releaseBrowserbaseSession,
-} from '../browserbase-session-limiter';
+  acquireBrowserSessionCreateLease,
+  releaseBrowserSession,
+} from '../browser-session-limiter';
 
 dotenv.config();
 
@@ -48,6 +54,8 @@ const DEFAULT_MODELS = {
 export class OrchestratorAgent {
   private openai: OpenAI | null = null;
   private stagehand: Stagehand | null = null;
+  private hyperbrowserClient: Hyperbrowser | null = null;
+  private hyperbrowserSessionId: string | null = null;
   private activeSessionId: string | null = null;
   private aborted = false;
   private aborting = false;
@@ -68,6 +76,28 @@ export class OrchestratorAgent {
       agent: this.options.models?.agent ?? DEFAULT_MODELS.agent,
       conditional: this.options.models?.conditional ?? DEFAULT_MODELS.conditional,
       save: this.options.models?.save ?? DEFAULT_MODELS.save,
+    };
+  }
+
+  private getActivePageUrl(): string {
+    if (!this.stagehand) return '';
+    try {
+      const page = this.stagehand.context.activePage() ?? this.stagehand.context.pages()[0];
+      return page?.url?.() ?? '';
+    } catch {
+      return '';
+    }
+  }
+
+  private buildPrepareStepForActiveTools(scope: string) {
+    return async ({ stepNumber }: { stepNumber?: number } = {}) => {
+      const activeUrl = this.getActivePageUrl();
+      const provider = getSpreadsheetProvider(activeUrl);
+      const activeTools = buildHybridActiveToolsForUrl(activeUrl);
+      console.log(
+        `[ORCHESTRATOR] Active tools scope=${scope} step=${typeof stepNumber === 'number' ? stepNumber : 'unknown'} provider=${provider ?? 'none'} tools=${JSON.stringify(activeTools)}`,
+      );
+      return { activeTools };
     };
   }
 
@@ -92,7 +122,7 @@ export class OrchestratorAgent {
   }
 
   getSessionId(): string | null {
-    return this.stagehand?.browserbaseSessionID ?? null;
+    return this.activeSessionId ?? this.stagehand?.browserbaseSessionID ?? null;
   }
 
   async runWorkflow(workflow: Workflow): Promise<WorkflowResult> {
@@ -137,11 +167,30 @@ export class OrchestratorAgent {
           data: error?.message ?? error,
         });
       } else {
-        console.error(`[ORCHESTRATOR] Workflow error: ${error.message}`);
+        const message = error?.message ?? String(error);
+        const stack = error?.stack;
+        const cause = error?.cause;
+        console.error(`[ORCHESTRATOR] Workflow error: ${message}`);
+        if (stack) {
+          console.error(`[ORCHESTRATOR] Workflow error stack:\n${stack}`);
+        }
+        if (cause) {
+          console.error(`[ORCHESTRATOR] Workflow error cause:`, cause);
+        }
+        this.emit({
+          type: 'log',
+          level: 'error',
+          message: 'Workflow error details',
+          data: {
+            error: message,
+            ...(stack ? { stack } : {}),
+            ...(cause ? { cause: String(cause) } : {}),
+          },
+        });
         this.emit({
           type: 'workflow:error',
           workflow,
-          error: error?.message ?? 'Unknown error',
+          error: message,
         });
       }
     } finally {
@@ -167,6 +216,44 @@ export class OrchestratorAgent {
     }
   }
 
+  private isInvalidJsonResponseError(message?: string): boolean {
+    return typeof message === 'string' && message.toLowerCase().includes('invalid json response');
+  }
+
+  private logUsageAfterToolCall(
+    toolName: string,
+    totals: { inputTokens: number; cachedInputTokens: number; outputTokens: number },
+    deltas?: { inputTokens: number; cachedInputTokens: number; outputTokens: number },
+  ): void {
+    const tokens = deltas ?? totals;
+    console.log(
+      `[ORCHESTRATOR] Usage after tool call "${toolName}": input_tokens=${tokens.inputTokens}, cached_input_tokens=${tokens.cachedInputTokens}, output_tokens=${tokens.outputTokens}`,
+    );
+    this.emit({
+      type: 'log',
+      level: 'info',
+      message: `Usage after tool call: ${toolName}`,
+      data: {
+        input_tokens: tokens.inputTokens,
+        cached_input_tokens: tokens.cachedInputTokens,
+        output_tokens: tokens.outputTokens,
+      },
+    });
+  }
+
+  private summarizeToolResultForLog(toolResult: unknown): string {
+    if (typeof toolResult === 'string') {
+      return toolResult.length > 600 ? `${toolResult.slice(0, 600)}...` : toolResult;
+    }
+    try {
+      const serialized = JSON.stringify(toolResult);
+      if (typeof serialized !== 'string') return String(toolResult);
+      return serialized.length > 600 ? `${serialized.slice(0, 600)}...` : serialized;
+    } catch {
+      return String(toolResult);
+    }
+  }
+
   private async init(startingUrl?: string): Promise<void> {
     this.assertNotAborted();
     const apiKey = process.env.OPENROUTER_API_KEY;
@@ -176,7 +263,7 @@ export class OrchestratorAgent {
     if (this.options.localCdpUrl) {
       await this.initLocal(startingUrl);
     } else {
-      await this.initBrowserbase(startingUrl);
+      await this.initHyperbrowser(startingUrl);
     }
   }
 
@@ -214,53 +301,56 @@ export class OrchestratorAgent {
     }
   }
 
-  private async initBrowserbase(startingUrl?: string): Promise<void> {
+  private async initHyperbrowser(startingUrl?: string): Promise<void> {
     const models = this.resolveModels();
-    const projectId = this.options.browserbaseProjectId ?? process.env.BROWSERBASE_PROJECT_ID ?? '';
-    if (!projectId) {
-      throw new Error('Missing BROWSERBASE_PROJECT_ID for Browserbase');
+    const hyperbrowserApiKey = process.env.HYPERBROWSER_API_KEY;
+    if (!hyperbrowserApiKey) {
+      throw new Error('Missing HYPERBROWSER_API_KEY for Hyperbrowser');
     }
 
-    const contextId =
-      this.options.browserbaseContextId ?? process.env.BROWSERBASE_CONTEXT_ID ?? undefined;
+    const profileId = this.options.hyperbrowserProfileId ?? process.env.HYPERBROWSER_PROFILE_ID;
 
-    const createLease = await acquireBrowserbaseSessionCreateLease('orchestrator:init');
+    const createLease = await acquireBrowserSessionCreateLease('orchestrator:init');
     let leaseConfirmed = false;
 
     try {
+      this.hyperbrowserClient = new Hyperbrowser({ apiKey: hyperbrowserApiKey });
+      const hyperbrowserSession = await this.hyperbrowserClient.sessions.create({
+        timeoutMinutes: 60,
+        enableWebRecording: true,
+        enableVideoWebRecording: true,
+        profile: profileId
+          ? {
+              id: profileId,
+              persistChanges: true,
+            }
+          : undefined,
+      });
+
       this.stagehand = new Stagehand({
-        env: 'BROWSERBASE',
+        env: 'LOCAL',
         verbose: 1,
         model: {
           modelName: models.extract,
           apiKey: process.env.OPENROUTER_API_KEY,
           baseURL: OPENROUTER_BASE_URL,
         },
-        browserbaseSessionCreateParams: {
-          projectId,
-          browserSettings: {
-            blockAds: true,
-            context: contextId
-              ? {
-                  id: contextId,
-                  persist: true,
-                }
-              : undefined,
-          },
+        localBrowserLaunchOptions: {
+          cdpUrl: hyperbrowserSession.wsEndpoint,
         },
         experimental: true,
         disableAPI: true,
       });
 
       await this.stagehand.init();
-      const sessionId = this.stagehand.browserbaseSessionID!;
+      const sessionId = hyperbrowserSession.id;
       createLease.confirmCreated(sessionId);
       leaseConfirmed = true;
       this.activeSessionId = sessionId;
+      this.hyperbrowserSessionId = sessionId;
 
       this.assertNotAborted();
-      const liveViewUrl = `https://browserbase.com/sessions/${sessionId}`;
-      console.log(liveViewUrl);
+      const liveViewUrl = hyperbrowserSession.liveUrl ?? '';
       this.emit({ type: 'session:ready', sessionId, liveViewUrl });
 
       // Only navigate if a starting URL is provided; otherwise the first navigate step will handle it
@@ -278,7 +368,7 @@ export class OrchestratorAgent {
   }
 
   private async close(): Promise<void> {
-    const sessionId = this.stagehand?.browserbaseSessionID ?? this.activeSessionId;
+    const sessionId = this.hyperbrowserSessionId ?? this.activeSessionId;
     const isLocal = !!this.options.localCdpUrl;
 
     if (this.stagehand) {
@@ -291,9 +381,16 @@ export class OrchestratorAgent {
     }
 
     if (sessionId && !isLocal) {
-      releaseBrowserbaseSession(sessionId);
+      if (this.hyperbrowserClient) {
+        await this.hyperbrowserClient.sessions.stop(sessionId).catch((error) => {
+          console.warn(`[ORCHESTRATOR] Failed to stop Hyperbrowser session ${sessionId}:`, error);
+        });
+      }
+      releaseBrowserSession(sessionId);
     }
     this.activeSessionId = null;
+    this.hyperbrowserSessionId = null;
+    this.hyperbrowserClient = null;
   }
 
   /**
@@ -470,7 +567,12 @@ export class OrchestratorAgent {
     if (!this.stagehand) throw new Error('Browser session not initialized');
     if (!this.openai) throw new Error('LLM client not initialized');
 
-    console.log(`[EXTRACT] Executing extract: ${step.description}`);
+    const extractStart = Date.now();
+    const activeUrl = this.getActivePageUrl();
+    const provider = getSpreadsheetProvider(activeUrl);
+    console.log(
+      `[EXTRACT] start step_index=${index} provider=${provider ?? 'none'} url="${activeUrl}" description="${step.description}"`,
+    );
 
     console.log(context);
 
@@ -479,21 +581,31 @@ export class OrchestratorAgent {
         ? `Context item: ${JSON.stringify(context.item)}\nInstruction: ${step.description}`
         : step.description;
 
+    const pageReadyStart = Date.now();
     await waitForPageReady(this.stagehand, undefined, this.assertNotAborted.bind(this));
+    console.log(
+      `[EXTRACT] page-ready duration_ms=${Date.now() - pageReadyStart} step_index=${index}`,
+    );
 
     try {
       this.assertNotAborted();
-      const page = this.stagehand.context.activePage() || this.stagehand.context.pages()[0];
       const schema = parseSchemaMap(step.dataSchema);
-      const result = await extractWithLlm({
+      console.log(
+        `[EXTRACT] schema step_index=${index} fields=${Object.keys(schema ?? {}).length}`,
+      );
+      const sharedStrategyStart = Date.now();
+      const result = await extractWithSharedStrategy({
+        stagehand: this.stagehand,
         llmClient: this.openai,
         model: this.resolveModels().extract,
-        page,
         dataExtractionGoal: contextualInstruction,
         schema,
         context,
         extractedVariables: this.extractedVariables,
       });
+      console.log(
+        `[EXTRACT] shared-strategy:end step_index=${index} mode=${result.mode} duration_ms=${Date.now() - sharedStrategyStart}`,
+      );
 
       const output = result.scraped_data;
       const map: Record<string, string> = {};
@@ -522,9 +634,15 @@ export class OrchestratorAgent {
         success: true,
         output: JSON.stringify(output ?? {}),
       });
+      console.log(
+        `[EXTRACT] end step_index=${index} success=true total_duration_ms=${Date.now() - extractStart}`,
+      );
       this.emit({ type: 'step:end', step, index, success: true });
     } catch (error: any) {
-      console.error(`[ORCHESTRATOR] Extract failed:`, error.message ?? error);
+      console.error(
+        `[ORCHESTRATOR] Extract failed after ${Date.now() - extractStart}ms:`,
+        error.message ?? error,
+      );
       this.stepResults.push({
         instruction: step.description,
         success: false,
@@ -681,30 +799,110 @@ export class OrchestratorAgent {
         this.requestCredentialHandoff(request, step, index, instruction),
     });
 
-    const agent = this.stagehand.agent({
+    const agentConfig = {
       systemPrompt: buildSystemPrompt(this.extractedVariables, context),
       tools,
-      stream: false,
       model: {
         modelName: this.resolveModels().agent,
         apiKey: process.env.OPENROUTER_API_KEY,
         baseURL: OPENROUTER_BASE_URL,
-        provider: {
-          order: DEFAULT_PROVIDER_ORDER,
-          allow_fallbacks: false,
-        },
       },
-      mode: 'cua',
-    });
+    } as const;
+
+    const usageTotals = {
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      outputTokens: 0,
+    };
+    const prepareStep = this.buildPrepareStepForActiveTools(`executeSingleStep:${index}`);
+    let chunksSinceLastStepFinish = 0;
+    const streamChunkText = new Map<string, string>();
+
+    const onStepFinish = (event: any) => {
+      const stepText = typeof event?.text === 'string' ? event.text : '';
+      if (chunksSinceLastStepFinish === 0 && stepText.length > 0) {
+        this.emit({
+          type: 'step:reasoning',
+          step,
+          index,
+          delta: stepText,
+        });
+      }
+      chunksSinceLastStepFinish = 0;
+      streamChunkText.clear();
+
+      const stepInputTokens = Number(event?.usage?.inputTokens ?? 0);
+      const stepCachedInputTokens = Number(event?.usage?.cachedInputTokens ?? 0);
+      const stepOutputTokens = Number(event?.usage?.outputTokens ?? 0);
+
+      usageTotals.inputTokens += Number.isFinite(stepInputTokens) ? stepInputTokens : 0;
+      usageTotals.cachedInputTokens += Number.isFinite(stepCachedInputTokens)
+        ? stepCachedInputTokens
+        : 0;
+      usageTotals.outputTokens += Number.isFinite(stepOutputTokens) ? stepOutputTokens : 0;
+
+      const toolCalls: Array<{ toolName?: string }> = Array.isArray(event?.toolCalls)
+        ? event.toolCalls
+        : [];
+      if (toolCalls.length === 0) return;
+
+      const toolResults: unknown[] = Array.isArray(event?.toolResults) ? event.toolResults : [];
+
+      for (const [toolIndex, toolCall] of toolCalls.entries()) {
+        const toolName =
+          typeof toolCall?.toolName === 'string' && toolCall.toolName.trim().length > 0
+            ? toolCall.toolName
+            : 'unknown';
+        this.logUsageAfterToolCall(toolName, usageTotals, {
+          inputTokens: Number.isFinite(stepInputTokens) ? stepInputTokens : 0,
+          cachedInputTokens: Number.isFinite(stepCachedInputTokens) ? stepCachedInputTokens : 0,
+          outputTokens: Number.isFinite(stepOutputTokens) ? stepOutputTokens : 0,
+        });
+        // if (toolIndex < toolResults.length) {
+        //   console.log(
+        //     `[ORCHESTRATOR] Tool result "${toolName}": ${this.summarizeToolResultForLog(toolResults[toolIndex])}`,
+        //   );
+        // }
+      }
+    };
 
     try {
-      const result = await agent.execute({
-        instruction: instruction,
-        maxSteps: 50,
-      });
+      const streamResult = await this.stagehand
+        .agent({
+          ...agentConfig,
+          mode: 'hybrid',
+          stream: true,
+        })
+        .execute({
+          instruction: instruction,
+          maxSteps: 50,
+          highlightCursor: false,
+          callbacks: {
+            prepareStep,
+            onStepFinish,
+            onChunk: ({ chunk }: any) => {
+              if (chunk?.type !== 'reasoning-delta' && chunk?.type !== 'text-delta') return;
+              const delta = typeof chunk?.text === 'string' ? chunk.text : '';
+              if (!delta) return;
+              const chunkId = typeof chunk?.id === 'string' ? chunk.id : 'default';
+              const nextText = `${streamChunkText.get(chunkId) ?? ''}${delta}`;
+              streamChunkText.set(chunkId, nextText);
+              chunksSinceLastStepFinish += 1;
+              this.emit({
+                type: 'step:reasoning',
+                step,
+                index,
+                delta: nextText,
+              });
+            },
+          },
+        });
+      await streamResult.consumeStream();
+      const result = await streamResult.result;
 
+      this.assertNotAborted();
       this.stepResults.push({
-        instruction,
+        instruction: instruction,
         success: result.success,
         output: stepOutput,
         error: result.success ? undefined : result.message,
@@ -746,7 +944,6 @@ export class OrchestratorAgent {
       models: this.resolveModels(),
       openrouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
       openrouterBaseUrl: OPENROUTER_BASE_URL,
-      providerOrder: DEFAULT_PROVIDER_ORDER,
       emit: this.emit.bind(this),
       assertNotAborted: this.assertNotAborted.bind(this),
       executeSteps: this.executeSteps.bind(this),
@@ -824,6 +1021,7 @@ export class OrchestratorAgent {
             this.requestCredentialHandoff(request, step, index, this.describeStepInstruction(step)),
         }),
         stream: false,
+        mode: 'hybrid',
       });
 
       try {
@@ -834,6 +1032,9 @@ export class OrchestratorAgent {
           agent.execute({
             instruction: conditionInstruction,
             maxSteps: 10,
+            callbacks: {
+              prepareStep: this.buildPrepareStepForActiveTools(`executeConditionalStep:${index}`),
+            },
             output: z.object({
               conditionMet: z.boolean().describe('Whether the condition is met'),
             }),

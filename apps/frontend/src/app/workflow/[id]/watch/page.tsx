@@ -15,13 +15,13 @@ import {
   useWorkflow,
 } from '../../../../hooks/api';
 import { Navbar } from '../../../components/Navbar';
-import { BrowserContainer } from '../../../components/Browser/BrowserContainer';
+import { VNCBrowser } from '../../../components/Browser/VNCBrowser';
 import {
   WorkflowActionsList,
   type PendingCredentialRequestView,
 } from '../../../components/WorkflowActionsList';
 import { Box, VStack, HStack, Heading, Text, Spinner, Button } from '@chakra-ui/react';
-import type { BrowserbasePage, WorkflowAction } from '@automated/api-dtos';
+import type { WorkflowAction } from '@automated/api-dtos';
 
 interface PendingCredentialRequestState {
   requestId: string;
@@ -98,18 +98,11 @@ export default function WatchWorkflowPage() {
   const refreshPagesMutation = useRefreshPages();
   const { data: workflow } = useWorkflow(workflowId);
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [activePageIndex, setActivePageIndex] = useState(0);
   const actionsRef = useRef(executionActions);
-  const pagesRef = useRef<BrowserbasePage[]>([]);
-  const activePageIndexRef = useRef(activePageIndex);
-  const frameCountsRef = useRef<Map<string, number>>(new Map());
-  const explicitActiveSignalRef = useRef(false);
-  const lastExplicitActiveAtRef = useRef(0);
+  const [stableLiveViewUrl, setStableLiveViewUrl] = useState<string | null>(null);
 
   const sessionId = executionStatus?.sessionId || null;
-  const pages: BrowserbasePage[] = debugInfo?.pages || [];
   const isRunning = executionStatus?.status === 'running';
   const pendingCredentialRequest = useMemo(
     () => getPendingCredentialRequest(executionActions),
@@ -122,23 +115,32 @@ export default function WatchWorkflowPage() {
     executionStatus?.status === 'stopped';
 
   useEffect(() => {
-    pagesRef.current = pages;
-  }, [pages]);
-
-  useEffect(() => {
-    activePageIndexRef.current = activePageIndex;
-  }, [activePageIndex]);
-
-  // Reset active page index when pages change
-  useEffect(() => {
-    if (pages.length > 0 && activePageIndex >= pages.length) {
-      setActivePageIndex(0);
-    }
-  }, [pages.length, activePageIndex]);
-
-  useEffect(() => {
     actionsRef.current = executionActions;
   }, [executionActions]);
+
+  useEffect(() => {
+    setStableLiveViewUrl(null);
+  }, [sessionId]);
+
+  // Hyperbrowser may rotate signed liveView URLs on each debug poll.
+  // Keep iframe src stable unless the underlying stream endpoint changes.
+  useEffect(() => {
+    const next = (debugInfo?.liveViewUrl as string | undefined) ?? null;
+    if (!next) return;
+
+    setStableLiveViewUrl((prev) => {
+      if (!prev) return next;
+      try {
+        const previousUrl = new URL(prev);
+        const nextUrl = new URL(next);
+        const sameStream =
+          previousUrl.origin === nextUrl.origin && previousUrl.pathname === nextUrl.pathname;
+        return sameStream ? prev : next;
+      } catch {
+        return prev === next ? prev : next;
+      }
+    });
+  }, [debugInfo?.liveViewUrl]);
 
   // Poll for page updates
   useEffect(() => {
@@ -150,78 +152,6 @@ export default function WatchWorkflowPage() {
 
     return () => clearInterval(interval);
   }, [sessionId, isRunning, refreshPagesMutation]);
-
-  // Follow the active browser tab signaled by the screencast player.
-  // Fallback to frame cadence if no explicit active-tab signal is available.
-  useEffect(() => {
-    if (!isRunning) {
-      explicitActiveSignalRef.current = false;
-      lastExplicitActiveAtRef.current = 0;
-      frameCountsRef.current.clear();
-      return;
-    }
-
-    const handleMessage = (event: MessageEvent) => {
-      const payload = event.data as { type?: string; pageId?: string } | null;
-      if (!payload || typeof payload !== 'object') return;
-
-      const pageId = payload.pageId;
-      if (!pageId) return;
-
-      if (payload.type === 'screencast:active-page') {
-        explicitActiveSignalRef.current = true;
-        lastExplicitActiveAtRef.current = Date.now();
-        const idx = pagesRef.current.findIndex((p) => p.id === pageId);
-        if (idx !== -1) {
-          setActivePageIndex((prev) => (prev === idx ? prev : idx));
-        }
-        return;
-      }
-
-      if (payload.type === 'screencast:frame-received' && !explicitActiveSignalRef.current) {
-        const counts = frameCountsRef.current;
-        counts.set(pageId, (counts.get(pageId) ?? 0) + 1);
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [isRunning]);
-
-  useEffect(() => {
-    if (!isRunning) return;
-
-    const interval = window.setInterval(() => {
-      const explicitSignalFresh =
-        explicitActiveSignalRef.current && Date.now() - lastExplicitActiveAtRef.current < 5000;
-      if (explicitSignalFresh) return;
-
-      explicitActiveSignalRef.current = false;
-
-      const counts = frameCountsRef.current;
-      if (counts.size === 0) return;
-
-      const currentPageId = pagesRef.current[activePageIndexRef.current]?.id;
-      let selectedPageId = currentPageId ?? '';
-      let highestCount = currentPageId ? counts.get(currentPageId) ?? 0 : 0;
-
-      counts.forEach((count, pageId) => {
-        if (count > highestCount) {
-          highestCount = count;
-          selectedPageId = pageId;
-        }
-      });
-      counts.clear();
-
-      if (!selectedPageId) return;
-      const idx = pagesRef.current.findIndex((p) => p.id === selectedPageId);
-      if (idx !== -1) {
-        setActivePageIndex((prev) => (prev === idx ? prev : idx));
-      }
-    }, 1200);
-
-    return () => window.clearInterval(interval);
-  }, [isRunning]);
 
   const handleStopClick = () => {
     stopExecution.mutate(workflowId);
@@ -238,17 +168,6 @@ export default function WatchWorkflowPage() {
     },
     [continueExecution, runId, workflowId],
   );
-
-  const handleRefreshPages = useCallback(
-    (sid: string) => {
-      refreshPagesMutation.mutate(sid);
-    },
-    [refreshPagesMutation],
-  );
-
-  // No-op handlers for read-only mode
-  const handleAddTab = useCallback(() => {}, []);
-  const handleCloseTab = useCallback(() => {}, []);
 
   useEffect(() => {
     if (!workflowId || !runId || !isRunning || !actionsReady) return;
@@ -385,23 +304,13 @@ export default function WatchWorkflowPage() {
 
         <HStack align="stretch" gap={6} flex={1} minH={0}>
           <Box flex={1} minH={0}>
-            <BrowserContainer
-              containerRef={containerRef}
+            <VNCBrowser
               contentRef={contentRef}
               sessionId={sessionId}
-              pages={pages}
-              activePageIndex={activePageIndex}
-              setActivePageIndex={setActivePageIndex}
-              isLoading={false}
-              isAddingTab={false}
-              refreshPages={handleRefreshPages}
-              handleAddTab={handleAddTab}
-              handleCloseTab={handleCloseTab}
-              emptyState="skeleton"
-              showLoadSkeleton={false}
+              liveViewUrl={stableLiveViewUrl}
+              isLoading={!stableLiveViewUrl}
               readOnly={!canUserControlBrowser}
               freeze={isFinished}
-              cdpWsUrlTemplate={debugInfo?.cdpWsUrlTemplate as string | undefined}
             />
           </Box>
           <Box w="360px" p={4} overflowY="auto">

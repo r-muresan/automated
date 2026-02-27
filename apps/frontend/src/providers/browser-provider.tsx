@@ -57,6 +57,7 @@ interface BrowserContextType {
   goForwardCurrentTab: () => Promise<void>;
   reloadCurrentTab: () => Promise<void>;
   cdpWsUrlTemplate: string | null;
+  liveViewUrl: string | null;
 }
 
 const BrowserContext = createContext<BrowserContextType | undefined>(undefined);
@@ -71,6 +72,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   const [focusUrlBarTrigger, setFocusUrlBarTrigger] = useState(0);
   const lastInteractionRef = useRef<number>(Date.now());
   const [cdpWsUrlTemplate, setCdpWsUrlTemplate] = useState<string | null>(null);
+  const [liveViewUrl, setLiveViewUrl] = useState<string | null>(null);
 
   // React Query mutations
   const createSessionMutation = useCreateSession();
@@ -90,6 +92,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   // which come from useBrowserCDP, but cdpCallbacks is passed into useBrowserCDP.
   const sendToPageRef = useRef<((targetId: string, method: string, params?: any) => Promise<any>) | null>(null);
   const activateTargetRef = useRef<((targetId: string) => Promise<any>) | null>(null);
+  const addInteractionRef = useRef<((type: Interaction['type'], element: Interaction['element'], pageId: string, data?: any) => void) | null>(null);
 
   // Callbacks for useBrowserCDP
   const cdpCallbacks = useCallback((): InteractionCallbacks => ({
@@ -125,7 +128,19 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
       if (suppressNewTabDetection.current) {
         return;
       }
+      addInteractionRef.current?.(
+        'tab_navigation',
+        {
+          tagName: 'NEW_TAB',
+          text: 'Open new tab',
+          href: url,
+        },
+        targetId,
+        { type: 'new_tab', url },
+      );
+
       // Add the new page if we don't already have it
+      let newIndex = -1;
       setPages((prev) => {
         if (prev.some((p) => p.id === targetId)) return prev;
         const newPage: BrowserPage = {
@@ -133,16 +148,12 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
           url,
           title: 'Loading...',
         };
+        newIndex = prev.length;
         return [...prev, newPage];
       });
-      // Set the new tab as active
-      setPages((prev) => {
-        const newIndex = prev.findIndex((p) => p.id === targetId);
-        if (newIndex !== -1) {
-          setActivePageIndex(newIndex);
-        }
-        return prev;
-      });
+      if (newIndex !== -1) {
+        setActivePageIndex(newIndex);
+      }
 
       // Apply viewport override and activate the new tab so the screencast
       // frame dimensions match the container (prevents white gap).
@@ -207,6 +218,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   // Keep refs in sync so onNewTabDetected can access these functions
   sendToPageRef.current = sendToPage;
   activateTargetRef.current = activateTarget;
+  addInteractionRef.current = addInteraction;
 
   const deletedTabIds = useRef<string[]>([]);
   const suppressNewTabDetection = useRef(false);
@@ -257,6 +269,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
       const sid = data.sessionId;
       console.log('[FRONTEND] Session recreated:', sid);
       setCdpWsUrlTemplate(data.cdpWsUrlTemplate || null);
+      setLiveViewUrl(data.liveViewUrl || null);
       setSessionId(sid);
       sessionCreatedAtRef.current = Date.now();
 
@@ -281,6 +294,12 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
     async (sid: string) => {
       try {
         const data = await refreshPagesMutation.mutateAsync(sid);
+        if (data.cdpWsUrlTemplate) {
+          setCdpWsUrlTemplate(data.cdpWsUrlTemplate);
+        }
+        if (data.liveViewUrl) {
+          setLiveViewUrl(data.liveViewUrl);
+        }
         if (data.pages) {
           setPages((prev) => {
             // Build a map of server pages for quick lookup
@@ -338,6 +357,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         const sid = data.sessionId;
         console.log('[FRONTEND] Session created:', sid);
         setCdpWsUrlTemplate(data.cdpWsUrlTemplate || null);
+        setLiveViewUrl(data.liveViewUrl || null);
         setSessionId(sid);
         sessionCreatedAtRef.current = Date.now();
 
@@ -386,6 +406,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
       setPages([]);
       setActivePageIndex(0);
       setCdpWsUrlTemplate(null);
+      setLiveViewUrl(null);
       deletedTabIds.current = []; // Reset deleted tabs when session is stopped
     }
   }, [sessionId, stopSessionMutation, deleteSessionMutation]);
@@ -924,6 +945,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         goForwardCurrentTab,
         reloadCurrentTab,
         cdpWsUrlTemplate,
+        liveViewUrl,
       }}
     >
       {children}
