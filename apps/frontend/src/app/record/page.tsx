@@ -5,7 +5,6 @@ import { useAudioStream } from '../../providers/audio-stream-provider';
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import posthog from 'posthog-js';
-import { BrowserContainer } from '../components/Browser/BrowserContainer';
 import { RecordingGuideModal } from '../components/RecordingGuideModal';
 import { MicrophoneSwitchModal } from '../components/MicrophoneSwitchModal';
 import { Box, VStack, HStack, Text, Button, Spinner } from '@chakra-ui/react';
@@ -60,23 +59,11 @@ export default function NewWorkflow() {
     sessionId,
     pages,
     activePageIndex,
-    setActivePageIndex,
     isLoading,
     setIsLoading,
-    isAddingTab,
-    refreshPages,
     handleTakeControl,
     handleStopSession,
-    handleAddTab,
-    handleCloseTab,
-    handleResetSession,
     interactions,
-    navigateCurrentTab,
-    goBackCurrentTab,
-    goForwardCurrentTab,
-    reloadCurrentTab,
-    focusUrlBar,
-    cdpWsUrlTemplate,
     liveViewUrl,
   } = useBrowser();
 
@@ -618,15 +605,6 @@ export default function NewWorkflow() {
       return null;
     });
 
-    // if (sessionId) {
-    //   // Stop backend keepalive when discarding recording
-    //   console.log('[RECORD PAGE] Stopping backend recording keepalive (discard)');
-    //   stopRecordingKeepaliveMutation
-    //     .mutateAsync(sessionId)
-    //     .catch((err) => console.error('[RECORD PAGE] Failed to stop recording keepalive:', err));
-    //   await handleResetSession();
-    // }
-
     setDuration(0);
     setHasFailed(false);
     setIsLoading(false);
@@ -643,7 +621,6 @@ export default function NewWorkflow() {
   }, [
     recordingStatus,
     sessionId,
-    handleResetSession,
     setRecordingStatus,
     resetRecordingTimes,
     setAudioStream,
@@ -928,32 +905,9 @@ export default function NewWorkflow() {
         <Box height="100%" overflow="hidden" width="full" borderRadius="2xl">
           <VNCBrowser
             contentRef={contentRef}
-            sessionId={sessionId}
             liveViewUrl={liveViewUrl}
             isLoading={isLoading}
           />
-          {/* <BrowserContainer
-            containerRef={containerRef}
-            contentRef={contentRef}
-            sessionId={sessionId}
-            pages={pages}
-            activePageIndex={activePageIndex}
-            setActivePageIndex={setActivePageIndex}
-            isLoading={isLoading}
-            isAddingTab={isAddingTab}
-            refreshPages={refreshPages}
-            handleAddTab={handleAddTab}
-            handleCloseTab={handleCloseTab}
-            onNavigate={navigateCurrentTab}
-            onGoBack={goBackCurrentTab}
-            onGoForward={goForwardCurrentTab}
-            onReload={reloadCurrentTab}
-            focusUrlBar={focusUrlBar}
-            emptyState="skeleton"
-            showLoadSkeleton={true}
-            minimalOverlay={true}
-            cdpWsUrlTemplate={cdpWsUrlTemplate}
-          /> */}
         </Box>
       </Box>
 

@@ -1,12 +1,9 @@
 import { Box, Spinner, Text, VStack } from '@chakra-ui/react';
 import { RefObject, useEffect, useState } from 'react';
 
-interface BrowserContainerProps {
+interface VNCBrowserProps {
   contentRef: RefObject<HTMLDivElement | null>;
-  sessionId: string | null;
-
   liveViewUrl: string | null;
-
   isLoading: boolean;
   readOnly?: boolean;
   freeze?: boolean;
@@ -15,11 +12,10 @@ interface BrowserContainerProps {
 export const VNCBrowser = ({
   contentRef,
   liveViewUrl,
-  sessionId,
   isLoading,
   readOnly = false,
   freeze = false,
-}: BrowserContainerProps) => {
+}: VNCBrowserProps) => {
   const interactionBlocked = readOnly || freeze;
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const showLoading = isLoading || !liveViewUrl || !iframeLoaded;
@@ -85,18 +81,6 @@ export const VNCBrowser = ({
             Loading browser...
           </Text>
         </VStack>
-      )}
-      {interactionBlocked && (
-        <Box
-          position="absolute"
-          inset={0}
-          zIndex={2}
-          bg="transparent"
-          pointerEvents="auto"
-          cursor="not-allowed"
-          aria-label="Browser is in view-only mode"
-          title="Browser is in view-only mode"
-        />
       )}
     </Box>
   );

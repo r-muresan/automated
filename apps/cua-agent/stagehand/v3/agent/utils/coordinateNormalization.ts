@@ -45,9 +45,7 @@ export function normalizeMoonshotCoordinates(
   };
 }
 
-async function getLiveViewport(
-  page: Page,
-): Promise<{ width: number; height: number } | undefined> {
+async function getLiveViewport(page: Page): Promise<{ width: number; height: number } | undefined> {
   try {
     const viewport = await page.mainFrame().evaluate<{
       width: number;
@@ -110,8 +108,6 @@ export async function processCoordinates(
   modelId?: string,
   page?: Page,
 ): Promise<{ x: number; y: number }> {
-  console.log({ x, y });
-
   const viewport = await getViewportForCoordinateNormalization(v3, page);
   if (viewport) {
     if (isGoogleProvider(provider)) {

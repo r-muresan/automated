@@ -167,7 +167,6 @@ export class BrowserSessionService implements OnModuleInit {
     colorScheme?: 'light' | 'dark',
     width?: number,
     height?: number,
-    reuseExisting = false,
     userAgent?: string,
     timezone?: string,
   ) {
@@ -186,12 +185,6 @@ export class BrowserSessionService implements OnModuleInit {
     let createdSessionId: string | undefined;
 
     try {
-      if (reuseExisting) {
-        console.log(
-          '[BrowserSessionService] Ignoring reuseExisting and recreating browser session',
-        );
-      }
-
       await this.stopExistingUserSessions(userId);
 
       const session = await this.browserProvider.createSession({

@@ -16,7 +16,6 @@ export interface BrowserSessionCreateRequest {
   colorScheme?: ColorScheme;
   width?: number;
   height?: number;
-  reuseExisting?: boolean;
   timezone?: string;
 }
 

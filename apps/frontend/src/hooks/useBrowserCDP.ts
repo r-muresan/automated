@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type Protocol from 'devtools-protocol';
 
 type CDPMethod = string;
 type CDPParams = Record<string, unknown>;
@@ -53,38 +52,8 @@ export interface InteractionCallbacks {
 }
 
 interface UseBrowserCDPReturn extends BrowserCDPState {
-  // Tab management
-  createTarget: (url?: string) => Promise<Protocol.Target.CreateTargetResponse>;
-  closeTarget: (targetId: string) => Promise<Protocol.Target.CloseTargetResponse>;
-  getTargets: () => Promise<Protocol.Target.GetTargetsResponse>;
-  activateTarget: (targetId: string) => Promise<void>;
-
-  // Navigation
-  navigate: (targetId: string, url: string) => Promise<Protocol.Page.NavigateResponse>;
-  goBack: (targetId: string) => Promise<void>;
-  goForward: (targetId: string) => Promise<void>;
-  reload: (targetId: string) => Promise<void>;
-
-  // DOM interaction
-  focusElement: (targetId: string, selector: string, maxAttempts?: number) => Promise<boolean>;
-
-  // Generic CDP commands
-  send: <T = CDPResult>(method: CDPMethod, params?: CDPParams) => Promise<T>;
-  sendToPage: <T = CDPResult>(
-    targetId: string,
-    method: CDPMethod,
-    params?: CDPParams,
-  ) => Promise<T>;
-
-  // Connection management
-  connect: (pageId: string) => void;
-  connectToPage: (pageId: string) => void;
   ensurePageConnections: (pageIds: string[]) => void;
-  disconnect: () => void;
-
-  // Interactions
   interactions: Interaction[];
-  clearInteractions: () => void;
   removeInteraction: (id: string) => void;
   addInteraction: (
     type: Interaction['type'],
@@ -104,7 +73,6 @@ interface UseBrowserCDPReturn extends BrowserCDPState {
 // Default to Browserbase URL pattern if no template provided
 const DEFAULT_CDP_WS_TEMPLATE = (sessionId: string) =>
   `wss://connect.browserbase.com/debug/${sessionId}/devtools/page/{pageId}`;
-const LATEST_SCREENCAST_FRAMES_KEY = '__cuaLatestScreencastFrameByPage';
 const CLICK_SCREENSHOT_REUSE_WINDOW_MS = 400;
 
 const clampNumber = (value: number, min: number, max: number) =>
@@ -1051,32 +1019,11 @@ export function useBrowserCDP(
     [attachToTargetSession, connectToPage, sendToAttachedTarget, sessionId, usesBrowserLevelCdp],
   );
 
-  const getLatestScreencastFrame = useCallback((pageId: string): string | null => {
-    if (!pageId || typeof window === 'undefined') return null;
-    const frameStore = (
-      window as Window & { [LATEST_SCREENCAST_FRAMES_KEY]?: Record<string, string> }
-    )[LATEST_SCREENCAST_FRAMES_KEY];
-    const frameData = frameStore?.[pageId];
-    if (typeof frameData === 'string' && frameData.startsWith('data:image/')) {
-      return frameData;
-    }
-    return null;
-  }, []);
-
   const getRawClickScreenshot = useCallback(
     async (pageId: string): Promise<string | null> => {
       if (!pageId) return null;
 
       const now = Date.now();
-      const latestFrame = getLatestScreencastFrame(pageId);
-      if (latestFrame) {
-        lastRawScreenshotByPageRef.current.set(pageId, {
-          timestamp: now,
-          screenshotUrl: latestFrame,
-        });
-        return latestFrame;
-      }
-
       const recent = lastRawScreenshotByPageRef.current.get(pageId);
       if (recent && now - recent.timestamp <= CLICK_SCREENSHOT_REUSE_WINDOW_MS) {
         return recent.screenshotUrl;
@@ -1113,7 +1060,7 @@ export function useBrowserCDP(
       pendingRawScreenshotByPageRef.current.set(pageId, capturePromise);
       return capturePromise;
     },
-    [getLatestScreencastFrame, sendToPage],
+    [sendToPage],
   );
 
   const createClickSnapshot = useCallback(
@@ -1217,140 +1164,7 @@ export function useBrowserCDP(
     [createClickSnapshot, getRawClickScreenshot],
   );
 
-  // Tab management methods
-  const createTarget = useCallback(
-    async (url = 'about:blank'): Promise<Protocol.Target.CreateTargetResponse> => {
-      const result = await send<Protocol.Target.CreateTargetResponse>('Target.createTarget', {
-        url,
-      });
-      // Register immediately so Target.targetCreated event doesn't trigger onNewTabDetected
-      if (result.targetId) {
-        knownPageIdsRef.current.add(result.targetId);
-      }
-      return result;
-    },
-    [send],
-  );
-
-  const closeTarget = useCallback(
-    async (targetId: string): Promise<Protocol.Target.CloseTargetResponse> => {
-      knownPageIdsRef.current.delete(targetId);
-      const attachedSessionId = pageTargetSessionIdsRef.current.get(targetId);
-      if (attachedSessionId) {
-        pageTargetSessionIdsRef.current.delete(targetId);
-        targetPageIdsBySessionRef.current.delete(attachedSessionId);
-        pendingTargetAttachmentRef.current.delete(targetId);
-      }
-
-      const pageWs = pageSessionsRef.current.get(targetId);
-      if (pageWs) {
-        pageWs.close();
-        pageSessionsRef.current.delete(targetId);
-      }
-      return send<Protocol.Target.CloseTargetResponse>('Target.closeTarget', { targetId });
-    },
-    [send],
-  );
-
-  const getTargets = useCallback(async (): Promise<Protocol.Target.GetTargetsResponse> => {
-    return send<Protocol.Target.GetTargetsResponse>('Target.getTargets');
-  }, [send]);
-
-  const activateTarget = useCallback(
-    async (targetId: string): Promise<void> => {
-      await send('Target.activateTarget', { targetId });
-    },
-    [send],
-  );
-
-  // Navigation
-  const navigate = useCallback(
-    async (targetId: string, url: string): Promise<Protocol.Page.NavigateResponse> => {
-      // First enable the Page domain on this target
-      await sendToPage(targetId, 'Page.enable');
-      return sendToPage<Protocol.Page.NavigateResponse>(targetId, 'Page.navigate', { url });
-    },
-    [sendToPage],
-  );
-
-  const goBack = useCallback(
-    async (targetId: string): Promise<void> => {
-      await sendToPage(targetId, 'Runtime.evaluate', {
-        expression: 'history.back()',
-      });
-    },
-    [sendToPage],
-  );
-
-  const goForward = useCallback(
-    async (targetId: string): Promise<void> => {
-      await sendToPage(targetId, 'Runtime.evaluate', {
-        expression: 'history.forward()',
-      });
-    },
-    [sendToPage],
-  );
-
-  const reload = useCallback(
-    async (targetId: string): Promise<void> => {
-      await sendToPage(targetId, 'Page.enable');
-      await sendToPage(targetId, 'Page.reload');
-    },
-    [sendToPage],
-  );
-
-  // DOM interaction - retries until element is found or max attempts reached
-  const focusElement = useCallback(
-    async (targetId: string, selector: string, maxAttempts = 10): Promise<boolean> => {
-      const escapedSelector = selector.replace(/'/g, "\\'");
-
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-          const result = await sendToPage<{ result?: { value?: boolean } }>(
-            targetId,
-            'Runtime.evaluate',
-            {
-              expression: `
-            (function() {
-              const el = document.querySelector('${escapedSelector}');
-              if (el) {
-                el.focus();
-                el.click();
-                return true;
-              }
-              return false;
-            })()
-          `,
-              returnByValue: true,
-            },
-          );
-
-          if (result?.result?.value === true) {
-            console.log('[CDP] Successfully focused element:', selector);
-            return true;
-          }
-        } catch (e) {
-          console.warn('[CDP] Focus attempt failed:', e);
-        }
-
-        // Wait before retrying
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-
-      console.warn('[CDP] Could not focus element after', maxAttempts, 'attempts:', selector);
-      return false;
-    },
-    [sendToPage],
-  );
-
   // Interaction handling
-  const clearInteractions = useCallback(() => {
-    setInteractions([]);
-    typingBufferRef.current = null;
-    lastRawScreenshotByPageRef.current.clear();
-    pendingRawScreenshotByPageRef.current.clear();
-  }, []);
-
   const removeInteraction = useCallback((id: string) => {
     setInteractions((prev) => prev.filter((i) => i.id !== id));
   }, []);
@@ -1559,90 +1373,6 @@ export function useBrowserCDP(
   // Update ref so connectToPage can use it
   handleKeydownRef.current = handleKeydown;
 
-  // Listen for postMessage events from the ScreencastView component.
-  // For local browser, ScreencastView holds the CDP connection and
-  // forwards Runtime.bindingCalled events (clicks, keydown) as well
-  // as Page.frameNavigated events here.
-  useEffect(() => {
-    if (!sessionId) return;
-
-    const handleScreencastMessage = (event: MessageEvent) => {
-      const msg = event.data;
-      if (!msg || typeof msg !== 'object') return;
-
-      if (msg.type === 'screencast:cdp-event' && msg.data) {
-        const eventData = msg.data;
-        const pageId = msg.pageId || '';
-        const now = Date.now();
-
-        if (eventData.type === 'keydown') {
-          handleKeydownRef.current?.(eventData, pageId);
-        } else if (eventData.type === 'click') {
-          if (now - lastClickTimestampRef.current < 100) return;
-          lastClickTimestampRef.current = now;
-          addInteractionRef.current?.(
-            'user_event',
-            eventData.target || {
-              tagName: 'CLICK',
-              text: 'click',
-              selector: 'unknown',
-            },
-            pageId,
-            eventData,
-          );
-        }
-      }
-
-      if (msg.type === 'screencast:frame-navigated' && msg.frame) {
-        const frame = msg.frame;
-        const pageId = msg.pageId || '';
-        const now = Date.now();
-
-        const lastNavigationAt = lastNavigationRefreshByPageRef.current.get(pageId) || 0;
-        if (now - lastNavigationAt > 1000) {
-          lastNavigationRefreshByPageRef.current.set(pageId, now);
-          addInteractionRef.current?.(
-            'frame_navigation',
-            {
-              tagName: 'FRAME_NAVIGATION',
-              text: `Navigated to ${frame.url}`,
-              selector: frame.id,
-              href: frame.url,
-            },
-            pageId,
-            {
-              url: frame.url,
-              frameId: frame.id,
-              name: frame.name,
-              pageId,
-            },
-          );
-
-          if (callbacksRef.current?.onFrameNavigation) {
-            callbacksRef.current.onFrameNavigation(frame.url, frame.id, pageId);
-          }
-        }
-      }
-
-      if (msg.type === 'screencast:url-sync' && typeof msg.url === 'string') {
-        const pageId = msg.pageId || '';
-        if (pageId && callbacksRef.current?.onFrameNavigation) {
-          callbacksRef.current.onFrameNavigation(msg.url, pageId, pageId);
-        }
-      }
-
-      if (msg.type === 'screencast:page-loaded') {
-        const pageId = msg.pageId || '';
-        if (pageId) {
-          void queryPageMetadata(pageId);
-        }
-      }
-    };
-
-    window.addEventListener('message', handleScreencastMessage);
-    return () => window.removeEventListener('message', handleScreencastMessage);
-  }, [sessionId, queryPageMetadata]);
-
   // Clear interactions when session ends
   useEffect(() => {
     if (!sessionId) {
@@ -1660,23 +1390,8 @@ export function useBrowserCDP(
 
   return {
     ...state,
-    createTarget,
-    closeTarget,
-    getTargets,
-    activateTarget,
-    navigate,
-    goBack,
-    goForward,
-    reload,
-    focusElement,
-    send,
-    sendToPage,
-    connect,
-    connectToPage,
     ensurePageConnections,
-    disconnect,
     interactions,
-    clearInteractions,
     removeInteraction,
     addInteraction,
   };
