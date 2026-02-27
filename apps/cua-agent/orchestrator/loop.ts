@@ -6,7 +6,7 @@ import {
   checkForMoreItemsFromVision,
   identifyItemsWithSharedStrategy,
   type ExtractionMode,
-  type VisionItem,
+  type ExtractionItem,
 } from './extraction';
 import {
   buildHybridActiveToolsForUrl,
@@ -155,9 +155,12 @@ export async function executeLoopStep(
       pageCount++;
 
       // ── 1. Identify new items via shared extraction strategy ────────────
-      const { mode: extractionMode, items: visionItems }: {
+      const {
+        mode: extractionMode,
+        items,
+      }: {
         mode: ExtractionMode;
-        items: VisionItem[];
+        items: ExtractionItem[];
       } = await identifyItemsWithSharedStrategy({
         stagehand: deps.stagehand,
         llmClient: deps.openai,
@@ -167,12 +170,12 @@ export async function executeLoopStep(
       });
 
       console.log(
-        `[VISION_LOOP] Page ${pageCount}: ${visionItems.length} new item(s) ` +
+        `[VISION_LOOP] Page ${pageCount}: ${items.length} new item(s) ` +
           `via ${extractionMode} extraction ` +
           `(${processedFingerprints.size} already processed)`,
       );
 
-      if (visionItems.length === 0) {
+      if (items.length === 0) {
         consecutiveEmpty++;
         console.log(`[VISION_LOOP] Empty page ${consecutiveEmpty}/${MAX_CONSECUTIVE_EMPTY}`);
         if (consecutiveEmpty >= MAX_CONSECUTIVE_EMPTY) {
@@ -184,24 +187,22 @@ export async function executeLoopStep(
       }
 
       // ── 3. Process each new item ────────────────────────────────────────
-      for (const visionItem of visionItems) {
+      for (const item of items) {
         if (totalProcessed >= MAX_TOTAL_ITEMS) break;
         deps.assertNotAborted();
 
         // Register fingerprint before executing so a re-visit won't reprocess
-        processedFingerprints.add(visionItem.fingerprint);
+        processedFingerprints.add(item.fingerprint);
 
-        console.log(
-          `[VISION_LOOP] Processing item ${totalProcessed + 1}: "${visionItem.fingerprint}"`,
-        );
+        console.log(`[VISION_LOOP] Processing item ${totalProcessed + 1}: "${item.fingerprint}"`);
 
         deps.emit({
           type: 'loop:iteration:start',
           step,
           index,
           iteration: totalProcessed + 1,
-          totalItems: Math.max(totalProcessed + visionItems.length, totalProcessed + 1),
-          item: visionItem.data,
+          totalItems: Math.max(totalProcessed + items.length, totalProcessed + 1),
+          item: item.data,
         });
 
         let iterationSuccess = true;
@@ -209,13 +210,13 @@ export async function executeLoopStep(
 
         try {
           await deps.executeSteps(step.steps, {
-            item: visionItem.data,
+            item: item.data,
             itemIndex: totalProcessed + 1,
           });
         } catch (error: any) {
           iterationSuccess = false;
           iterationError = error?.message ?? 'Iteration failed';
-          console.warn(`[VISION_LOOP] Item "${visionItem.fingerprint}" failed: ${iterationError}`);
+          console.warn(`[VISION_LOOP] Item "${item.fingerprint}" failed: ${iterationError}`);
         }
 
         totalProcessed++;
@@ -245,7 +246,9 @@ export async function executeLoopStep(
 
       // ── 4. Check for more items (vision, no DOM) ────────────────────────
       if (extractionMode === 'spreadsheet') {
-        console.log('[VISION_LOOP] Spreadsheet extraction mode has no pagination search — stopping');
+        console.log(
+          '[VISION_LOOP] Spreadsheet extraction mode has no pagination search — stopping',
+        );
         break;
       }
 

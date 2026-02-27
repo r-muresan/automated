@@ -8,8 +8,25 @@ import type {
   SpreadsheetProvider,
   SpreadsheetToolError,
 } from '../types';
-import { ensureSpreadsheetBridge, getSpreadsheetPageState, runBridge, spreadsheetToolError } from './bridge';
+import {
+  ensureSpreadsheetBridge,
+  getSpreadsheetPageState,
+  runBridge,
+  spreadsheetToolError,
+} from './bridge';
+import { readRangeViaGviz } from './bridge/gviz';
+import { readRangeViaExcelGraph } from './bridge/excel-graph';
 import { EXCEL_TOOL_PREFIX, SHEETS_TOOL_PREFIX } from './constants';
+import {
+  normalizeStringGrid,
+  trimEmptyGrid,
+  escapePipeCell,
+  quoteSheetName,
+  splitRangeReference,
+  columnNumberToLetters,
+  lettersToColumnNumber,
+  parseCellAddress,
+} from './shared-utils';
 
 function isBridgeError(result: BridgeRunResult): result is Extract<BridgeRunResult, { ok: false }> {
   return 'error' in result;
@@ -17,39 +34,6 @@ function isBridgeError(result: BridgeRunResult): result is Extract<BridgeRunResu
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
-
-function normalizeStringGrid(values: unknown): string[][] {
-  if (!Array.isArray(values)) return [];
-  return values
-    .filter((row): row is unknown[] => Array.isArray(row))
-    .map((row) => row.map((cell) => (cell == null ? '' : typeof cell === 'string' ? cell : String(cell))));
-}
-
-function escapePipeCell(value: string): string {
-  return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
-}
-
-function columnNumberToLetters(index: number): string {
-  if (!Number.isInteger(index) || index < 1) return '';
-  let value = index;
-  let result = '';
-  while (value > 0) {
-    const remainder = (value - 1) % 26;
-    result = String.fromCharCode(65 + remainder) + result;
-    value = Math.floor((value - 1) / 26);
-  }
-  return result;
-}
-
-function lettersToColumnNumber(letters: string): number {
-  let value = 0;
-  for (const char of letters.toUpperCase()) {
-    const code = char.charCodeAt(0);
-    if (code < 65 || code > 90) return NaN;
-    value = value * 26 + (code - 64);
-  }
-  return value;
 }
 
 type ParsedRange = {
@@ -62,40 +46,6 @@ type ParsedRange = {
   rows: number;
   cols: number;
 };
-
-function unquoteSheetName(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length >= 2) {
-    return trimmed.slice(1, -1).replace(/''/g, "'");
-  }
-  return trimmed;
-}
-
-function quoteSheetName(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  if (/^[A-Za-z0-9_]+$/.test(trimmed)) return trimmed;
-  return `'${trimmed.replace(/'/g, "''")}'`;
-}
-
-function splitRangeReference(value: string): { sheetName: string; rangePart: string } {
-  const trimmed = value.trim();
-  const bangIndex = trimmed.lastIndexOf('!');
-  if (bangIndex < 0) return { sheetName: '', rangePart: trimmed };
-  return {
-    sheetName: unquoteSheetName(trimmed.slice(0, bangIndex)),
-    rangePart: trimmed.slice(bangIndex + 1).trim(),
-  };
-}
-
-function parseCellAddress(value: string): { col: number; row: number } | null {
-  const match = /^\$?([A-Za-z]{1,5})\$?(\d{1,7})$/.exec(value.trim());
-  if (!match) return null;
-  const col = lettersToColumnNumber(match[1]);
-  const row = Number(match[2]);
-  if (!Number.isFinite(col) || !Number.isFinite(row) || col < 1 || row < 1) return null;
-  return { col, row };
-}
 
 function parseA1Range(value: string): ParsedRange | null {
   const { sheetName, rangePart } = splitRangeReference(value);
@@ -153,33 +103,6 @@ function splitRangeList(input: string): string[] {
   return result;
 }
 
-function normalizeRanges(rangeA1: string | string[]): string[] {
-  if (Array.isArray(rangeA1)) {
-    return rangeA1.map((entry) => entry.trim()).filter(Boolean);
-  }
-  return splitRangeList(rangeA1);
-}
-
-function trimEmptyGrid(values: string[][]): string[][] {
-  if (!values.length) return [];
-  let lastRowIndex = values.length - 1;
-  while (lastRowIndex >= 0 && values[lastRowIndex].every((cell) => cell.trim() === '')) {
-    lastRowIndex -= 1;
-  }
-  if (lastRowIndex < 0) return [];
-  const rows = values.slice(0, lastRowIndex + 1);
-  let lastColIndex = 0;
-  for (const row of rows) {
-    for (let col = row.length - 1; col >= 0; col -= 1) {
-      if (row[col] && row[col].trim() !== '') {
-        lastColIndex = Math.max(lastColIndex, col);
-        break;
-      }
-    }
-  }
-  return rows.map((row) => row.slice(0, lastColIndex + 1));
-}
-
 function formatTable(values: string[][], width: number, maxRows: number, startingRow = 1): string {
   const rows = values.slice(0, Math.max(0, maxRows));
   const maxColumns = rows.reduce((acc, row) => Math.max(acc, row.length), 0);
@@ -190,14 +113,15 @@ function formatTable(values: string[][], width: number, maxRows: number, startin
   );
   const effectiveWidth = Number.isFinite(width) ? Math.max(60, Math.floor(width)) : 300;
   const cellWidth = Math.max(8, Math.min(40, Math.floor(effectiveWidth / (maxColumns + 1)) - 3));
-  const clip = (value: string) => (value.length > cellWidth ? `${value.slice(0, cellWidth - 3)}...` : value);
+  const clip = (value: string) =>
+    value.length > cellWidth ? `${value.slice(0, cellWidth - 3)}...` : value;
 
-  const header = ['#', ...Array.from({ length: maxColumns }, (_, index) => columnNumberToLetters(index + 1))];
-  const divider = header.map(() => '---');
-  const lines = [
-    `| ${header.join(' | ')} |`,
-    `| ${divider.join(' | ')} |`,
+  const header = [
+    '#',
+    ...Array.from({ length: maxColumns }, (_, index) => columnNumberToLetters(index + 1)),
   ];
+  const divider = header.map(() => '---');
+  const lines = [`| ${header.join(' | ')} |`, `| ${divider.join(' | ')} |`];
 
   normalizedRows.forEach((row, rowIndex) => {
     const rendered = row.map((cell) => escapePipeCell(clip(cell)));
@@ -213,7 +137,10 @@ type MatrixBuildResult = {
   cols: number;
 };
 
-function resolveRangeDimensions(rangeA1: string, value: unknown): { rows: number; cols: number; startRow: number } {
+function resolveRangeDimensions(
+  rangeA1: string,
+  value: unknown,
+): { rows: number; cols: number; startRow: number } {
   const parsed = parseA1Range(rangeA1);
   if (parsed) {
     return {
@@ -267,7 +194,10 @@ function buildMatrix(value: unknown, rows: number, cols: number): MatrixBuildRes
     if (vector.length !== rows && vector.length !== 1) {
       throw new Error(`Column fill expects ${rows} values, got ${vector.length}.`);
     }
-    const data = vector.length === 1 ? Array.from({ length: rows }, () => [vector[0]]) : vector.map((entry) => [entry]);
+    const data =
+      vector.length === 1
+        ? Array.from({ length: rows }, () => [vector[0]])
+        : vector.map((entry) => [entry]);
     return { matrix: data, rows, cols: 1 };
   }
 
@@ -285,9 +215,7 @@ function stringifyCellValue(value: unknown): string {
 }
 
 function matrixToTsv(matrix: unknown[][]): string {
-  return matrix
-    .map((row) => row.map((cell) => stringifyCellValue(cell)).join('\t'))
-    .join('\n');
+  return matrix.map((row) => row.map((cell) => stringifyCellValue(cell)).join('\t')).join('\n');
 }
 
 function matrixContainsFormula(matrix: unknown[][]): boolean {
@@ -300,7 +228,9 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function getReadySpreadsheetState(stagehand: Stagehand): Promise<
+async function getReadySpreadsheetState(
+  stagehand: Stagehand,
+): Promise<
   | { page: CdpPageLike; provider: SpreadsheetProvider; url: string }
   | { error: SpreadsheetToolError }
 > {
@@ -346,7 +276,10 @@ function isClipboardFailure(payload: Record<string, unknown>): payload is {
 async function activateRange(
   page: CdpPageLike,
   rangeA1: string,
-): Promise<{ ok: true; activeSheetName?: string; activeSelectionA1?: string } | { ok: false; error: SpreadsheetToolError }> {
+): Promise<
+  | { ok: true; activeSheetName?: string; activeSelectionA1?: string }
+  | { ok: false; error: SpreadsheetToolError }
+> {
   const activation = await bridgeResult(page, 'activateRange', [rangeA1]);
   if ('error' in activation) return { ok: false, error: activation.error };
   if (activation.value.success !== true) {
@@ -363,9 +296,13 @@ async function activateRange(
   }
 
   let activeSheetName =
-    typeof activation.value.activeSheetName === 'string' ? activation.value.activeSheetName : undefined;
+    typeof activation.value.activeSheetName === 'string'
+      ? activation.value.activeSheetName
+      : undefined;
   let activeSelectionA1 =
-    typeof activation.value.activeSelectionA1 === 'string' ? activation.value.activeSelectionA1 : undefined;
+    typeof activation.value.activeSelectionA1 === 'string'
+      ? activation.value.activeSelectionA1
+      : undefined;
 
   if (activation.value.nameBoxStillFocused === true) {
     try {
@@ -402,7 +339,10 @@ async function activateRange(
 async function readRangeViaClipboard(
   page: CdpPageLike,
   rangeA1: string,
-): Promise<{ ok: true; values: string[][]; rawTsv: string; metadata: Record<string, unknown> } | { ok: false; error: SpreadsheetToolError }> {
+): Promise<
+  | { ok: true; values: string[][]; rawTsv: string; metadata: Record<string, unknown> }
+  | { ok: false; error: SpreadsheetToolError }
+> {
   const activated = await activateRange(page, rangeA1);
   if ('error' in activated) return { ok: false, error: activated.error };
 
@@ -438,12 +378,63 @@ async function readRangeViaClipboard(
   const parsedResult = await bridgeResult(page, 'parseTsv', [rawText]);
   if ('error' in parsedResult) return { ok: false, error: parsedResult.error };
   const values = normalizeStringGrid(parsedResult.value.values);
-  const rawTsv = typeof parsedResult.value.rawTsv === 'string' ? parsedResult.value.rawTsv : rawText;
+  const rawTsv =
+    typeof parsedResult.value.rawTsv === 'string' ? parsedResult.value.rawTsv : rawText;
 
   const metadataResult = await bridgeResult(page, 'getSelectionMetadata');
   if ('error' in metadataResult) return { ok: false, error: metadataResult.error };
 
   return { ok: true, values, rawTsv, metadata: metadataResult.value };
+}
+
+/**
+ * Unified read function: tries API-based reads first, falls back to clipboard.
+ * - Google Sheets: gviz endpoint
+ * - Excel Web: Microsoft Graph API
+ */
+async function readRange(
+  page: CdpPageLike,
+  rangeA1: string,
+  provider: SpreadsheetProvider,
+): Promise<
+  | { ok: true; values: string[][]; rawTsv: string; metadata: Record<string, unknown> }
+  | { ok: false; error: SpreadsheetToolError }
+> {
+  if (provider === 'google_sheets') {
+    const { sheetName, rangePart } = splitRangeReference(rangeA1);
+    const gvizResult = await readRangeViaGviz(page, sheetName, rangePart || rangeA1);
+    if (gvizResult.ok) {
+      const metadataResult = await bridgeResult(page, 'getSelectionMetadata');
+      const metadata = 'error' in metadataResult ? {} : metadataResult.value;
+      return {
+        ok: true,
+        values: gvizResult.values,
+        rawTsv: '',
+        metadata,
+      };
+    }
+    console.log(`[ORCHESTRATOR] gviz read failed, falling back to clipboard: ${gvizResult}`);
+  }
+
+  if (provider === 'excel_web') {
+    const { sheetName, rangePart } = splitRangeReference(rangeA1);
+    const graphResult = await readRangeViaExcelGraph(page, sheetName, rangePart || rangeA1);
+    if (graphResult.ok) {
+      const metadataResult = await bridgeResult(page, 'getSelectionMetadata');
+      const metadata = 'error' in metadataResult ? {} : metadataResult.value;
+      return {
+        ok: true,
+        values: graphResult.values,
+        rawTsv: '',
+        metadata,
+      };
+    }
+    console.log(
+      `[ORCHESTRATOR] Excel Graph API read failed, falling back to clipboard: ${graphResult}`,
+    );
+  }
+
+  return readRangeViaClipboard(page, rangeA1);
 }
 
 async function writeRangeViaClipboard(
@@ -496,17 +487,11 @@ const PROVIDER_BY_PREFIX: Record<SpreadsheetToolPrefix, SpreadsheetProvider> = {
 };
 
 const cellInputSchema = z.object({
-  cell_a1: z
-    .string()
-    .min(1)
-    .describe('Single A1 cell reference (for example A1 or Sheet1!B2).'),
+  cell_a1: z.string().min(1).describe('Single A1 cell reference (for example A1 or Sheet1!B2).'),
 });
 
 const setCellInputSchema = z.object({
-  cell_a1: z
-    .string()
-    .min(1)
-    .describe('Single A1 cell reference (for example A1 or Sheet1!B2).'),
+  cell_a1: z.string().min(1).describe('Single A1 cell reference (for example A1 or Sheet1!B2).'),
   value: z.any().describe('Cell value to write. Formulas should start with "=".'),
 });
 
@@ -616,6 +601,7 @@ function createPrefixedSpreadsheetTools(stagehand: Stagehand, prefix: Spreadshee
           );
         }
 
+        // Use clipboard for single-cell reads — fast and always fresh after writes
         const dataResult = await readRangeViaClipboard(state.page, cell_a1.trim());
         if ('error' in dataResult) return dataResult.error;
 
@@ -648,6 +634,7 @@ function createPrefixedSpreadsheetTools(stagehand: Stagehand, prefix: Spreadshee
         const writeResult = await writeRangeViaClipboard(state.page, cell_a1.trim(), [[value]]);
         if ('error' in writeResult) return writeResult.error;
 
+        // Always use clipboard for readback after write — API caches may be stale
         const readBack = await readRangeViaClipboard(state.page, cell_a1.trim());
         if ('error' in readBack) return readBack.error;
 
@@ -718,7 +705,9 @@ function createPrefixedSpreadsheetTools(stagehand: Stagehand, prefix: Spreadshee
           success: true,
           provider: state.provider,
           workbook_title:
-            typeof payload.workbookTitle === 'string' ? payload.workbookTitle : await getPageTitle(state.page),
+            typeof payload.workbookTitle === 'string'
+              ? payload.workbookTitle
+              : await getPageTitle(state.page),
           total_sheets: typeof payload.total_sheets === 'number' ? payload.total_sheets : 0,
           sheet_names: Array.isArray(payload.sheet_names)
             ? payload.sheet_names.filter((entry): entry is string => typeof entry === 'string')
@@ -741,7 +730,7 @@ function createPrefixedSpreadsheetTools(stagehand: Stagehand, prefix: Spreadshee
         const lastColumnLetter = columnNumberToLetters(READ_SHEET_COLUMN_LIMIT);
         const sheetPrefix = sheet_name ? `${quoteSheetName(sheet_name)}!` : '';
         const rangeA1 = `${sheetPrefix}A${start_row}:${lastColumnLetter}${endRow}`;
-        const dataResult = await readRangeViaClipboard(state.page, rangeA1);
+        const dataResult = await readRange(state.page, rangeA1, state.provider);
         if ('error' in dataResult) return dataResult.error;
 
         const trimmedValues = trimEmptyGrid(dataResult.values);

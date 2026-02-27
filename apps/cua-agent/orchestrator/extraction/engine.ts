@@ -14,13 +14,9 @@ import {
   extractFromVision,
   identifyItemsFromVision,
   type PaginationCheck,
-  type VisionItem,
+  type ExtractionItem,
 } from './vision';
-import {
-  normalizeLoopItems,
-  validateAndFillExtractionResult,
-  type ParsedSchema,
-} from './schema';
+import { normalizeLoopItems, validateAndFillExtractionResult, type ParsedSchema } from './schema';
 
 export type ExtractionMode = 'spreadsheet' | 'dom' | 'vision';
 
@@ -29,11 +25,11 @@ export type ExtractOutput = {
   mode: ExtractionMode;
 };
 
-function toVisionItems(
+function toExtractionItems(
   rawItems: Array<Record<string, unknown>>,
   knownFingerprints: Set<string>,
-): VisionItem[] {
-  const items: VisionItem[] = [];
+): ExtractionItem[] {
+  const items: ExtractionItem[] = [];
 
   for (const item of rawItems) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
@@ -111,7 +107,10 @@ export async function extractWithSharedStrategy(params: {
         schema && !skipValidation ? validateAndFillExtractionResult(domResult, schema) : domResult,
     };
   } catch (error) {
-    console.warn('[EXTRACTION] DOM extraction failed; falling back to vision:', (error as Error).message);
+    console.warn(
+      '[EXTRACTION] DOM extraction failed; falling back to vision:',
+      (error as Error).message,
+    );
   }
 
   const screenshotDataUrl = await capturePageScreenshot(stagehand, { fullPage: true });
@@ -126,7 +125,9 @@ export async function extractWithSharedStrategy(params: {
   return {
     mode: 'vision',
     scraped_data:
-      schema && !skipValidation ? validateAndFillExtractionResult(visionResult, schema) : visionResult,
+      schema && !skipValidation
+        ? validateAndFillExtractionResult(visionResult, schema)
+        : visionResult,
   };
 }
 
@@ -136,7 +137,7 @@ export async function identifyItemsWithSharedStrategy(params: {
   model: string;
   description: string;
   knownFingerprints: Set<string>;
-}): Promise<{ mode: ExtractionMode; items: VisionItem[] }> {
+}): Promise<{ mode: ExtractionMode; items: ExtractionItem[] }> {
   const { stagehand, llmClient, model, description, knownFingerprints } = params;
 
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
@@ -145,23 +146,45 @@ export async function identifyItemsWithSharedStrategy(params: {
 
   if (spreadsheetProvider) {
     const snapshot = await captureSpreadsheetSnapshot(stagehand);
-    const items = await extractLoopItemsFromSpreadsheetWithLlm({
+
+    console.log({ snapshot });
+
+    const spreadsheetRawItems = await extractLoopItemsFromSpreadsheetWithLlm({
       llmClient,
       model,
       description,
       snapshot,
     });
 
+    if (spreadsheetRawItems.length > 0) {
+      return {
+        mode: 'spreadsheet',
+        items: toExtractionItems(spreadsheetRawItems, knownFingerprints),
+      };
+    }
+
+    console.warn(
+      '[EXTRACTION] Spreadsheet loop discovery returned no items; falling back to vision.',
+    );
+    const screenshotDataUrl = await capturePageScreenshot(stagehand);
+    const visionItems = await identifyItemsFromVision({
+      llmClient,
+      model,
+      screenshotDataUrl,
+      description,
+      knownFingerprints,
+    });
+
     return {
-      mode: 'spreadsheet',
-      items: toVisionItems(items, knownFingerprints),
+      mode: 'vision',
+      items: visionItems,
     };
   }
 
   try {
     const domLoopResult = await extractLoopItemsFromDom({ stagehand, description });
     const normalized = normalizeLoopItems(domLoopResult);
-    const domItems = toVisionItems(normalized.items, knownFingerprints);
+    const domItems = toExtractionItems(normalized.items, knownFingerprints);
     if (domItems.length > 0) {
       return {
         mode: 'dom',
@@ -169,7 +192,10 @@ export async function identifyItemsWithSharedStrategy(params: {
       };
     }
   } catch (error) {
-    console.warn('[EXTRACTION] DOM loop discovery failed; falling back to vision:', (error as Error).message);
+    console.warn(
+      '[EXTRACTION] DOM loop discovery failed; falling back to vision:',
+      (error as Error).message,
+    );
   }
 
   const screenshotDataUrl = await capturePageScreenshot(stagehand);
@@ -188,4 +214,4 @@ export async function identifyItemsWithSharedStrategy(params: {
 }
 
 export { checkForMoreItemsFromVision, capturePageScreenshot };
-export type { PaginationCheck, VisionItem };
+export type { PaginationCheck, ExtractionItem };

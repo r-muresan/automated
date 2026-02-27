@@ -3,12 +3,25 @@ import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
 import type { Stagehand } from '../../stagehand/v3';
 import type { CdpPageLike, SpreadsheetProvider } from '../agent-tools/types';
-import { ensureSpreadsheetBridge, getSpreadsheetPageState, runBridge } from '../agent-tools/spreadsheet';
+import {
+  ensureSpreadsheetBridge,
+  getSpreadsheetPageState,
+  runBridge,
+  readRangeViaGviz,
+  readRangeViaExcelGraph,
+} from '../agent-tools/spreadsheet';
+import {
+  normalizeStringGrid,
+  trimEmptyGrid,
+  escapePipeCell,
+  quoteSheetName,
+  splitRangeReference,
+} from '../agent-tools/spreadsheet/shared-utils';
 import type { ParsedSchema } from './schema';
 import { buildZodObjectFromMap } from './schema';
 import { parseJsonFromText } from './common';
 
-const SPREADSHEET_PREVIEW_MAX_ROWS = 80;
+const SPREADSHEET_PREVIEW_MAX_ROWS = 50;
 const SPREADSHEET_PREVIEW_LAST_COLUMN = 'Z';
 
 type SpreadsheetSnapshot = {
@@ -26,37 +39,6 @@ type SpreadsheetSnapshot = {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
-
-function normalizeStringGrid(values: unknown): string[][] {
-  if (!Array.isArray(values)) return [];
-  return values
-    .filter((row): row is unknown[] => Array.isArray(row))
-    .map((row) => row.map((cell) => (cell == null ? '' : typeof cell === 'string' ? cell : String(cell))));
-}
-
-function trimEmptyGrid(values: string[][]): string[][] {
-  if (!values.length) return [];
-  let lastRowIndex = values.length - 1;
-  while (lastRowIndex >= 0 && values[lastRowIndex].every((cell) => cell.trim() === '')) {
-    lastRowIndex -= 1;
-  }
-  if (lastRowIndex < 0) return [];
-  const rows = values.slice(0, lastRowIndex + 1);
-  let lastColIndex = 0;
-  for (const row of rows) {
-    for (let col = row.length - 1; col >= 0; col -= 1) {
-      if (row[col] && row[col].trim() !== '') {
-        lastColIndex = Math.max(lastColIndex, col);
-        break;
-      }
-    }
-  }
-  return rows.map((row) => row.slice(0, lastColIndex + 1));
-}
-
-function escapePipeCell(value: string): string {
-  return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 }
 
 function formatTable(values: string[][]): string {
@@ -79,22 +61,35 @@ function formatTable(values: string[][]): string {
   return lines.join('\n');
 }
 
-function quoteSheetName(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  if (/^[A-Za-z0-9_]+$/.test(trimmed)) return trimmed;
-  return `'${trimmed.replace(/'/g, "''")}'`;
+function parseCellAddress(value: string): { row: number } | null {
+  const match = /^\$?[A-Za-z]{1,5}\$?(\d{1,7})$/.exec(value.trim());
+  if (!match) return null;
+  const row = Number(match[1]);
+  if (!Number.isInteger(row) || row < 1) return null;
+  return { row };
 }
 
-function looksLikeRangeA1(value: string): boolean {
-  return /^'?[^'!]*'?!?\$?[A-Za-z]{1,5}\$?\d{1,7}(?::\$?[A-Za-z]{1,5}\$?\d{1,7})?$/i.test(
-    value.trim(),
-  );
-}
-
-function buildDefaultRangeA1(sheetName: string): string {
+function buildWindowRangeA1(sheetName: string, startRow: number): string {
   const sheetPrefix = sheetName ? `${quoteSheetName(sheetName)}!` : '';
-  return `${sheetPrefix}A1:${SPREADSHEET_PREVIEW_LAST_COLUMN}${SPREADSHEET_PREVIEW_MAX_ROWS}`;
+  const endRow = startRow + SPREADSHEET_PREVIEW_MAX_ROWS - 1;
+  return `${sheetPrefix}A${startRow}:${SPREADSHEET_PREVIEW_LAST_COLUMN}${endRow}`;
+}
+
+function resolveSampledRangeA1(activeSelectionA1: string, activeSheetName: string): string {
+  const trimmedSelection = activeSelectionA1.trim();
+  if (!trimmedSelection) {
+    return buildWindowRangeA1(activeSheetName, 1);
+  }
+
+  const { sheetName, rangePart } = splitRangeReference(trimmedSelection);
+  const [leftCell] = rangePart.split(':', 1);
+  const parsedCell = parseCellAddress(leftCell ?? '');
+  if (!parsedCell) {
+    return buildWindowRangeA1(activeSheetName, 1);
+  }
+
+  const targetSheet = sheetName || activeSheetName;
+  return buildWindowRangeA1(targetSheet, parsedCell.row);
 }
 
 async function bridgeCall(
@@ -113,12 +108,14 @@ async function bridgeCall(
 async function activateRange(page: CdpPageLike, rangeA1: string): Promise<void> {
   const activation = await bridgeCall(page, 'activateRange', [rangeA1]);
   if (activation.success === false) {
-    const message = typeof activation.message === 'string' ? activation.message : 'Failed to activate range.';
+    const message =
+      typeof activation.message === 'string' ? activation.message : 'Failed to activate range.';
     throw new Error(message);
   }
 
   if (activation.nameBoxStillFocused === true) {
     await page.keyPress('Enter');
+    await new Promise((resolve) => setTimeout(resolve, 90));
   }
 }
 
@@ -127,6 +124,7 @@ async function readRangeViaClipboard(page: CdpPageLike, rangeA1: string): Promis
 
   const keyCombo = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
   await page.keyPress(keyCombo);
+  await new Promise((resolve) => setTimeout(resolve, 100));
 
   const clipboardResult = await bridgeCall(page, 'readClipboardText');
   if (clipboardResult.success === false) {
@@ -142,7 +140,32 @@ async function readRangeViaClipboard(page: CdpPageLike, rangeA1: string): Promis
   return normalizeStringGrid(parsed.values);
 }
 
-export async function captureSpreadsheetSnapshot(stagehand: Stagehand): Promise<SpreadsheetSnapshot> {
+async function readRangeViaApi(
+  page: CdpPageLike,
+  provider: SpreadsheetProvider,
+  rangeA1: string,
+): Promise<string[][]> {
+  const { sheetName, rangePart } = splitRangeReference(rangeA1);
+  const rangeOnly = rangePart || rangeA1;
+
+  if (provider === 'google_sheets') {
+    const result = await readRangeViaGviz(page, sheetName, rangeOnly);
+    if (result.ok) return result.values;
+    console.log(`[ORCHESTRATOR] Extraction gviz read failed, falling back to clipboard: ${result}`);
+  } else if (provider === 'excel_web') {
+    const result = await readRangeViaExcelGraph(page, sheetName, rangeOnly);
+    if (result.ok) return result.values;
+    console.log(
+      `[ORCHESTRATOR] Extraction Excel Graph API read failed, falling back to clipboard: ${result}`,
+    );
+  }
+
+  return readRangeViaClipboard(page, rangeA1);
+}
+
+export async function captureSpreadsheetSnapshot(
+  stagehand: Stagehand,
+): Promise<SpreadsheetSnapshot> {
   const state = await getSpreadsheetPageState(stagehand);
   if ('error' in state) {
     throw new Error(state.error.error.message);
@@ -159,18 +182,17 @@ export async function captureSpreadsheetSnapshot(stagehand: Stagehand): Promise<
   const activeSheetName =
     typeof workbookInfo.active_sheet === 'string' && workbookInfo.active_sheet.trim().length > 0
       ? workbookInfo.active_sheet
-      : sheetNames[0] ?? '';
+      : (sheetNames[0] ?? '');
 
   const activeSelectionA1 =
-    typeof workbookInfo.activeSelectionA1 === 'string' && workbookInfo.activeSelectionA1.trim().length > 0
+    typeof workbookInfo.activeSelectionA1 === 'string' &&
+    workbookInfo.activeSelectionA1.trim().length > 0
       ? workbookInfo.activeSelectionA1.trim()
       : '';
 
-  const sampledRangeA1 = looksLikeRangeA1(activeSelectionA1)
-    ? activeSelectionA1
-    : buildDefaultRangeA1(activeSheetName);
+  const sampledRangeA1 = resolveSampledRangeA1(activeSelectionA1, activeSheetName);
 
-  const values = trimEmptyGrid(await readRangeViaClipboard(state.page, sampledRangeA1));
+  const values = trimEmptyGrid(await readRangeViaApi(state.page, state.provider, sampledRangeA1));
 
   return {
     provider: state.provider,
@@ -179,7 +201,8 @@ export async function captureSpreadsheetSnapshot(stagehand: Stagehand): Promise<
       typeof workbookInfo.workbookTitle === 'string' && workbookInfo.workbookTitle.trim().length > 0
         ? workbookInfo.workbookTitle
         : '',
-    totalSheets: typeof workbookInfo.total_sheets === 'number' ? workbookInfo.total_sheets : sheetNames.length,
+    totalSheets:
+      typeof workbookInfo.total_sheets === 'number' ? workbookInfo.total_sheets : sheetNames.length,
     sheetNames,
     activeSheetName,
     activeSelectionA1,
@@ -227,10 +250,7 @@ export async function extractFromSpreadsheetWithLlm(params: {
     `You are extracting data from a spreadsheet snapshot.\n\n` +
     `Goal:\n${dataExtractionGoal}\n\n` +
     `Spreadsheet metadata:\n` +
-    `- Provider: ${snapshot.provider}\n` +
-    `- Workbook title: ${snapshot.workbookTitle || '(unknown)'}\n` +
-    `- Active sheet: ${snapshot.activeSheetName || '(unknown)'}\n` +
-    `- Active selection: ${snapshot.activeSelectionA1 || '(none)'}\n` +
+    `- Sheet name: ${snapshot.activeSheetName || '(unknown)'}\n` +
     `- Sampled range: ${snapshot.sampledRangeA1}\n` +
     `- Total sheets: ${snapshot.totalSheets}\n\n` +
     `Table preview:\n${snapshot.tablePreview}\n\n` +
@@ -286,8 +306,6 @@ export async function extractLoopItemsFromSpreadsheetWithLlm(params: {
     `You are identifying loop items from a spreadsheet snapshot.\n\n` +
     `Find all rows/items matching this description: "${description}".\n\n` +
     `Spreadsheet metadata:\n` +
-    `- Provider: ${snapshot.provider}\n` +
-    `- Workbook title: ${snapshot.workbookTitle || '(unknown)'}\n` +
     `- Active sheet: ${snapshot.activeSheetName || '(unknown)'}\n` +
     `- Sampled range: ${snapshot.sampledRangeA1}\n\n` +
     `Table preview:\n${snapshot.tablePreview}\n\n` +

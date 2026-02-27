@@ -6,4 +6,6 @@ export {
   getSpreadsheetPageState,
   runBridge,
   spreadsheetToolError,
+  readRangeViaGviz,
+  readRangeViaExcelGraph,
 } from './bridge';

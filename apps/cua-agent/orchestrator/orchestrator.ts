@@ -823,11 +823,11 @@ export class OrchestratorAgent {
           cachedInputTokens: Number.isFinite(stepCachedInputTokens) ? stepCachedInputTokens : 0,
           outputTokens: Number.isFinite(stepOutputTokens) ? stepOutputTokens : 0,
         });
-        if (toolIndex < toolResults.length) {
-          console.log(
-            `[ORCHESTRATOR] Tool result "${toolName}": ${this.summarizeToolResultForLog(toolResults[toolIndex])}`,
-          );
-        }
+        // if (toolIndex < toolResults.length) {
+        //   console.log(
+        //     `[ORCHESTRATOR] Tool result "${toolName}": ${this.summarizeToolResultForLog(toolResults[toolIndex])}`,
+        //   );
+        // }
       }
     };
 
@@ -997,9 +997,7 @@ export class OrchestratorAgent {
             instruction: conditionInstruction,
             maxSteps: 10,
             callbacks: {
-              prepareStep: this.buildPrepareStepForActiveTools(
-                `executeConditionalStep:${index}`,
-              ),
+              prepareStep: this.buildPrepareStepForActiveTools(`executeConditionalStep:${index}`),
             },
             output: z.object({
               conditionMet: z.boolean().describe('Whether the condition is met'),

@@ -14,5 +14,5 @@ export {
   type ExtractOutput,
   type ExtractionMode,
   type PaginationCheck,
-  type VisionItem,
+  type ExtractionItem,
 } from './engine';

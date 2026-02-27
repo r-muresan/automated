@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { buildZodObjectFromMap, type ParsedSchema } from './schema';
 import { parseJsonFromText } from './common';
 
-export interface VisionItem {
+export interface ExtractionItem {
   fingerprint: string;
   data: Record<string, unknown>;
 }
@@ -21,7 +21,7 @@ export async function identifyItemsFromVision(params: {
   screenshotDataUrl: string;
   description: string;
   knownFingerprints: Set<string>;
-}): Promise<VisionItem[]> {
+}): Promise<ExtractionItem[]> {
   const { llmClient, model, screenshotDataUrl, description, knownFingerprints } = params;
 
   const itemsSchema = z.object({ items: z.array(z.record(z.string(), z.unknown())) });
@@ -53,7 +53,7 @@ Return a JSON object with an "items" array where each element is an object with 
     return [];
   }
 
-  const items: VisionItem[] = [];
+  const items: ExtractionItem[] = [];
   for (const item of parsed.items) {
     if (!item || typeof item !== 'object') continue;
     const normalizedItem = item as Record<string, unknown>;
