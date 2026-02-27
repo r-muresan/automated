@@ -32,7 +32,7 @@ import {
   getSpreadsheetProvider,
   type CredentialHandoffRequest,
 } from './agent-tools';
-import { extractWithLlm, normalizeLoopItems, parseSchemaMap } from './extraction';
+import { extractWithSharedStrategy, parseSchemaMap } from './extraction';
 import { executeLoopStep, type LoopDeps } from './loop';
 import {
   acquireBrowserbaseSessionCreateLease,
@@ -567,12 +567,11 @@ export class OrchestratorAgent {
 
     try {
       this.assertNotAborted();
-      const page = this.stagehand.context.activePage() || this.stagehand.context.pages()[0];
       const schema = parseSchemaMap(step.dataSchema);
-      const result = await extractWithLlm({
+      const result = await extractWithSharedStrategy({
+        stagehand: this.stagehand,
         llmClient: this.openai,
         model: this.resolveModels().extract,
-        page,
         dataExtractionGoal: contextualInstruction,
         schema,
         context,

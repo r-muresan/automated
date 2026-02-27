@@ -27,6 +27,18 @@ function withLlmTimeout<T>(promise: Promise<T>, operation: string): Promise<T> {
   return withTimeout(promise, timeoutMs, `LLM ${operation}`);
 }
 
+function shouldUseTemperature(modelName: string): boolean {
+  const normalized = String(modelName || "").toLowerCase();
+  if (normalized.includes("gpt-5")) return false;
+  if (normalized.includes("gemini-2.5")) return false;
+  if (/(^|\/)o[134]([\-./]|$)/i.test(normalized)) return false;
+  return true;
+}
+
+function resolveInferenceTemperature(modelName: string): number | undefined {
+  return shouldUseTemperature(modelName) ? 0.1 : undefined;
+}
+
 export async function extract<T extends StagehandZodObject>({
   instruction,
   domElements,
@@ -61,7 +73,7 @@ export async function extract<T extends StagehandZodObject>({
   type MetadataResponse = z.infer<typeof metadataSchema>;
 
   const isUsingAnthropic = llmClient.type === "anthropic";
-  const isGPT5 = llmClient.modelName.includes("gpt-5"); // TODO: remove this as we update support for gpt-5 configuration options
+  const temperature = resolveInferenceTemperature(llmClient.modelName);
 
   const extractCallMessages: ChatMessage[] = [
     buildExtractSystemPrompt(isUsingAnthropic, userProvidedInstructions),
@@ -92,7 +104,7 @@ export async function extract<T extends StagehandZodObject>({
           schema,
           name: "Extraction",
         },
-        temperature: isGPT5 ? 1 : 0.1,
+        temperature,
         top_p: 1,
         frequency_penalty: 0,
         presence_penalty: 0,
@@ -159,7 +171,7 @@ export async function extract<T extends StagehandZodObject>({
           name: "Metadata",
           schema: metadataSchema,
         },
-        temperature: isGPT5 ? 1 : 0.1,
+        temperature,
         top_p: 1,
         frequency_penalty: 0,
         presence_penalty: 0,
@@ -252,7 +264,7 @@ export async function observe({
   logInferenceToFile?: boolean;
   supportedActions?: string[];
 }) {
-  const isGPT5 = llmClient.modelName.includes("gpt-5"); // TODO: remove this as we update support for gpt-5 configuration options
+  const temperature = resolveInferenceTemperature(llmClient.modelName);
 
   const observeSchema = z.object({
     elements: z
@@ -322,7 +334,7 @@ export async function observe({
         schema: observeSchema,
         name: "Observation",
       },
-      temperature: isGPT5 ? 1 : 0.1,
+      temperature,
       top_p: 1,
       frequency_penalty: 0,
       presence_penalty: 0,
@@ -399,7 +411,7 @@ export async function act({
   logger: (message: LogLine) => void;
   logInferenceToFile?: boolean;
 }) {
-  const isGPT5 = llmClient.modelName.includes("gpt-5"); // TODO: remove this as we update support for gpt-5 configuration options
+  const temperature = resolveInferenceTemperature(llmClient.modelName);
 
   const actSchema = z.object({
     elementId: z
@@ -462,7 +474,7 @@ export async function act({
         schema: actSchema,
         name: "act",
       },
-      temperature: isGPT5 ? 1 : 0.1,
+      temperature,
       top_p: 1,
       frequency_penalty: 0,
       presence_penalty: 0,

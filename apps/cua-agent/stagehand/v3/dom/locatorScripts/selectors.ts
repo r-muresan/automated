@@ -18,7 +18,7 @@ const collectCssMatches = (selector: string, limit: number): Element[] => {
     seenRoots.add(root);
 
     try {
-      const matches = root.querySelectorAll(selector);
+      const matches = Array.from(root.querySelectorAll(selector));
       for (const element of matches) {
         if (seenElements.has(element)) continue;
         seenElements.add(element);
@@ -104,7 +104,7 @@ export function resolveCssSelectorPierce(
     seenRoots.add(root);
 
     try {
-      const matches = root.querySelectorAll(selector);
+      const matches = Array.from(root.querySelectorAll(selector));
       for (const element of matches) {
         if (seenElements.has(element)) continue;
         seenElements.add(element);

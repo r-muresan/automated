@@ -2,8 +2,10 @@ import OpenAI from 'openai';
 import type { Stagehand } from '../stagehand/v3';
 import type { LoopStep, Step, OrchestratorEvent, LoopContext } from '../types';
 import {
-  identifyItemsFromVision,
+  capturePageScreenshot,
   checkForMoreItemsFromVision,
+  identifyItemsWithSharedStrategy,
+  type ExtractionMode,
   type VisionItem,
 } from './extraction';
 import {
@@ -47,17 +49,6 @@ function resolveCuaModelName(modelName: string): string {
 function resolveOpenRouterModelName(modelName: string): string {
   const normalized = resolveCuaModelName(modelName);
   return normalized.startsWith('openai/') ? normalized : `openai/${normalized}`;
-}
-
-// ---------------------------------------------------------------------------
-// Page utilities (no DOM, no page.evaluate)
-// ---------------------------------------------------------------------------
-
-/** Viewport screenshot as a base64 data URL. Uses CDP — not DOM. */
-export async function capturePageScreenshot(stagehand: Stagehand): Promise<string> {
-  const page = stagehand.context.activePage() || stagehand.context.pages()[0];
-  const screenshot = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 70 });
-  return `data:image/jpeg;base64,${Buffer.from(screenshot).toString('base64')}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -163,20 +154,21 @@ export async function executeLoopStep(
       deps.assertNotAborted();
       pageCount++;
 
-      // ── 1. Screenshot (pure vision, no DOM) ────────────────────────────
-      const screenshot = await capturePageScreenshot(deps.stagehand);
-
-      // ── 2. Identify new items via vision LLM ───────────────────────────
-      const visionItems: VisionItem[] = await identifyItemsFromVision({
+      // ── 1. Identify new items via shared extraction strategy ────────────
+      const { mode: extractionMode, items: visionItems }: {
+        mode: ExtractionMode;
+        items: VisionItem[];
+      } = await identifyItemsWithSharedStrategy({
+        stagehand: deps.stagehand,
         llmClient: deps.openai,
         model: deps.models.extract,
-        screenshotDataUrl: screenshot,
         description: step.description,
         knownFingerprints: processedFingerprints,
       });
 
       console.log(
         `[VISION_LOOP] Page ${pageCount}: ${visionItems.length} new item(s) ` +
+          `via ${extractionMode} extraction ` +
           `(${processedFingerprints.size} already processed)`,
       );
 
@@ -252,6 +244,11 @@ export async function executeLoopStep(
       }
 
       // ── 4. Check for more items (vision, no DOM) ────────────────────────
+      if (extractionMode === 'spreadsheet') {
+        console.log('[VISION_LOOP] Spreadsheet extraction mode has no pagination search — stopping');
+        break;
+      }
+
       const freshScreenshot = await capturePageScreenshot(deps.stagehand);
       const pagination = await checkForMoreItemsFromVision({
         llmClient: deps.openai,
