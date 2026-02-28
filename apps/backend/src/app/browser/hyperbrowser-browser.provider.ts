@@ -290,9 +290,11 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
     });
   }
 
-  async createContext(): Promise<string> {
+  async createContext({ name }: { name: string }): Promise<string> {
     const client = this.requireClient();
-    const profile = await client.profiles.create();
+    const profile = await client.profiles.create({
+      name,
+    });
     return profile.id;
   }
 

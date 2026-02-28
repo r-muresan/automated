@@ -203,7 +203,7 @@ export class WorkflowExecutionService {
 
   async startWorkflow(
     workflowId: string,
-    email?: string,
+    email: string,
     inputValues?: Record<string, string>,
     requireBrowserbase = false,
   ): Promise<WorkflowExecutionCommandResponse> {
@@ -244,19 +244,9 @@ export class WorkflowExecutionService {
       await this.browserSessionService.assertBrowserMinutesRemaining(email);
     }
 
-    // Get user context if email is provided
-    let browserbaseContextId: string | undefined;
-    let hyperbrowserProfileId: string | undefined;
-    if (email) {
-      const user = await this.prisma.user.findUnique({ where: { email } });
-      if (user) {
-        const userContext = await this.prisma.userContext.findUnique({
-          where: { userId: user.id },
-        });
-        browserbaseContextId = userContext?.browserbaseContextId;
-        hyperbrowserProfileId = userContext?.hyperbrowserProfileId ?? undefined;
-      }
-    }
+    const userBrowserIdentity = await this.browserSessionService.getOrCreateUserBrowserIdentity(email);
+
+    const hyperbrowserProfileId = userBrowserIdentity?.hyperbrowserProfileId ?? undefined;
 
     let agentSteps = this.buildStepTree(workflow.steps);
     if (agentSteps.length === 0) {
@@ -299,28 +289,26 @@ export class WorkflowExecutionService {
       message: 'Workflow started',
     });
 
-    // Create local browser session only when managed browser is not configured
-    let localCdpUrl: string | undefined;
-    if (!process.env.HYPERBROWSER_API_KEY) {
-      const session = await this.browserProvider.createSession({
-        contextId: browserbaseContextId,
-      });
-      const debugInfo = await this.browserProvider.getDebugInfo(session.id);
-      localCdpUrl = debugInfo.browserWsUrl;
-      if (!localCdpUrl) {
-        throw new Error('Failed to get browser CDP URL for local session');
-      }
-      this.workflowLocalSessions.set(workflowId, session.id);
-      console.log(
-        `[WORKFLOW] Created local browser session ${session.id} for workflow ${workflowId}`,
-      );
-    }
+    // // Create local browser session only when managed browser is not configured
+    // let localCdpUrl: string | undefined;
+    // if (!process.env.HYPERBROWSER_API_KEY) {
+    //   const session = await this.browserProvider.createSession({
+    //     contextId: hyperbrowserProfileId,
+    //   });
+    //   const debugInfo = await this.browserProvider.getDebugInfo(session.id);
+    //   localCdpUrl = session.browserWsUrl;
+    //   if (!localCdpUrl) {
+    //     throw new Error('Failed to get browser CDP URL for local session');
+    //   }
+    //   this.workflowLocalSessions.set(workflowId, session.id);
+    //   console.log(
+    //     `[WORKFLOW] Created local browser session ${session.id} for workflow ${workflowId}`,
+    //   );
+    // }
 
     const localSessionId = this.workflowLocalSessions.get(workflowId);
     const orchestrator = new OrchestratorAgent({
-      browserbaseContextId,
       hyperbrowserProfileId,
-      localCdpUrl,
       localSessionId: localSessionId ?? undefined,
       onEvent: (event) => this.handleOrchestratorEvent(workflowId, event),
       onCredentialRequest: (request) => this.handleCredentialRequest(workflowId, request),
@@ -898,11 +886,7 @@ export class WorkflowExecutionService {
     }
   }
 
-  private addLog(
-    workflowId: string,
-    entry: WorkflowLogEntry,
-    options?: { persist?: boolean },
-  ) {
+  private addLog(workflowId: string, entry: WorkflowLogEntry, options?: { persist?: boolean }) {
     const logs = this.executionLogs.get(workflowId) ?? [];
     logs.push(entry);
     if (logs.length > LOG_LIMIT) {

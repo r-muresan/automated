@@ -121,9 +121,11 @@ export class BrowserSessionService implements OnModuleInit {
     if (!userContext) {
       // Only create managed-browser profile context when using Hyperbrowser provider
       if (this.browserProvider instanceof HyperbrowserBrowserProvider) {
-        const profileId = await (
-          this.browserProvider as HyperbrowserBrowserProvider
-        ).createContext();
+        const profileId = await (this.browserProvider as HyperbrowserBrowserProvider).createContext(
+          {
+            name: email,
+          },
+        );
 
         userContext = await this.prisma.userContext.upsert({
           where: { userId: user.id },
@@ -146,9 +148,9 @@ export class BrowserSessionService implements OnModuleInit {
       this.browserProvider instanceof HyperbrowserBrowserProvider &&
       !userContext.hyperbrowserProfileId
     ) {
-      const profileId = await (
-        this.browserProvider as HyperbrowserBrowserProvider
-      ).createContext();
+      const profileId = await (this.browserProvider as HyperbrowserBrowserProvider).createContext({
+        name: email,
+      });
 
       userContext = await this.prisma.userContext.update({
         where: { userId: user.id },
@@ -178,8 +180,8 @@ export class BrowserSessionService implements OnModuleInit {
     ]);
     const contextId =
       this.browserProvider instanceof HyperbrowserBrowserProvider
-        ? userBrowserIdentity?.hyperbrowserProfileId ?? undefined
-        : userBrowserIdentity?.browserbaseContextId ?? undefined;
+        ? (userBrowserIdentity?.hyperbrowserProfileId ?? undefined)
+        : (userBrowserIdentity?.browserbaseContextId ?? undefined);
 
     let leaseConfirmed = false;
     let createdSessionId: string | undefined;
