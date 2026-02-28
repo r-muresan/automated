@@ -51,7 +51,7 @@ https://github.com/user-attachments/assets/8f9ecb26-5b42-4b4c-a1ca-ab2ea2589992
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/useautomated/automated.git
+git clone https://github.com/r-muresan/automated
 cd automated
 ```
 
