@@ -113,6 +113,22 @@ export default function WatchWorkflowPage() {
     executionStatus?.status === 'completed' ||
     executionStatus?.status === 'failed' ||
     executionStatus?.status === 'stopped';
+  const browserOverlayTitle =
+    executionStatus?.status === 'completed'
+      ? 'Workflow Completed'
+      : executionStatus?.status === 'failed'
+        ? 'Workflow Failed'
+        : executionStatus?.status === 'stopped'
+          ? 'Workflow Stopped'
+          : null;
+  const browserOverlayDescription =
+    executionStatus?.status === 'completed'
+      ? 'This run finished successfully.'
+      : executionStatus?.status === 'failed'
+        ? executionStatus.error || 'This run ended with an error.'
+        : executionStatus?.status === 'stopped'
+          ? 'This run was stopped before completion.'
+          : null;
 
   useEffect(() => {
     actionsRef.current = executionActions;
@@ -274,19 +290,14 @@ export default function WatchWorkflowPage() {
       <Box flex={1} display="flex" flexDir="column" p={4} minH={0} w="full" mx="auto" maxW="1400px">
         <HStack justify="space-between" mb={4}>
           <Text fontSize="3xl" fontWeight="bold">
-            {isFinished
-              ? executionStatus?.status === 'completed'
-                ? 'Workflow Completed'
-                : executionStatus?.status === 'failed'
-                  ? 'Workflow Failed'
-                  : 'Workflow Stopped'
-              : 'Watching Workflow'}
+            Watching Workflow
           </Text>
 
           <HStack gap={3}>
             <Button size="sm" variant="outline" onClick={() => router.push('/')}>
               Back
             </Button>
+
             {isRunning && (
               <Button
                 size="sm"
@@ -305,9 +316,11 @@ export default function WatchWorkflowPage() {
             <VNCBrowser
               contentRef={contentRef}
               liveViewUrl={stableLiveViewUrl}
-              isLoading={!stableLiveViewUrl}
+              isLoading={isRunning && !stableLiveViewUrl}
               readOnly={!canUserControlBrowser}
               freeze={isFinished}
+              overlayTitle={browserOverlayTitle}
+              overlayDescription={browserOverlayDescription}
             />
           </Box>
           <Box w="360px" p={4} overflowY="auto">

@@ -574,15 +574,16 @@ export class OrchestratorAgent {
       `[EXTRACT] start step_index=${index} provider=${provider ?? 'none'} url="${activeUrl}" description="${step.description}"`,
     );
 
-    console.log(context);
-
     const contextualInstruction =
       context && context.item != null
         ? `Context item: ${JSON.stringify(context.item)}\nInstruction: ${step.description}`
         : step.description;
 
     const pageReadyStart = Date.now();
-    await waitForPageReady(this.stagehand, undefined, this.assertNotAborted.bind(this));
+    if (!provider) {
+      await waitForPageReady(this.stagehand, undefined, this.assertNotAborted.bind(this));
+    }
+
     console.log(
       `[EXTRACT] page-ready duration_ms=${Date.now() - pageReadyStart} step_index=${index}`,
     );

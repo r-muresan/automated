@@ -1,6 +1,62 @@
 import type { Stagehand } from '../stagehand/v3';
 import { LOADING_SELECTORS, getDomStabilityJs } from './page-scripts';
 
+const PAGE_READY_OPERATION_TIMEOUT_MS = 1500;
+
+type PageLike = {
+  evaluate: <T = unknown>(expression: string) => Promise<T>;
+  locator: (selector: string) => LocatorLike;
+};
+
+type LocatorLike = {
+  count: () => Promise<number>;
+  nth: (index: number) => LocatorElementLike;
+};
+
+type LocatorElementLike = {
+  isVisible: () => Promise<boolean>;
+};
+
+type LoadingIndicatorInfo = {
+  tag: string;
+  className: string;
+  id: string;
+  width: number;
+  height: number;
+  animationName: string;
+  opacity: string;
+};
+
+function getLoadingIndicatorInfoJs(selector: string, index: number): string {
+  return `(() => {
+    const elements = Array.from(document.querySelectorAll(${JSON.stringify(selector)}));
+    const node = elements[${index}];
+    if (!(node instanceof Element)) return null;
+    const style = window.getComputedStyle(node);
+    const rect = node.getBoundingClientRect();
+    const cn = node.className;
+    const className = typeof cn === 'string' ? cn : '';
+    return {
+      tag: node.tagName.toLowerCase(),
+      className,
+      id: node.id || '',
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      animationName: style.animationName,
+      opacity: style.opacity,
+    };
+  })()`;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timeout after ${timeoutMs}ms`)), timeoutMs),
+    ),
+  ]);
+}
+
 export async function waitForPageReady(
   stagehand: Stagehand,
   options?: {
@@ -59,8 +115,9 @@ export async function waitForPageReady(
   );
 }
 
-export async function waitForLoadingIndicatorsGone(page: any, timeoutMs: number): Promise<void> {
+export async function waitForLoadingIndicatorsGone(page: PageLike, timeoutMs: number): Promise<void> {
   const startTime = Date.now();
+  const operationTimeoutMs = Math.min(PAGE_READY_OPERATION_TIMEOUT_MS, Math.max(250, timeoutMs));
 
   const ariaSelectors = new Set([
     '[role="progressbar"]',
@@ -77,30 +134,26 @@ export async function waitForLoadingIndicatorsGone(page: any, timeoutMs: number)
       const requireAnimation = !ariaSelectors.has(selector);
       try {
         const locator = page.locator(selector);
-        const count = await locator.count();
+        const count = await withTimeout(
+          locator.count(),
+          operationTimeoutMs,
+          `[PAGE_READY] locator.count(${selector})`,
+        );
 
         for (let i = 0; i < count; i++) {
           const el = locator.nth(i);
-          const visible = await el.isVisible().catch(() => false);
+          const visible = await withTimeout(
+            el.isVisible(),
+            operationTimeoutMs,
+            `[PAGE_READY] isVisible(${selector}, ${i})`,
+          ).catch(() => false);
           if (!visible) continue;
 
-          const info = await el
-            .evaluate((node: Element) => {
-              const style = window.getComputedStyle(node);
-              const rect = node.getBoundingClientRect();
-              const cn = node.className;
-              const className = typeof cn === 'string' ? cn : '';
-              return {
-                tag: node.tagName.toLowerCase(),
-                className,
-                id: node.id || '',
-                width: Math.round(rect.width),
-                height: Math.round(rect.height),
-                animationName: style.animationName,
-                opacity: style.opacity,
-              };
-            })
-            .catch(() => null);
+          const info = await withTimeout<LoadingIndicatorInfo | null>(
+            page.evaluate(getLoadingIndicatorInfoJs(selector, i)),
+            operationTimeoutMs,
+            `[PAGE_READY] evaluate(${selector}, ${i})`,
+          ).catch(() => null);
 
           if (!info) continue;
 
@@ -143,15 +196,10 @@ export async function waitForLoadingIndicatorsGone(page: any, timeoutMs: number)
 }
 
 export async function waitForDomStable(
-  page: any,
+  page: PageLike,
   stableMs: number,
   timeoutMs: number,
 ): Promise<void> {
   const js = getDomStabilityJs(stableMs);
-  await Promise.race([
-    page.evaluate(js),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('DOM stability timeout')), timeoutMs),
-    ),
-  ]);
+  await withTimeout(page.evaluate(js), timeoutMs, 'DOM stability');
 }

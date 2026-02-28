@@ -7,6 +7,8 @@ interface VNCBrowserProps {
   isLoading: boolean;
   readOnly?: boolean;
   freeze?: boolean;
+  overlayTitle?: string | null;
+  overlayDescription?: string | null;
 }
 
 export const VNCBrowser = ({
@@ -15,10 +17,13 @@ export const VNCBrowser = ({
   isLoading,
   readOnly = false,
   freeze = false,
+  overlayTitle = null,
+  overlayDescription = null,
 }: VNCBrowserProps) => {
   const interactionBlocked = readOnly || freeze;
   const [iframeLoaded, setIframeLoaded] = useState(false);
-  const showLoading = isLoading || !liveViewUrl || !iframeLoaded;
+  const showTerminalOverlay = Boolean(overlayTitle);
+  const showLoading = !showTerminalOverlay && (isLoading || !liveViewUrl || !iframeLoaded);
 
   useEffect(() => {
     setIframeLoaded(false);
@@ -55,7 +60,9 @@ export const VNCBrowser = ({
           height="full"
           border="none"
           opacity={showLoading ? 0 : 1}
-          transition="opacity 0.15s ease"
+          filter={showTerminalOverlay ? 'blur(3px) saturate(0.85)' : 'none'}
+          transform={showTerminalOverlay ? 'scale(1.01)' : 'scale(1)'}
+          transition="opacity 0.15s ease, filter 0.3s ease, transform 0.3s ease"
           onLoad={() => setIframeLoaded(true)}
           {...({
             src: liveViewUrl,
@@ -66,6 +73,30 @@ export const VNCBrowser = ({
           } as any)}
         />
       )}
+      <VStack
+        position="absolute"
+        inset={0}
+        zIndex={2}
+        px={8}
+        bg="rgba(255, 255, 255, 0.88)"
+        backdropFilter="blur(12px)"
+        align="center"
+        justify="center"
+        gap={3}
+        textAlign="center"
+        opacity={showTerminalOverlay ? 1 : 0}
+        pointerEvents={showTerminalOverlay ? 'auto' : 'none'}
+        transition="opacity 0.3s ease"
+      >
+        <Text color="app.snow" fontSize="2xl" fontWeight="bold">
+          {overlayTitle}
+        </Text>
+        {overlayDescription ? (
+          <Text color="app.muted" fontSize="sm" maxW="sm">
+            {overlayDescription}
+          </Text>
+        ) : null}
+      </VStack>
       {showLoading && (
         <VStack
           position="absolute"

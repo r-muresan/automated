@@ -28,9 +28,15 @@ export { LOADING_SELECTORS };
  */
 export function getDomStabilityJs(stableMs: number): string {
   return `
-  () => new Promise((resolve) => {
+  (() => new Promise((resolve) => {
     let lastMutationTime = Date.now();
     let resolved = false;
+    const root = document.body ?? document.documentElement;
+
+    if (!root) {
+      resolve(true);
+      return;
+    }
 
     const observer = new MutationObserver((mutations) => {
       const mutationList = Array.isArray(mutations) ? mutations : [];
@@ -51,7 +57,7 @@ export function getDomStabilityJs(stableMs: number): string {
       }
     });
 
-    observer.observe(document.body, {
+    observer.observe(root, {
       childList: true,
       subtree: true,
       attributes: true,
@@ -71,6 +77,6 @@ export function getDomStabilityJs(stableMs: number): string {
     };
 
     setTimeout(checkStability, 50);
-  })
+  }))()
   `;
 }

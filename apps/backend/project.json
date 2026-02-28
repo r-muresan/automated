@@ -6,6 +6,14 @@
   "targets": {
     "build": {
       "executor": "nx:run-commands",
+      "inputs": [
+        "production",
+        "^production",
+        "{workspaceRoot}/libs/prisma/src/**/*",
+        "{workspaceRoot}/libs/prisma/prisma/**/*",
+        "{workspaceRoot}/libs/prisma/generated/prisma/**/*",
+        "{workspaceRoot}/libs/prisma/generated/prisma-sqlite/**/*"
+      ],
       "options": {
         "command": "webpack-cli build",
         "args": ["--node-env=production"],
