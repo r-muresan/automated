@@ -4,7 +4,6 @@ import { chromium } from 'playwright-core';
 import { Browserbase, toFile } from '@browserbasehq/sdk';
 import {
   BrowserProvider,
-  BrowserHandle,
   CreateBrowserSessionOptions,
   BrowserSessionResult,
   InitSessionOptions,
@@ -244,20 +243,6 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
     } catch (error) {
       console.error('[BrowserbaseBrowserProvider] Error initializing session:', error);
       return { pages: [] };
-    }
-  }
-
-  async connectForKeepalive(sessionId: string, connectUrl?: string): Promise<BrowserHandle | null> {
-    try {
-      const wsUrl =
-        connectUrl ?? `wss://connect.browserbase.com?apiKey=${this.apiKey}&sessionId=${sessionId}`;
-      return await chromium.connectOverCDP(wsUrl);
-    } catch (error) {
-      console.error(
-        `[BrowserbaseBrowserProvider] Failed to connect for keepalive: ${sessionId}`,
-        error,
-      );
-      return null;
     }
   }
 

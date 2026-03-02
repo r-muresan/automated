@@ -43,6 +43,7 @@ import {
 dotenv.config();
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+const HYPERBROWSER_DOWNLOAD_PATH = '/tmp/downloads';
 
 const DEFAULT_MODELS = {
   extract: 'google/gemini-2.5-flash',
@@ -317,6 +318,7 @@ export class OrchestratorAgent {
       this.hyperbrowserClient = new Hyperbrowser({ apiKey: hyperbrowserApiKey });
       const hyperbrowserSession = await this.hyperbrowserClient.sessions.create({
         timeoutMinutes: 60,
+        saveDownloads: true,
         enableWebRecording: true,
         enableVideoWebRecording: true,
         profile: profileId
@@ -337,6 +339,8 @@ export class OrchestratorAgent {
         },
         localBrowserLaunchOptions: {
           cdpUrl: hyperbrowserSession.wsEndpoint,
+          acceptDownloads: true,
+          downloadsPath: HYPERBROWSER_DOWNLOAD_PATH,
         },
         experimental: true,
         disableAPI: true,

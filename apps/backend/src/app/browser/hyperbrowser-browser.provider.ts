@@ -1,10 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Hyperbrowser } from '@hyperbrowser/sdk';
 import type { SessionRegion } from '@hyperbrowser/sdk/types';
-import { chromium } from 'playwright-core';
+import { chromium, type Browser } from 'playwright-core';
 import {
   BrowserProvider,
-  BrowserHandle,
   CreateBrowserSessionOptions,
   BrowserSessionResult,
   InitSessionOptions,
@@ -19,6 +18,7 @@ type HyperbrowserRegion = SessionRegion;
 const DEFAULT_HYPERBROWSER_REGION: HyperbrowserRegion = 'us-east';
 const DEFAULT_INITIAL_PAGE_URL = 'https://www.google.com';
 const DEFAULT_INITIAL_PAGE_TITLE = 'Google';
+const HYPERBROWSER_DOWNLOAD_PATH = '/tmp/downloads';
 const REGION_UTC_OFFSET_HOURS: Record<HyperbrowserRegion, number> = {
   'us-east': -5,
   'us-west': -8,
@@ -136,6 +136,9 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
             persistChanges: true,
           }
         : undefined,
+      saveDownloads: true,
+      enableWebRecording: true,
+      enableVideoWebRecording: true,
     });
 
     return {
@@ -222,7 +225,10 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
 
       const session = await client.sessions.get(sessionId);
       const wsUrl = connectUrl ?? session.wsEndpoint;
+
       const browser = await chromium.connectOverCDP(wsUrl);
+      this.enableDownloadBehavior(browser);
+
       const defaultContext = browser.contexts()[0];
       if (!defaultContext) {
         return { pages: [] };
@@ -258,22 +264,6 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
     } catch (error) {
       console.error('[HyperbrowserBrowserProvider] Error initializing session:', error);
       return { pages: [] };
-    }
-  }
-
-  async connectForKeepalive(sessionId: string, connectUrl?: string): Promise<BrowserHandle | null> {
-    const client = this.requireClient();
-
-    try {
-      const session = await client.sessions.get(sessionId);
-      const wsUrl = connectUrl ?? session.wsEndpoint;
-      return await chromium.connectOverCDP(wsUrl);
-    } catch (error) {
-      console.error(
-        `[HyperbrowserBrowserProvider] Failed to connect for keepalive: ${sessionId}`,
-        error,
-      );
-      return null;
     }
   }
 
@@ -332,6 +322,19 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
 
   private async injectInitScript(context: any): Promise<void> {
     await context.addInitScript(INIT_SCRIPT);
+  }
+
+  private async enableDownloadBehavior(browser: Browser): Promise<void> {
+    const cdp = await browser.newBrowserCDPSession();
+    try {
+      await cdp.send('Browser.setDownloadBehavior', {
+        behavior: 'allow',
+        downloadPath: HYPERBROWSER_DOWNLOAD_PATH,
+        eventsEnabled: true,
+      });
+    } finally {
+      await cdp.detach().catch(() => {});
+    }
   }
 
   private async getTargetId(page: any): Promise<string | undefined> {

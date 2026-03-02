@@ -1,10 +1,6 @@
 import { Injectable, ForbiddenException, OnModuleInit, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import {
-  BrowserProvider,
-  BrowserHandle,
-  SessionUploadFile,
-} from '../browser/browser-provider.interface';
+import { BrowserProvider, SessionUploadFile } from '../browser/browser-provider.interface';
 import { HyperbrowserBrowserProvider } from '../browser/hyperbrowser-browser.provider';
 import { acquireBrowserSessionCreateLease, releaseBrowserSession } from 'apps/cua-agent';
 
@@ -34,14 +30,6 @@ function buildCdpWsUrlTemplate(
   }
 }
 
-interface RecordingSession {
-  sessionId: string;
-  startTime: number;
-  browser: BrowserHandle | null;
-  lastPingTime: number;
-  connectUrl?: string;
-}
-
 interface UserBrowserIdentity {
   browserbaseContextId: string | null;
   hyperbrowserProfileId: string | null;
@@ -49,10 +37,6 @@ interface UserBrowserIdentity {
 
 @Injectable()
 export class BrowserSessionService implements OnModuleInit {
-  private activeRecordingSessions = new Map<string, RecordingSession>();
-  private readonly RECORDING_MAX_DURATION_MS = 5 * 60 * 1000;
-  private readonly RECORDING_PING_INTERVAL_MS = 10 * 1000;
-
   constructor(
     private prisma: PrismaService,
     private browserProvider: BrowserProvider,
@@ -64,12 +48,6 @@ export class BrowserSessionService implements OnModuleInit {
         console.error('Error in cleanupExpiredSessions:', err),
       );
     }, 10000);
-
-    setInterval(() => {
-      this.pingActiveRecordingSessions().catch((err) =>
-        console.error('Error in pingActiveRecordingSessions:', err),
-      );
-    }, this.RECORDING_PING_INTERVAL_MS);
   }
 
   async assertBrowserMinutesRemaining(userId: string) {
@@ -278,7 +256,6 @@ export class BrowserSessionService implements OnModuleInit {
       console.log(
         `[BrowserSessionService] Recreating session, stopping existing session ${existingSession.browserbaseSessionId}`,
       );
-      this.stopRecordingKeepalive(existingSession.browserbaseSessionId);
       this.stopSession(existingSession.browserbaseSessionId);
     }
   }
@@ -325,59 +302,21 @@ export class BrowserSessionService implements OnModuleInit {
   }
 
   async startRecordingKeepalive(sessionId: string) {
-    if (this.activeRecordingSessions.has(sessionId)) {
-      return { success: true, message: 'Keepalive already active' };
-    }
-
     try {
-      console.log(`[BrowserSessionService] Starting recording keepalive for session ${sessionId}`);
-      const dbSession = await this.prisma.browserSession.findFirst({
-        where: { browserbaseSessionId: sessionId },
-        select: { connectUrl: true },
-      });
-      const connectUrl = dbSession?.connectUrl ?? undefined;
-      const browser = await this.browserProvider.connectForKeepalive(sessionId, connectUrl);
-
-      this.activeRecordingSessions.set(sessionId, {
-        sessionId,
-        startTime: Date.now(),
-        browser,
-        lastPingTime: Date.now(),
-        connectUrl,
-      });
-
       await this.updateLastUsed(sessionId);
-      return { success: true, message: 'Keepalive started' };
+      return { success: true, message: 'Recording start acknowledged' };
     } catch (error) {
-      console.error(`[BrowserSessionService] Failed to start keepalive for ${sessionId}:`, error);
-      return { success: false, message: 'Failed to start keepalive', error: String(error) };
+      console.error(`[BrowserSessionService] Failed to acknowledge recording start for ${sessionId}:`, error);
+      return { success: false, message: 'Failed to acknowledge recording start', error: String(error) };
     }
   }
 
   async stopRecordingKeepalive(sessionId: string) {
-    const recordingSession = this.activeRecordingSessions.get(sessionId);
-    if (!recordingSession) {
-      return { success: true, message: 'No active keepalive' };
-    }
-
     try {
-      if (recordingSession.browser) {
-        await recordingSession.browser
-          .close()
-          .catch((err: Error) =>
-            console.error(`Error closing browser for session ${sessionId}:`, err),
-          );
-      }
-      this.activeRecordingSessions.delete(sessionId);
-      return { success: true, message: 'Keepalive stopped' };
+      return { success: true, message: 'Recording stop acknowledged' };
     } catch (error) {
-      this.activeRecordingSessions.delete(sessionId);
-      return { success: false, message: 'Error stopping keepalive', error: String(error) };
+      return { success: false, message: 'Failed to acknowledge recording stop', error: String(error) };
     }
-  }
-
-  isRecordingKeepaliveActive(sessionId: string): boolean {
-    return this.activeRecordingSessions.has(sessionId);
   }
 
   async uploadSessionFile(sessionId: string, file: SessionUploadFile) {
@@ -394,48 +333,6 @@ export class BrowserSessionService implements OnModuleInit {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to upload file';
       throw new BadRequestException(message);
-    }
-  }
-
-  private async pingActiveRecordingSessions() {
-    const now = Date.now();
-
-    for (const [sessionId, recordingSession] of this.activeRecordingSessions.entries()) {
-      if (now - recordingSession.startTime > this.RECORDING_MAX_DURATION_MS) {
-        console.log(`Recording session ${sessionId} exceeded max duration, stopping keepalive`);
-        await this.stopRecordingKeepalive(sessionId);
-        continue;
-      }
-
-      try {
-        if (recordingSession.browser && recordingSession.browser.isConnected()) {
-          const contexts = recordingSession.browser.contexts();
-          if (contexts.length > 0) {
-            const pages = contexts[0].pages();
-            if (pages.length > 0) {
-              await pages[0].evaluate(() => 1);
-              recordingSession.lastPingTime = now;
-            }
-          }
-        } else {
-          // Try to reconnect
-          try {
-            const browser = await this.browserProvider.connectForKeepalive(
-              sessionId,
-              recordingSession.connectUrl,
-            );
-            recordingSession.browser = browser;
-            recordingSession.lastPingTime = now;
-          } catch (reconnectError) {
-            console.error(`Failed to reconnect to session ${sessionId}:`, reconnectError);
-            await this.stopRecordingKeepalive(sessionId);
-          }
-        }
-
-        await this.updateLastUsed(sessionId);
-      } catch (error) {
-        console.error(`Error pinging recording session ${sessionId}:`, error);
-      }
     }
   }
 }
