@@ -49,6 +49,7 @@ export interface BrowserSessionRecordingResponse {
 export interface BrowserSessionUploadResponse {
   success: boolean;
   message: string;
+  filePath?: string;
 }
 
 export interface InteractionPayload {

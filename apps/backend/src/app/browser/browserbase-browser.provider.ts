@@ -246,7 +246,10 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
     }
   }
 
-  async uploadSessionFile(sessionId: string, file: SessionUploadFile): Promise<void> {
+  async uploadSessionFile(
+    sessionId: string,
+    file: SessionUploadFile,
+  ): Promise<{ filePath: string }> {
     if (!this.client) {
       throw new Error('Browserbase API key is not configured');
     }
@@ -260,6 +263,7 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
     });
 
     await this.client.sessions.uploads.create(sessionId, { file: uploadFile });
+    return { filePath: `/tmp/uploads/${file.originalname || 'upload.bin'}` };
   }
 
   async createContext(): Promise<string> {

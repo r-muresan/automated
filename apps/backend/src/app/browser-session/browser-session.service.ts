@@ -325,11 +325,15 @@ export class BrowserSessionService implements OnModuleInit {
     }
 
     try {
-      await this.browserProvider.uploadSessionFile(sessionId, file);
+      const result = await this.browserProvider.uploadSessionFile(sessionId, file);
       await this.updateLastUsed(sessionId).catch((err) =>
         console.error('Error updating lastUsedAt after upload:', err),
       );
-      return { success: true, message: 'File uploaded to browser session' };
+      return {
+        success: true,
+        message: 'File uploaded to browser session',
+        filePath: result.filePath,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to upload file';
       throw new BadRequestException(message);

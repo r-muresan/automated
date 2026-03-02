@@ -267,17 +267,22 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
     }
   }
 
-  async uploadSessionFile(sessionId: string, file: SessionUploadFile): Promise<void> {
+  async uploadSessionFile(
+    sessionId: string,
+    file: SessionUploadFile,
+  ): Promise<{ filePath: string }> {
     const client = this.requireClient();
 
     if (!file?.buffer?.length) {
       throw new Error('Uploaded file is empty');
     }
 
-    await client.sessions.uploadFile(sessionId, {
+    const result = await client.sessions.uploadFile(sessionId, {
       fileInput: file.buffer,
       fileName: file.originalname || 'upload.bin',
     });
+
+    return { filePath: (result as any).filePath || `/tmp/uploads/${file.originalname || 'upload.bin'}` };
   }
 
   async createContext({ name }: { name: string }): Promise<string> {

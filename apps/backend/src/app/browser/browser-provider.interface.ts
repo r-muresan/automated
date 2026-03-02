@@ -58,5 +58,8 @@ export abstract class BrowserProvider {
     sessionId: string,
     options?: InitSessionOptions,
   ): Promise<InitSessionResult>;
-  abstract uploadSessionFile(sessionId: string, file: SessionUploadFile): Promise<void>;
+  abstract uploadSessionFile(
+    sessionId: string,
+    file: SessionUploadFile,
+  ): Promise<{ filePath: string }>;
 }

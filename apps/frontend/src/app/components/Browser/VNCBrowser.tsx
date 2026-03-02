@@ -1,5 +1,7 @@
 import { Box, Spinner, Text, VStack } from '@chakra-ui/react';
-import { RefObject, useEffect, useState } from 'react';
+import { RefObject, useCallback, useEffect, useState } from 'react';
+import { FileUploadModal } from './FileUploadModal';
+import { useOptionalBrowser } from '../../../providers/browser-provider';
 
 interface VNCBrowserProps {
   contentRef: RefObject<HTMLDivElement | null>;
@@ -20,6 +22,22 @@ export const VNCBrowser = ({
   overlayTitle = null,
   overlayDescription = null,
 }: VNCBrowserProps) => {
+  const browser = useOptionalBrowser();
+  const sessionId = browser?.sessionId ?? null;
+  const downloadedFiles = browser?.downloadedFiles ?? [];
+  const fileChooserState = browser?.fileChooserState ?? null;
+  const handleFileChooser = browser?.handleFileChooser;
+
+  const onFileChooserAccept = useCallback(
+    (files: string[]) => {
+      void handleFileChooser?.('accept', files);
+    },
+    [handleFileChooser],
+  );
+
+  const onFileChooserCancel = useCallback(() => {
+    void handleFileChooser?.('cancel');
+  }, [handleFileChooser]);
   const interactionBlocked = readOnly || freeze;
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const showTerminalOverlay = Boolean(overlayTitle);
@@ -112,6 +130,17 @@ export const VNCBrowser = ({
             Loading browser...
           </Text>
         </VStack>
+      )}
+
+      {sessionId && fileChooserState && (
+        <FileUploadModal
+          isOpen={true}
+          sessionId={sessionId}
+          downloadedFiles={downloadedFiles}
+          fileChooserMode={fileChooserState.mode}
+          onAccept={onFileChooserAccept}
+          onCancel={onFileChooserCancel}
+        />
       )}
     </Box>
   );

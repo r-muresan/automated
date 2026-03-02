@@ -315,7 +315,10 @@ export class LocalBrowserProvider extends BrowserProvider {
     }
   }
 
-  async uploadSessionFile(_sessionId: string, _file: SessionUploadFile): Promise<void> {
+  async uploadSessionFile(
+    _sessionId: string,
+    _file: SessionUploadFile,
+  ): Promise<{ filePath: string }> {
     throw new Error('File uploads are only supported for managed browser sessions');
   }
 
