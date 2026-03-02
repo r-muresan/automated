@@ -1,9 +1,10 @@
 import OpenAI from 'openai';
 import type { Stagehand } from '../../stagehand/v3';
-import type { LoopContext } from '../../types';
+import type { DownloadedSessionFile, LoopContext } from '../../types';
 import { getSpreadsheetProvider } from '../agent-tools';
 import { capturePageScreenshot } from './common';
 import { extractFromDom, extractLoopItemsFromDom } from './dom';
+import { extractLoopItemsFromDownloadedFilesWithLlm } from './files';
 import {
   captureSpreadsheetSnapshot,
   extractFromSpreadsheetWithLlm,
@@ -18,7 +19,7 @@ import {
 } from './vision';
 import { normalizeLoopItems, validateAndFillExtractionResult, type ParsedSchema } from './schema';
 
-export type ExtractionMode = 'spreadsheet' | 'dom' | 'vision';
+export type ExtractionMode = 'spreadsheet' | 'files' | 'dom' | 'vision';
 
 export type ExtractOutput = {
   scraped_data: unknown;
@@ -158,8 +159,10 @@ export async function identifyItemsWithSharedStrategy(params: {
   model: string;
   description: string;
   knownFingerprints: Set<string>;
+  downloadedFiles?: DownloadedSessionFile[];
 }): Promise<{ mode: ExtractionMode; items: ExtractionItem[] }> {
   const { stagehand, llmClient, model, description, knownFingerprints } = params;
+  const downloadedFiles = params.downloadedFiles ?? [];
 
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
   const activeUrl = page?.url?.() ?? '';
@@ -167,8 +170,6 @@ export async function identifyItemsWithSharedStrategy(params: {
 
   if (spreadsheetProvider) {
     const snapshot = await captureSpreadsheetSnapshot(stagehand);
-
-    console.log({ snapshot });
 
     const spreadsheetRawItems = await extractLoopItemsFromSpreadsheetWithLlm({
       llmClient,
@@ -185,21 +186,31 @@ export async function identifyItemsWithSharedStrategy(params: {
     }
 
     console.warn(
-      '[EXTRACTION] Spreadsheet loop discovery returned no items; falling back to vision.',
+      '[EXTRACTION] Spreadsheet loop discovery returned no items; continuing to session files, DOM, then vision.',
     );
-    const screenshotDataUrl = await capturePageScreenshot(stagehand);
-    const visionItems = await identifyItemsFromVision({
-      llmClient,
-      model,
-      screenshotDataUrl,
-      description,
-      knownFingerprints,
-    });
+  }
 
-    return {
-      mode: 'vision',
-      items: visionItems,
-    };
+  if (downloadedFiles.length > 0) {
+    try {
+      const fileRawItems = await extractLoopItemsFromDownloadedFilesWithLlm({
+        llmClient,
+        model,
+        description,
+        downloadedFiles,
+      });
+      const fileItems = toExtractionItems(fileRawItems, knownFingerprints);
+      if (fileItems.length > 0) {
+        return {
+          mode: 'files',
+          items: fileItems,
+        };
+      }
+    } catch (error) {
+      console.warn(
+        '[EXTRACTION] Session file loop discovery failed; continuing to DOM:',
+        (error as Error).message,
+      );
+    }
   }
 
   try {

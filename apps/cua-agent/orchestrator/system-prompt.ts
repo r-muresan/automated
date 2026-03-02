@@ -1,10 +1,12 @@
 /**
  * Builds the system prompt for the browser automation agent.
  */
-import type { LoopContext } from '../types';
+import { buildSessionDownloadedFilesSection } from './session-files';
+import type { DownloadedSessionFile, LoopContext } from '../types';
 
 export function buildSystemPrompt(
   extractedVariables: Record<string, string>,
+  downloadedFiles: DownloadedSessionFile[],
   context?: LoopContext,
 ): string {
   const sections: string[] = [];
@@ -29,6 +31,12 @@ export function buildSystemPrompt(
     sections.push('## Item of Interest');
     sections.push(`- **Index**: ${context.itemIndex ?? ''}`);
     sections.push(`- **Item**: ${JSON.stringify(context.item)}`);
+  }
+
+  const downloadedFilesSection = buildSessionDownloadedFilesSection(downloadedFiles);
+  if (downloadedFilesSection) {
+    sections.push('');
+    sections.push(downloadedFilesSection);
   }
 
   return sections.join('\n');

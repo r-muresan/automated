@@ -1,6 +1,12 @@
 import OpenAI from 'openai';
 import type { Stagehand } from '../stagehand/v3';
-import type { LoopStep, Step, OrchestratorEvent, LoopContext } from '../types';
+import type {
+  DownloadedSessionFile,
+  LoopStep,
+  Step,
+  OrchestratorEvent,
+  LoopContext,
+} from '../types';
 import {
   capturePageScreenshot,
   checkForMoreItemsFromVision,
@@ -30,6 +36,7 @@ export interface LoopDeps {
   emit: (event: OrchestratorEvent) => void;
   assertNotAborted: () => void;
   executeSteps: (steps: Step[], context?: LoopContext) => Promise<void>;
+  getDownloadedFiles: () => DownloadedSessionFile[];
   requestCredentialHandoff?: (
     request: CredentialHandoffRequest,
     step: LoopStep,
@@ -46,16 +53,16 @@ function resolveCuaModelName(modelName: string): string {
   return CUA_MODEL_ALIASES[modelName] ?? modelName;
 }
 
-function resolveOpenRouterModelName(modelName: string): string {
+export function resolveOpenRouterModelName(modelName: string): string {
   const normalized = resolveCuaModelName(modelName);
-  return normalized.startsWith('openai/') ? normalized : `openai/${normalized}`;
+  return normalized.includes('/') ? normalized : `openai/${normalized}`;
 }
 
 // ---------------------------------------------------------------------------
 // CUA navigation — pure vision + computer-use tools, no DOM
 // ---------------------------------------------------------------------------
 
-async function navigateToNextBatch(
+export async function navigateToNextBatch(
   deps: LoopDeps,
   loopStep: LoopStep,
   loopIndex: number,
@@ -97,26 +104,22 @@ Perform exactly the action described. Do not do anything else.`,
     mode: 'hybrid',
   });
 
-  try {
-    await agent.execute({
-      instruction,
-      maxSteps: 10,
-      callbacks: {
-        prepareStep: async ({ stepNumber }: { stepNumber: number }) => {
-          const page = deps.stagehand.context.activePage() ?? deps.stagehand.context.pages()[0];
-          const activeUrl = page?.url?.() ?? '';
-          const provider = getSpreadsheetProvider(activeUrl);
-          const activeTools = buildHybridActiveToolsForUrl(activeUrl);
-          console.log(
-            `[VISION_LOOP] Tool activation step=${stepNumber}: provider=${provider ?? 'none'} spreadsheetTools=${provider ? 'enabled' : 'disabled'} activeTools=${JSON.stringify(activeTools)}`,
-          );
-          return { activeTools };
-        },
+  await agent.execute({
+    instruction,
+    maxSteps: 10,
+    callbacks: {
+      prepareStep: async ({ stepNumber }: { stepNumber: number }) => {
+        const page = deps.stagehand.context.activePage() ?? deps.stagehand.context.pages()[0];
+        const activeUrl = page?.url?.() ?? '';
+        const provider = getSpreadsheetProvider(activeUrl);
+        const activeTools = buildHybridActiveToolsForUrl(activeUrl);
+        console.log(
+          `[VISION_LOOP] Tool activation step=${stepNumber}: provider=${provider ?? 'none'} spreadsheetTools=${provider ? 'enabled' : 'disabled'} activeTools=${JSON.stringify(activeTools)}`,
+        );
+        return { activeTools };
       },
-    });
-  } catch (error: any) {
-    console.warn(`[VISION_LOOP] Navigation agent error (continuing): ${error.message}`);
-  }
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +170,10 @@ export async function executeLoopStep(
         model: deps.models.extract,
         description: step.description,
         knownFingerprints: processedFingerprints,
+        downloadedFiles: deps.getDownloadedFiles(),
       });
+
+      console.log(extractionMode, items);
 
       console.log(
         `[VISION_LOOP] Page ${pageCount}: ${items.length} new item(s) ` +
@@ -252,36 +258,38 @@ export async function executeLoopStep(
         break;
       }
 
-      const freshScreenshot = await capturePageScreenshot(deps.stagehand);
-      const pagination = await checkForMoreItemsFromVision({
-        llmClient: deps.openai,
-        model: deps.models.extract,
-        screenshotDataUrl: freshScreenshot,
-        description: step.description,
-        totalProcessed,
-      });
+      break;
 
-      console.log(
-        `[VISION_LOOP] Pagination: hasMore=${pagination.hasMore} ` +
-          `action=${pagination.action} hint="${pagination.selectorHint}"`,
-      );
+      // const freshScreenshot = await capturePageScreenshot(deps.stagehand);
+      // const pagination = await checkForMoreItemsFromVision({
+      //   llmClient: deps.openai,
+      //   model: deps.models.extract,
+      //   screenshotDataUrl: freshScreenshot,
+      //   description: step.description,
+      //   totalProcessed,
+      // });
 
-      if (!pagination.hasMore || pagination.action === 'none') {
-        console.log('[VISION_LOOP] No more items — done');
-        break;
-      }
+      // console.log(
+      //   `[VISION_LOOP] Pagination: hasMore=${pagination.hasMore} ` +
+      //     `action=${pagination.action} hint="${pagination.selectorHint}"`,
+      // );
 
-      // ── 5. Navigate to next batch via CUA agent (vision + tools) ────────
-      await navigateToNextBatch(
-        deps,
-        step,
-        index,
-        pagination.action,
-        pagination.selectorHint,
-        step.description,
-      );
+      // if (!pagination.hasMore || pagination.action === 'none') {
+      //   console.log('[VISION_LOOP] No more items — done');
+      //   break;
+      // }
 
-      await waitForPageReady(deps.stagehand);
+      // // ── 5. Navigate to next batch via CUA agent (vision + tools) ────────
+      // await navigateToNextBatch(
+      //   deps,
+      //   step,
+      //   index,
+      //   pagination.action,
+      //   pagination.selectorHint,
+      //   step.description,
+      // );
+
+      // await waitForPageReady(deps.stagehand);
     }
   } catch (error: any) {
     if ((error as any)?.message === 'Workflow aborted') throw error;

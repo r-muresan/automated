@@ -12,6 +12,10 @@ export type {
   OrchestratorModels,
   CredentialRequest,
   CredentialRequestResult,
+  DownloadedSessionFile,
+  PendingDownloadedFile,
+  StepExecutionContext,
+  UploadedSessionFileEvent,
 } from './types';
 export type {
   Workflow,

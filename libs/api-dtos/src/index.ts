@@ -1,4 +1,9 @@
-import type { Step, Workflow } from '@automated/cua-agent';
+import type {
+  DownloadedSessionFile,
+  Step,
+  StepExecutionContext,
+  Workflow,
+} from '@automated/cua-agent';
 
 export type ApiDate = string | Date;
 
@@ -224,7 +229,9 @@ export type WorkflowActionEventType =
   | 'loop:iteration:start'
   | 'loop:iteration:end'
   | 'credential:request'
-  | 'credential:continue';
+  | 'credential:continue'
+  | 'file:downloaded'
+  | 'file:uploaded';
 
 export interface WorkflowActionData {
   stepIndex?: number;
@@ -244,6 +251,17 @@ export interface WorkflowActionData {
   reasoningDelta?: string;
   buttonLabel?: string;
   continued?: boolean;
+  fileId?: string;
+  filename?: string;
+  remotePath?: string;
+  downloadUrl?: string;
+  completedAt?: string;
+  chooserMode?: 'selectSingle' | 'selectMultiple' | string;
+  sourceStep?: StepExecutionContext;
+  targetStep?: StepExecutionContext;
+  selectedFileIds?: string[];
+  selectedRemotePaths?: string[];
+  selectedFiles?: DownloadedSessionFile[];
   [key: string]: any;
 }
 

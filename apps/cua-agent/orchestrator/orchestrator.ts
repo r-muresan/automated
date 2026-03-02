@@ -27,6 +27,7 @@ import { AGENT_TIMEOUT_MS } from './constants';
 import { withTimeout } from './utils';
 import { waitForPageReady } from './page-ready';
 import { buildSystemPrompt } from './system-prompt';
+import { DEFAULT_SESSION_DOWNLOAD_PATH, SessionFileManager } from './session-file-manager';
 import {
   buildHybridActiveToolsForUrl,
   createBrowserTabTools,
@@ -43,7 +44,6 @@ import {
 dotenv.config();
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-const HYPERBROWSER_DOWNLOAD_PATH = '/tmp/downloads';
 
 const DEFAULT_MODELS = {
   extract: 'google/gemini-2.5-flash',
@@ -63,12 +63,18 @@ export class OrchestratorAgent {
   private extractedVariables: Record<string, string> = {};
   private globalState: any[] = [];
   private savedFiles: SavedFile[] = [];
+  private sessionFiles: SessionFileManager;
   private stepResults: StepResult[] = [];
   private workflowName: string = '';
   private options: OrchestratorOptions;
 
   constructor(options?: OrchestratorOptions) {
     this.options = options ?? {};
+    this.sessionFiles = new SessionFileManager({
+      emit: this.emit.bind(this),
+      getActivePageUrl: this.getActivePageUrl.bind(this),
+      getAgentModel: () => this.resolveModels().agent,
+    });
   }
 
   private resolveModels() {
@@ -283,12 +289,15 @@ export class OrchestratorAgent {
       },
       localBrowserLaunchOptions: {
         cdpUrl,
+        acceptDownloads: true,
+        downloadsPath: DEFAULT_SESSION_DOWNLOAD_PATH,
       },
       experimental: true,
       disableAPI: true,
     });
 
     await this.stagehand.init();
+    await this.sessionFiles.attach(this.stagehand, this.openai!);
     const sessionId = this.options.localSessionId ?? 'local';
     this.activeSessionId = sessionId;
 
@@ -331,7 +340,7 @@ export class OrchestratorAgent {
 
       this.stagehand = new Stagehand({
         env: 'LOCAL',
-        verbose: 1,
+        verbose: 0,
         model: {
           modelName: models.extract,
           apiKey: process.env.OPENROUTER_API_KEY,
@@ -340,13 +349,14 @@ export class OrchestratorAgent {
         localBrowserLaunchOptions: {
           cdpUrl: hyperbrowserSession.wsEndpoint,
           acceptDownloads: true,
-          downloadsPath: HYPERBROWSER_DOWNLOAD_PATH,
+          downloadsPath: DEFAULT_SESSION_DOWNLOAD_PATH,
         },
         experimental: true,
         disableAPI: true,
       });
 
       await this.stagehand.init();
+      await this.sessionFiles.attach(this.stagehand, this.openai!);
       const sessionId = hyperbrowserSession.id;
       createLease.confirmCreated(sessionId);
       leaseConfirmed = true;
@@ -374,6 +384,7 @@ export class OrchestratorAgent {
   private async close(): Promise<void> {
     const sessionId = this.hyperbrowserSessionId ?? this.activeSessionId;
     const isLocal = !!this.options.localCdpUrl;
+    this.sessionFiles.reset();
 
     if (this.stagehand) {
       try {
@@ -430,6 +441,7 @@ export class OrchestratorAgent {
       this.assertNotAborted();
       const step = steps[i];
       const instruction = this.describeStepInstruction(step);
+      const stepContext = this.sessionFiles.beginStep(step, index, instruction, context);
       this.emit({ type: 'step:start', step, index, instruction });
 
       // Wait for page to be ready before each step (except save which doesn't interact with page)
@@ -437,20 +449,24 @@ export class OrchestratorAgent {
       //   await this.waitForPageReady();
       // }
 
-      if (step.type === 'step') {
-        await this.executeSingleStep(step.description, context, index, step);
-      } else if (step.type === 'loop') {
-        await executeLoopStep(this.buildLoopDeps(step, index), step, index);
-      } else if (step.type === 'conditional') {
-        await this.executeConditionalStep(step, context, index);
-      } else if (step.type === 'extract') {
-        await this.executeExtractStep(step, context, index);
-      } else if (step.type === 'save') {
-        await this.executeSaveStep(step, context, index);
-      } else if (step.type === 'navigate') {
-        await this.executeNavigateStep(step, index);
-      } else if (step.type === 'tab_navigate') {
-        await this.executeTabNavigateStep(step, index);
+      try {
+        if (step.type === 'step') {
+          await this.executeSingleStep(step.description, context, index, step);
+        } else if (step.type === 'loop') {
+          await executeLoopStep(this.buildLoopDeps(step, index), step, index);
+        } else if (step.type === 'conditional') {
+          await this.executeConditionalStep(step, context, index);
+        } else if (step.type === 'extract') {
+          await this.executeExtractStep(step, context, index);
+        } else if (step.type === 'save') {
+          await this.executeSaveStep(step, context, index);
+        } else if (step.type === 'navigate') {
+          await this.executeNavigateStep(step, index);
+        } else if (step.type === 'tab_navigate') {
+          await this.executeTabNavigateStep(step, index);
+        }
+      } finally {
+        this.sessionFiles.endStep(stepContext);
       }
 
       this.assertNotAborted();
@@ -805,7 +821,11 @@ export class OrchestratorAgent {
     });
 
     const agentConfig = {
-      systemPrompt: buildSystemPrompt(this.extractedVariables, context),
+      systemPrompt: buildSystemPrompt(
+        this.extractedVariables,
+        this.sessionFiles.getDownloadedFiles(),
+        context,
+      ),
       tools,
       model: {
         modelName: this.resolveModels().agent,
@@ -904,6 +924,7 @@ export class OrchestratorAgent {
         });
       await streamResult.consumeStream();
       const result = await streamResult.result;
+      await this.sessionFiles.waitForSettledChooserWork();
 
       this.assertNotAborted();
       this.stepResults.push({
@@ -924,20 +945,26 @@ export class OrchestratorAgent {
         ...(result.success ? {} : { error: result.message || 'Agent could not complete the task' }),
       });
     } catch (error: any) {
-      console.error(`[ORCHESTRATOR] Step failed:`, error.message ?? error);
-      if (error.cause) console.error(`[ORCHESTRATOR] Cause:`, error.cause);
-      if (error.stack) console.error(`[ORCHESTRATOR] Stack:`, error.stack);
+      let finalError = error;
+      try {
+        await this.sessionFiles.waitForSettledChooserWork();
+      } catch (fileChooserError) {
+        finalError = fileChooserError;
+      }
+      console.error(`[ORCHESTRATOR] Step failed:`, finalError?.message ?? finalError ?? error);
+      if (finalError?.cause) console.error(`[ORCHESTRATOR] Cause:`, finalError.cause);
+      if (finalError?.stack) console.error(`[ORCHESTRATOR] Stack:`, finalError.stack);
       this.stepResults.push({
         instruction,
         success: false,
-        error: error.message,
+        error: finalError?.message ?? 'Step failed',
       });
       this.emit({
         type: 'step:end',
         step,
         index,
         success: false,
-        error: error?.message ?? 'Step failed',
+        error: finalError?.message ?? 'Step failed',
       });
     }
   }
@@ -952,6 +979,7 @@ export class OrchestratorAgent {
       emit: this.emit.bind(this),
       assertNotAborted: this.assertNotAborted.bind(this),
       executeSteps: this.executeSteps.bind(this),
+      getDownloadedFiles: () => this.sessionFiles.getDownloadedFiles(),
       requestCredentialHandoff: (request) =>
         this.requestCredentialHandoff(
           request,
@@ -1020,7 +1048,11 @@ export class OrchestratorAgent {
 
     if (conditionMet === 'unsure') {
       const agent = this.stagehand.agent({
-        systemPrompt: buildSystemPrompt(this.extractedVariables, context),
+        systemPrompt: buildSystemPrompt(
+          this.extractedVariables,
+          this.sessionFiles.getDownloadedFiles(),
+          context,
+        ),
         tools: createBrowserTabTools(this.stagehand, {
           onRequestCredentials: (request) =>
             this.requestCredentialHandoff(request, step, index, this.describeStepInstruction(step)),
@@ -1047,9 +1079,15 @@ export class OrchestratorAgent {
           AGENT_TIMEOUT_MS,
           `agent.execute for condition "${step.condition.slice(0, 50)}"`,
         );
+        await this.sessionFiles.waitForSettledChooserWork();
         conditionMet = Boolean(result.output?.conditionMet);
         console.log(`[ORCHESTRATOR] Agent evaluation: "${step.condition}" => ${conditionMet}`);
       } catch (error: any) {
+        try {
+          await this.sessionFiles.waitForSettledChooserWork();
+        } catch (fileChooserError) {
+          throw fileChooserError;
+        }
         console.error(`[ORCHESTRATOR] Agent evaluation failed:`, error.message ?? error);
         conditionMet = false;
       }
