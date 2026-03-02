@@ -69,8 +69,8 @@ export async function waitForPageReady(
 ): Promise<void> {
   assertNotAborted?.();
   const {
-    networkIdleTimeoutMs: _networkIdleTimeoutMs = 3000,
-    loadingIndicatorTimeoutMs = 5000,
+    networkIdleTimeoutMs: _networkIdleTimeoutMs = 1000,
+    loadingIndicatorTimeoutMs = 2000,
     domStableMs = 300,
     domStabilityTimeoutMs = 3000,
   } = options ?? {};
@@ -115,7 +115,10 @@ export async function waitForPageReady(
   );
 }
 
-export async function waitForLoadingIndicatorsGone(page: PageLike, timeoutMs: number): Promise<void> {
+export async function waitForLoadingIndicatorsGone(
+  page: PageLike,
+  timeoutMs: number,
+): Promise<void> {
   const startTime = Date.now();
   const operationTimeoutMs = Math.min(PAGE_READY_OPERATION_TIMEOUT_MS, Math.max(250, timeoutMs));
 

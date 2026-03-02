@@ -619,6 +619,26 @@ export type AgentModelConfig<TModelName extends string = string> = {
  */
 export type AgentToolMode = "dom" | "hybrid" | "cua";
 
+export interface AgentUploadedFileNote {
+  fileId: string;
+  filename: string;
+  uploadedAs: string;
+  remotePath: string;
+}
+
+export interface AgentInteractionSyncResult {
+  uploadedFiles: AgentUploadedFileNote[];
+  uploadMessage?: string;
+}
+
+export interface AgentInteractionScope {
+  settle(): Promise<AgentInteractionSyncResult | null>;
+}
+
+export interface AgentInteractionSync {
+  beginScope(): AgentInteractionScope;
+}
+
 export type AgentConfig = {
   /**
    * Custom system prompt to provide to the agent. Overrides the default system prompt.
@@ -661,6 +681,11 @@ export type AgentConfig = {
    * - 'cua': Uses Computer Use Agent (CUA) providers for screenshot-based automation
    */
   mode?: AgentToolMode;
+  /**
+   * Optional interaction sync hook for coordinating browser-side side effects
+   * such as intercepted file uploads with the agent's tool loop.
+   */
+  interactionSync?: AgentInteractionSync;
 };
 
 /**
@@ -703,6 +728,8 @@ export interface ClickToolResult {
   coordinates?: number[];
   error?: string;
   screenshotBase64?: string;
+  uploadedFiles?: AgentUploadedFileNote[];
+  uploadMessage?: string;
 }
 
 export interface TypeToolResult {
@@ -711,6 +738,8 @@ export interface TypeToolResult {
   text?: string;
   error?: string;
   screenshotBase64?: string;
+  uploadedFiles?: AgentUploadedFileNote[];
+  uploadMessage?: string;
 }
 
 export interface DragAndDropToolResult {
@@ -731,6 +760,8 @@ export interface FillFormVisionToolResult {
   playwrightArguments?: FillFormField[];
   error?: string;
   screenshotBase64?: string;
+  uploadedFiles?: AgentUploadedFileNote[];
+  uploadMessage?: string;
 }
 
 export interface ScrollToolResult {

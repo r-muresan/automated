@@ -22,9 +22,9 @@ export function buildLoopItemFromDownloadedFile(
     type: 'downloaded_file',
     fileId: file.id,
     filename: file.filename,
-    remotePath: file.remotePath,
-    downloadUrl: file.downloadUrl ?? null,
-    completedAt: file.completedAt,
+    // remotePath: file.remotePath,
+    // downloadUrl: file.downloadUrl ?? null,
+    // completedAt: file.completedAt,
     sourceStep: file.sourceStep,
   };
 }
@@ -36,25 +36,26 @@ export function buildLoopItemsFromDownloadedFilesPrompt(args: {
   const filePayload = args.downloadedFiles.map((file) => ({
     id: file.id,
     filename: file.filename,
-    remotePath: file.remotePath,
-    downloadUrl: file.downloadUrl ?? null,
+    // remotePath: file.remotePath,
+    // downloadUrl: file.downloadUrl ?? null,
     completedAt: file.completedAt,
-    sourceStep: file.sourceStep,
+    sourceStepInstruction: file.sourceStep?.instruction ?? null,
+    sourceStepType: file.sourceStep?.stepType ?? null,
+    sourcePageUrl: file.sourceStep?.pageUrl ?? null,
+    loopItem: file.sourceStep?.loopItem ?? null,
   }));
 
   return [
-    'You are selecting previously downloaded session files to use as loop items.',
-    `Find all downloaded files that match this loop description: "${args.description}".`,
+    `Select which of the downloaded files are relevant for this task: "${args.description}"`,
     '',
-    'Only select from the provided file ids.',
-    'Use the filename, download URL, source step instruction, source step type, page URL, and loop item metadata to decide which files match.',
-    'Return every matching file id in the same order the files are provided, unless the description clearly requires a different order.',
-    'If no downloaded files match, return an empty fileIds array.',
+    'If the task describes an action to perform on files (e.g. uploading, sending, processing) without specifying which files, select ALL files.',
+    'Only narrow the selection if the task explicitly filters by filename, type, or other criteria.',
+    'Return file ids in the order provided unless the task requires a different order.',
     '',
-    'Downloaded files:',
+    `${filePayload.length} downloaded files:`,
     safeJson(filePayload),
     '',
-    'Return JSON only in the shape {"fileIds":["..."]}.',
+    'Return JSON: {"fileIds":["..."]}',
   ].join('\n');
 }
 

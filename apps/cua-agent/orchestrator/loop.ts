@@ -1,11 +1,13 @@
 import OpenAI from 'openai';
 import type { Stagehand } from '../stagehand/v3';
+import type { AgentInteractionSync } from '../stagehand/v3/types/public/agent';
 import type {
   DownloadedSessionFile,
   LoopStep,
   Step,
   OrchestratorEvent,
   LoopContext,
+  UploadedSessionFileEvent,
 } from '../types';
 import {
   capturePageScreenshot,
@@ -22,6 +24,7 @@ import {
   type CredentialHandoffResult,
 } from './agent-tools';
 import { waitForPageReady } from './page-ready';
+import { buildSessionDownloadedFilesSection } from './session-files';
 
 // ---------------------------------------------------------------------------
 // Dependency contract — everything the loop needs from the orchestrator
@@ -37,6 +40,8 @@ export interface LoopDeps {
   assertNotAborted: () => void;
   executeSteps: (steps: Step[], context?: LoopContext) => Promise<void>;
   getDownloadedFiles: () => DownloadedSessionFile[];
+  getUploadedFiles: () => UploadedSessionFileEvent[];
+  getAgentInteractionSync: () => AgentInteractionSync;
   requestCredentialHandoff?: (
     request: CredentialHandoffRequest,
     step: LoopStep,
@@ -80,12 +85,19 @@ export async function navigateToNextBatch(
     actionInstructions[action] ??
     `Navigate to see more "${description}" items.${selectorHint ? ` Look for: ${selectorHint}` : ''}`;
 
-  console.log(`[VISION_LOOP] Navigating to next batch: ${instruction}`);
+  console.log(`[LOOP] Navigating to next batch: ${instruction}`);
   const requestCredentialHandoff = deps.requestCredentialHandoff;
+  const promptSections = [
+    `You are navigating a web page to reveal more list items.`,
+    `Perform exactly the action described. Do not do anything else.`,
+  ];
+  const downloadedFilesSection = buildSessionDownloadedFilesSection(deps.getDownloadedFiles());
+  if (downloadedFilesSection) {
+    promptSections.push('', downloadedFilesSection);
+  }
 
   const agent = deps.stagehand.agent({
-    systemPrompt: `You are navigating a web page to reveal more list items.
-Perform exactly the action described. Do not do anything else.`,
+    systemPrompt: promptSections.join('\n'),
     tools: createBrowserTabTools(
       deps.stagehand,
       requestCredentialHandoff
@@ -102,6 +114,7 @@ Perform exactly the action described. Do not do anything else.`,
       baseURL: deps.openrouterBaseUrl,
     },
     mode: 'hybrid',
+    interactionSync: deps.getAgentInteractionSync(),
   });
 
   await agent.execute({
@@ -114,7 +127,7 @@ Perform exactly the action described. Do not do anything else.`,
         const provider = getSpreadsheetProvider(activeUrl);
         const activeTools = buildHybridActiveToolsForUrl(activeUrl);
         console.log(
-          `[VISION_LOOP] Tool activation step=${stepNumber}: provider=${provider ?? 'none'} spreadsheetTools=${provider ? 'enabled' : 'disabled'} activeTools=${JSON.stringify(activeTools)}`,
+          `[LOOP] Tool activation step=${stepNumber}: provider=${provider ?? 'none'} spreadsheetTools=${provider ? 'enabled' : 'disabled'} activeTools=${JSON.stringify(activeTools)}`,
         );
         return { activeTools };
       },
@@ -136,7 +149,7 @@ export async function executeLoopStep(
   step: LoopStep,
   index: number,
 ): Promise<void> {
-  console.log(`[VISION_LOOP] Starting: "${step.description}"`);
+  console.log(`[LOOP] Starting: "${step.description}"`);
   deps.assertNotAborted();
 
   const processedFingerprints = new Set<string>();
@@ -176,16 +189,16 @@ export async function executeLoopStep(
       console.log(extractionMode, items);
 
       console.log(
-        `[VISION_LOOP] Page ${pageCount}: ${items.length} new item(s) ` +
+        `[LOOP] Page ${pageCount}: ${items.length} new item(s) ` +
           `via ${extractionMode} extraction ` +
           `(${processedFingerprints.size} already processed)`,
       );
 
       if (items.length === 0) {
         consecutiveEmpty++;
-        console.log(`[VISION_LOOP] Empty page ${consecutiveEmpty}/${MAX_CONSECUTIVE_EMPTY}`);
+        console.log(`[LOOP] Empty page ${consecutiveEmpty}/${MAX_CONSECUTIVE_EMPTY}`);
         if (consecutiveEmpty >= MAX_CONSECUTIVE_EMPTY) {
-          console.log('[VISION_LOOP] Consecutive empty limit reached — stopping');
+          console.log('[LOOP] Consecutive empty limit reached — stopping');
           break;
         }
       } else {
@@ -200,7 +213,7 @@ export async function executeLoopStep(
         // Register fingerprint before executing so a re-visit won't reprocess
         processedFingerprints.add(item.fingerprint);
 
-        console.log(`[VISION_LOOP] Processing item ${totalProcessed + 1}: "${item.fingerprint}"`);
+        console.log(`[LOOP] Processing item ${totalProcessed + 1}: "${item.fingerprint}"`);
 
         deps.emit({
           type: 'loop:iteration:start',
@@ -222,7 +235,7 @@ export async function executeLoopStep(
         } catch (error: any) {
           iterationSuccess = false;
           iterationError = error?.message ?? 'Iteration failed';
-          console.warn(`[VISION_LOOP] Item "${item.fingerprint}" failed: ${iterationError}`);
+          console.warn(`[LOOP] Item "${item.fingerprint}" failed: ${iterationError}`);
         }
 
         totalProcessed++;
@@ -252,9 +265,7 @@ export async function executeLoopStep(
 
       // ── 4. Check for more items (vision, no DOM) ────────────────────────
       if (extractionMode === 'spreadsheet') {
-        console.log(
-          '[VISION_LOOP] Spreadsheet extraction mode has no pagination search — stopping',
-        );
+        console.log('[LOOP] Spreadsheet extraction mode has no pagination search — stopping');
         break;
       }
 
@@ -270,12 +281,12 @@ export async function executeLoopStep(
       // });
 
       // console.log(
-      //   `[VISION_LOOP] Pagination: hasMore=${pagination.hasMore} ` +
+      //   `[LOOP] Pagination: hasMore=${pagination.hasMore} ` +
       //     `action=${pagination.action} hint="${pagination.selectorHint}"`,
       // );
 
       // if (!pagination.hasMore || pagination.action === 'none') {
-      //   console.log('[VISION_LOOP] No more items — done');
+      //   console.log('[LOOP] No more items — done');
       //   break;
       // }
 
@@ -295,11 +306,11 @@ export async function executeLoopStep(
     if ((error as any)?.message === 'Workflow aborted') throw error;
     loopSuccess = false;
     loopError = error?.message ?? 'Loop failed';
-    console.error(`[VISION_LOOP] Error: ${loopError}`);
+    console.error(`[LOOP] Error: ${loopError}`);
   }
 
   console.log(
-    `[VISION_LOOP] Complete: "${step.description}" — ` +
+    `[LOOP] Complete: "${step.description}" — ` +
       `${totalProcessed} item(s) across ${pageCount} page(s)`,
   );
 

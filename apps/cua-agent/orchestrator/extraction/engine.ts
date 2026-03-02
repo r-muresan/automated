@@ -95,7 +95,9 @@ export async function extractWithSharedStrategy(params: {
       snapshot,
     });
     console.log(`[EXTRACTION] spreadsheet:llm-ready duration_ms=${Date.now() - llmStart}`);
-    console.log(`[EXTRACTION] extractWithSharedStrategy:end mode=spreadsheet total_ms=${Date.now() - start}`);
+    console.log(
+      `[EXTRACTION] extractWithSharedStrategy:end mode=spreadsheet total_ms=${Date.now() - start}`,
+    );
 
     return {
       mode: 'spreadsheet',
@@ -114,7 +116,9 @@ export async function extractWithSharedStrategy(params: {
       schema,
     });
     console.log(`[EXTRACTION] dom:success duration_ms=${Date.now() - domStart}`);
-    console.log(`[EXTRACTION] extractWithSharedStrategy:end mode=dom total_ms=${Date.now() - start}`);
+    console.log(
+      `[EXTRACTION] extractWithSharedStrategy:end mode=dom total_ms=${Date.now() - start}`,
+    );
 
     return {
       mode: 'dom',
@@ -142,7 +146,9 @@ export async function extractWithSharedStrategy(params: {
     schema,
   });
   console.log(`[EXTRACTION] vision:llm-ready duration_ms=${Date.now() - visionStart}`);
-  console.log(`[EXTRACTION] extractWithSharedStrategy:end mode=vision total_ms=${Date.now() - start}`);
+  console.log(
+    `[EXTRACTION] extractWithSharedStrategy:end mode=vision total_ms=${Date.now() - start}`,
+  );
 
   return {
     mode: 'vision',
@@ -191,6 +197,8 @@ export async function identifyItemsWithSharedStrategy(params: {
   }
 
   if (downloadedFiles.length > 0) {
+    console.log(downloadedFiles);
+
     try {
       const fileRawItems = await extractLoopItemsFromDownloadedFilesWithLlm({
         llmClient,
@@ -198,7 +206,9 @@ export async function identifyItemsWithSharedStrategy(params: {
         description,
         downloadedFiles,
       });
+
       const fileItems = toExtractionItems(fileRawItems, knownFingerprints);
+
       if (fileItems.length > 0) {
         return {
           mode: 'files',

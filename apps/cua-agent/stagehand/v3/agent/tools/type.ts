@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { V3 } from "../../v3.js";
 import type { Action } from "../../types/public/methods.js";
 import type {
+  AgentInteractionSync,
   TypeToolResult,
   ModelOutputContentItem,
   Variables,
@@ -12,10 +13,22 @@ import {
   processCoordinates,
 } from "../utils/coordinateNormalization.js";
 import { ensureXPath } from "../utils/xpath.js";
+import {
+  beginInteractionScope,
+  mergeInteractionSyncResult,
+  rethrowInteractionSyncError,
+  settleInteractionScope,
+} from "./interactionSync.js";
 import { waitAndCaptureScreenshot } from "../utils/screenshotHandler.js";
 import { substituteVariables } from "../utils/variables.js";
 
-export const typeTool = (v3: V3, provider?: string, variables?: Variables, modelId?: string) => {
+export const typeTool = (
+  v3: V3,
+  provider?: string,
+  variables?: Variables,
+  modelId?: string,
+  interactionSync?: AgentInteractionSync,
+) => {
   const hasVariables = variables && Object.keys(variables).length > 0;
   const unitScaleCoordinates = isMoonshotModel(modelId);
   const coordinateSchema = unitScaleCoordinates ? z.number().min(0).max(1) : z.number();
@@ -45,6 +58,7 @@ export const typeTool = (v3: V3, provider?: string, variables?: Variables, model
       coordinates,
       text,
     }): Promise<TypeToolResult> => {
+      const scope = beginInteractionScope(interactionSync);
       try {
         const page = await v3.context.awaitActivePage();
         const processed = await processCoordinates(
@@ -79,6 +93,7 @@ export const typeTool = (v3: V3, provider?: string, variables?: Variables, model
 
         const shouldBulkType = actualText.length > 20;
         await page.type(actualText, shouldBulkType ? { bulk: true } : undefined);
+        const syncResult = await settleInteractionScope(scope);
 
         const screenshotBase64 = await waitAndCaptureScreenshot(page);
 
@@ -101,13 +116,15 @@ export const typeTool = (v3: V3, provider?: string, variables?: Variables, model
           }
         }
 
-        return {
+        return mergeInteractionSyncResult({
           success: true,
           describe,
           text, // Return original text (with %variableName% tokens) to avoid exposing sensitive values to LLM
           screenshotBase64,
-        };
+        }, syncResult);
       } catch (error) {
+        await settleInteractionScope(scope).catch(() => {});
+        rethrowInteractionSyncError(error);
         return {
           success: false,
           error: `Error typing: ${(error as Error).message}`,
@@ -123,6 +140,8 @@ export const typeTool = (v3: V3, provider?: string, variables?: Variables, model
               success: result.success,
               describe: result.describe,
               text: result.text,
+              ...(result.uploadedFiles ? { uploadedFiles: result.uploadedFiles } : {}),
+              ...(result.uploadMessage ? { uploadMessage: result.uploadMessage } : {}),
             }),
           },
         ];

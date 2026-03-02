@@ -139,6 +139,10 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
       saveDownloads: true,
       enableWebRecording: true,
       enableVideoWebRecording: true,
+      adblock: true,
+      trackers: true,
+      annoyances: true,
+      acceptCookies: true,
     });
 
     return {
@@ -282,7 +286,9 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
       fileName: file.originalname || 'upload.bin',
     });
 
-    return { filePath: (result as any).filePath || `/tmp/uploads/${file.originalname || 'upload.bin'}` };
+    return {
+      filePath: (result as any).filePath || `/tmp/uploads/${file.originalname || 'upload.bin'}`,
+    };
   }
 
   async createContext({ name }: { name: string }): Promise<string> {

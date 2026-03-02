@@ -33,11 +33,11 @@ export function buildSystemPrompt(
     sections.push(`- **Item**: ${JSON.stringify(context.item)}`);
   }
 
-  const downloadedFilesSection = buildSessionDownloadedFilesSection(downloadedFiles);
-  if (downloadedFilesSection) {
-    sections.push('');
-    sections.push(downloadedFilesSection);
-  }
+  // const downloadedFilesSection = buildSessionDownloadedFilesSection(downloadedFiles);
+  // if (downloadedFilesSection) {
+  //   sections.push('');
+  //   sections.push(downloadedFilesSection);
+  // }
 
   return sections.join('\n');
 }

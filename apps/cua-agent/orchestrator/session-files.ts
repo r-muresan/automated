@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import path from 'path';
 import { z } from 'zod';
 import type {
   DownloadedSessionFile,
@@ -7,9 +8,8 @@ import type {
 } from '../types';
 
 const FILE_SELECTOR_RESPONSE_SCHEMA = z.object({
-  selectedFileIds: z.array(z.string()).default([]),
   reason: z.string().min(1).default('Selected the best matching previously downloaded file.'),
-  confidence: z.enum(['high', 'medium', 'low']).default('low'),
+  selectedFileIds: z.array(z.string()).default([]),
 });
 
 const MAX_SYSTEM_PROMPT_DOWNLOADS = 10;
@@ -50,26 +50,81 @@ export function buildSessionDownloadedFilesSection(
 ): string {
   if (downloadedFiles.length === 0) return '';
 
-  const lines = downloadedFiles
+  const fileEntries = downloadedFiles
     .slice(-maxFiles)
     .reverse()
-    .map((file) => {
-      const origin = [
-        `source_step=${file.sourceStep.stepIndex ?? 'unknown'}`,
-        `source_type=${file.sourceStep.stepType ?? 'unknown'}`,
-        `source_instruction=${file.sourceStep.instruction ?? 'unknown'}`,
-      ];
+    .map((file) => ({
+      id: file.id,
+      filename: file.filename,
+      stepDescription: file.sourceStep.instruction ?? 'Unknown step',
+    }));
 
-      if (typeof file.sourceStep.loopItemIndex === 'number') {
-        origin.push(`loop_item_index=${file.sourceStep.loopItemIndex}`);
-      }
+  const groups = new Map<string, string[]>();
+  const orderedDescriptions: string[] = [];
 
-      origin.push(`completed_at=${file.completedAt}`);
+  for (const { id, filename, stepDescription } of fileEntries) {
+    const groupLines = groups.get(stepDescription);
+    const line = `ID: ${id}, Name: ${filename}`;
 
-      return `- id=${file.id}; filename=${file.filename}; ${origin.join('; ')}`;
-    });
+    if (groupLines) {
+      groupLines.push(line);
+      continue;
+    }
 
-  return ['## Session Downloaded Files', ...lines].join('\n');
+    groups.set(stepDescription, [line]);
+    orderedDescriptions.push(stepDescription);
+  }
+
+  const lines = orderedDescriptions.flatMap((stepDescription, index) => {
+    const prefix = index === 0 ? [] : [''];
+    return [...prefix, `From ${stepDescription}`, ...(groups.get(stepDescription) ?? [])];
+  });
+
+  return ['## Downloaded Files', ...lines].join('\n');
+}
+
+export function buildSessionUploadedFilesSection(
+  uploadedFiles: UploadedSessionFileEvent[],
+  maxFiles = MAX_SYSTEM_PROMPT_DOWNLOADS,
+): string {
+  if (uploadedFiles.length === 0) return '';
+
+  const fileEntries = uploadedFiles
+    .flatMap((upload) =>
+      upload.selectedFiles.map((file, index) => ({
+        file,
+        remotePath: upload.selectedRemotePaths[index] ?? file.remotePath,
+        targetStep: upload.targetStep,
+      })),
+    )
+    .slice(-maxFiles)
+    .reverse();
+
+  if (fileEntries.length === 0) return '';
+
+  const groups = new Map<string, string[]>();
+  const orderedDescriptions: string[] = [];
+
+  for (const { file, remotePath, targetStep } of fileEntries) {
+    const stepDescription = targetStep.instruction ?? 'Unknown step';
+    const groupLines = groups.get(stepDescription);
+    const line = `ID: ${file.id}, Name: ${path.basename(remotePath)}`;
+
+    if (groupLines) {
+      groupLines.push(line);
+      continue;
+    }
+
+    groups.set(stepDescription, [line]);
+    orderedDescriptions.push(stepDescription);
+  }
+
+  const lines = orderedDescriptions.flatMap((stepDescription, index) => {
+    const prefix = index === 0 ? [] : [''];
+    return [...prefix, `From ${stepDescription}`, ...(groups.get(stepDescription) ?? [])];
+  });
+
+  return ['## Uploaded Files', ...lines].join('\n');
 }
 
 export function buildFileSelectionPrompt(args: {
@@ -81,10 +136,7 @@ export function buildFileSelectionPrompt(args: {
   const candidatePayload = args.candidates.map((file) => ({
     id: file.id,
     filename: file.filename,
-    remotePath: file.remotePath,
-    downloadUrl: file.downloadUrl ?? null,
-    completedAt: file.completedAt,
-    sourceStep: file.sourceStep,
+    sourceStep: file.sourceStep?.instruction,
   }));
 
   return [
@@ -136,7 +188,11 @@ export function normalizeFileSelectionResult(args: {
   );
 
   const fallbackSelection =
-    dedupedSelections.length > 0 ? dedupedSelections : args.candidates.length > 0 ? [args.candidates[0]] : [];
+    dedupedSelections.length > 0
+      ? dedupedSelections
+      : args.candidates.length > 0
+        ? [args.candidates[0]]
+        : [];
 
   const selectedFiles =
     args.chooserMode === 'selectMultiple' ? fallbackSelection : fallbackSelection.slice(0, 1);

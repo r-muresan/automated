@@ -1,7 +1,14 @@
 import { randomUUID } from 'crypto';
+import path from 'path';
 import OpenAI from 'openai';
 import type { Protocol } from 'devtools-protocol';
 import type { Stagehand } from '../stagehand/v3';
+import type {
+  AgentInteractionScope,
+  AgentInteractionSync,
+  AgentInteractionSyncResult,
+  AgentUploadedFileNote,
+} from '../stagehand/v3/types/public/agent';
 import type { CDPSessionLike } from '../stagehand/v3/understudy/cdp';
 import type {
   DownloadedSessionFile,
@@ -12,12 +19,22 @@ import type {
   StepExecutionContext,
   UploadedSessionFileEvent,
 } from '../types';
-import {
-  selectDownloadedFilesForUpload,
-  type FileSelectionResult,
-} from './session-files';
+import { selectDownloadedFilesForUpload, type FileSelectionResult } from './session-files';
 
 export const DEFAULT_SESSION_DOWNLOAD_PATH = '/tmp/downloads';
+const FILE_CHOOSER_SCOPE_GRACE_MS = 3000;
+const FILE_CHOOSER_SCOPE_SETTLE_TIMEOUT_MS = 15000;
+
+interface InteractionScopeState {
+  active: boolean;
+  taskIds: Set<number>;
+  onTaskAdded?: () => void;
+}
+
+interface UploadedSessionFileRecord {
+  chooserTaskId: number;
+  upload: UploadedSessionFileEvent;
+}
 
 interface SessionFileManagerDeps {
   emit: (event: OrchestratorEvent) => void;
@@ -25,14 +42,36 @@ interface SessionFileManagerDeps {
   getAgentModel: () => string;
 }
 
+function waitForTaskWithTimeout(taskPromise: Promise<void>, timeoutMs: number): Promise<void> {
+  let timeoutHandle: NodeJS.Timeout | null = null;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(
+        new Error(`Timed out waiting for intercepted file upload to finish after ${timeoutMs}ms.`),
+      );
+    }, timeoutMs);
+  });
+
+  return Promise.race([taskPromise, timeoutPromise]).finally(() => {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  });
+}
+
 export class SessionFileManager {
   private stagehand: Stagehand | null = null;
   private openai: OpenAI | null = null;
   private currentStepContext: StepExecutionContext | null = null;
   private downloadedSessionFiles: DownloadedSessionFile[] = [];
+  private uploadedSessionFileRecords: UploadedSessionFileRecord[] = [];
   private pendingDownloadsByGuid: Map<string, PendingDownloadedFile> = new Map();
   private fileChooserQueue: Promise<void> = Promise.resolve();
+  private fileChooserTaskPromises: Map<number, Promise<void>> = new Map();
+  private nextFileChooserTaskId = 0;
   private fileChooserErrors: Error[] = [];
+  private interactionScopes: Map<string, InteractionScopeState> = new Map();
   private restoreCdpEventLogger: (() => void) | null = null;
 
   constructor(
@@ -61,6 +100,28 @@ export class SessionFileManager {
     return this.downloadedSessionFiles;
   }
 
+  getUploadedFiles(): UploadedSessionFileEvent[] {
+    return this.uploadedSessionFileRecords.map((record) => record.upload);
+  }
+
+  createAgentInteractionSync(): AgentInteractionSync {
+    return {
+      beginScope: (): AgentInteractionScope => {
+        const scopeId = randomUUID();
+        this.interactionScopes.set(scopeId, {
+          active: true,
+          taskIds: new Set<number>(),
+        });
+
+        return {
+          settle: async (): Promise<AgentInteractionSyncResult | null> => {
+            return this.settleInteractionScope(scopeId);
+          },
+        };
+      },
+    };
+  }
+
   async attach(stagehand: Stagehand, openai: OpenAI): Promise<void> {
     this.stagehand = stagehand;
     this.openai = openai;
@@ -69,7 +130,11 @@ export class SessionFileManager {
 
     const conn = stagehand.context.conn;
     const previousEventLogger = conn.cdpEventLogger;
-    const wrappedEventLogger = (info: { method: string; params?: unknown; targetId?: string | null }) => {
+    const wrappedEventLogger = (info: {
+      method: string;
+      params?: unknown;
+      targetId?: string | null;
+    }) => {
       previousEventLogger?.(info);
       void this.handleSessionFileCdpEvent(info);
     };
@@ -97,8 +162,12 @@ export class SessionFileManager {
     this.openai = null;
     this.currentStepContext = null;
     this.downloadedSessionFiles = [];
+    this.uploadedSessionFileRecords = [];
     this.pendingDownloadsByGuid.clear();
+    this.fileChooserTaskPromises.clear();
+    this.nextFileChooserTaskId = 0;
     this.fileChooserErrors = [];
+    this.interactionScopes.clear();
     this.fileChooserQueue = Promise.resolve();
   }
 
@@ -134,8 +203,12 @@ export class SessionFileManager {
       instruction,
       pageUrl: this.deps.getActivePageUrl() || null,
       startedAt: new Date().toISOString(),
-      ...(typeof loopContext?.itemIndex === 'number' ? { loopItemIndex: loopContext.itemIndex } : {}),
-      ...(loopContext?.item !== undefined ? { loopItem: this.cloneLoopItem(loopContext.item) } : {}),
+      ...(typeof loopContext?.itemIndex === 'number'
+        ? { loopItemIndex: loopContext.itemIndex }
+        : {}),
+      ...(loopContext?.item !== undefined
+        ? { loopItem: this.cloneLoopItem(loopContext.item) }
+        : {}),
     };
   }
 
@@ -144,13 +217,20 @@ export class SessionFileManager {
     this.fileChooserErrors.push(normalized);
   }
 
-  private enqueueFileChooserTask(task: () => Promise<void>): void {
-    this.fileChooserQueue = this.fileChooserQueue
-      .catch(() => {})
-      .then(task)
-      .catch((error) => {
-        this.recordFileChooserError(error);
-      });
+  private enqueueFileChooserTask(task: (chooserTaskId: number) => Promise<void>): void {
+    const chooserTaskId = ++this.nextFileChooserTaskId;
+    for (const scope of this.interactionScopes.values()) {
+      if (scope.active) {
+        scope.taskIds.add(chooserTaskId);
+        scope.onTaskAdded?.();
+      }
+    }
+
+    const taskPromise = this.fileChooserQueue.catch(() => {}).then(() => task(chooserTaskId));
+    this.fileChooserTaskPromises.set(chooserTaskId, taskPromise);
+    this.fileChooserQueue = taskPromise.catch((error) => {
+      this.recordFileChooserError(error);
+    });
   }
 
   private getPageByTargetId(targetId: string) {
@@ -164,7 +244,10 @@ export class SessionFileManager {
         enabled: true,
       })
       .catch((error) => {
-        console.warn('[ORCHESTRATOR] Failed to enable file chooser interception on session:', error);
+        console.warn(
+          '[ORCHESTRATOR] Failed to enable file chooser interception on session:',
+          error,
+        );
       });
   }
 
@@ -197,14 +280,13 @@ export class SessionFileManager {
       filename,
       remotePath: `${this.downloadPath}/${filename}`,
       ...(params.url ? { downloadUrl: params.url } : {}),
-      sourceStep:
-        this.cloneStepExecutionContext(this.currentStepContext) ?? {
-          stepIndex: null,
-          stepType: null,
-          instruction: null,
-          pageUrl: this.deps.getActivePageUrl() || null,
-          startedAt: new Date().toISOString(),
-        },
+      sourceStep: this.cloneStepExecutionContext(this.currentStepContext) ?? {
+        stepIndex: null,
+        stepType: null,
+        instruction: null,
+        pageUrl: this.deps.getActivePageUrl() || null,
+        startedAt: new Date().toISOString(),
+      },
     });
   }
 
@@ -246,20 +328,20 @@ export class SessionFileManager {
       selectedRemotePaths: selection.selectedRemotePaths,
       selectedFiles: selection.selectedFiles,
       chooserMode: args.chooserMode,
-      targetStep:
-        this.cloneStepExecutionContext(args.targetStep) ?? {
-          stepIndex: null,
-          stepType: null,
-          instruction: null,
-          pageUrl,
-          startedAt: new Date().toISOString(),
-        },
+      targetStep: this.cloneStepExecutionContext(args.targetStep) ?? {
+        stepIndex: null,
+        stepType: null,
+        instruction: null,
+        pageUrl,
+        startedAt: new Date().toISOString(),
+      },
+      uploadedAt: new Date().toISOString(),
       reason: selection.reason,
-      confidence: selection.confidence,
     };
   }
 
   private async handleFileChooserOpened(args: {
+    chooserTaskId: number;
     targetId: string;
     chooserMode: UploadedSessionFileEvent['chooserMode'];
     backendNodeId: number;
@@ -284,16 +366,103 @@ export class SessionFileManager {
       candidates: [...this.downloadedSessionFiles].reverse(),
     });
 
+    console.log(selection);
+
     await page.sendCDP('DOM.enable').catch(() => {});
     await page.sendCDP('DOM.setFileInputFiles', {
       backendNodeId: args.backendNodeId,
       files: selection.selectedRemotePaths,
     });
 
+    const upload = this.buildUploadedSessionFileEvent(args, selection, pageUrl);
+    this.uploadedSessionFileRecords.push({
+      chooserTaskId: args.chooserTaskId,
+      upload,
+    });
     this.deps.emit({
       type: 'file:uploaded',
-      upload: this.buildUploadedSessionFileEvent(args, selection, pageUrl),
+      upload,
     });
+  }
+
+  private async settleInteractionScope(
+    scopeId: string,
+  ): Promise<AgentInteractionSyncResult | null> {
+    const scope = this.interactionScopes.get(scopeId);
+    if (!scope) return null;
+
+    // If there are downloaded files that could be uploaded, wait for a file chooser event
+    // (up to the grace period). Otherwise skip the wait since no upload can happen.
+    if (this.downloadedSessionFiles.length > 0) {
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(resolve, FILE_CHOOSER_SCOPE_GRACE_MS);
+        scope.onTaskAdded = () => {
+          clearTimeout(timeout);
+          resolve();
+        };
+      });
+      scope.onTaskAdded = undefined;
+    }
+    scope.active = false;
+
+    try {
+      for (const taskId of scope.taskIds) {
+        const taskPromise = this.fileChooserTaskPromises.get(taskId);
+        if (taskPromise) {
+          try {
+            await waitForTaskWithTimeout(taskPromise, FILE_CHOOSER_SCOPE_SETTLE_TIMEOUT_MS);
+          } catch (error) {
+            const normalized = error instanceof Error ? error : new Error(String(error));
+            normalized.name = 'AgentInteractionSyncError';
+            throw normalized;
+          }
+        }
+      }
+
+      const uploads = this.uploadedSessionFileRecords
+        .filter((record) => scope.taskIds.has(record.chooserTaskId))
+        .map((record) => record.upload);
+
+      if (uploads.length === 0) {
+        return null;
+      }
+
+      return this.buildInteractionSyncResult(uploads);
+    } finally {
+      this.interactionScopes.delete(scopeId);
+    }
+  }
+
+  private buildInteractionSyncResult(
+    uploads: UploadedSessionFileEvent[],
+  ): AgentInteractionSyncResult | null {
+    const uploadedFiles: AgentUploadedFileNote[] = uploads.flatMap((upload) =>
+      upload.selectedFiles.map((file, index) => {
+        const remotePath = upload.selectedRemotePaths[index] ?? file.remotePath;
+        return {
+          fileId: file.id,
+          filename: file.filename,
+          uploadedAs: path.basename(remotePath),
+          remotePath,
+        };
+      }),
+    );
+
+    if (uploadedFiles.length === 0) {
+      return null;
+    }
+
+    const uploadMessage =
+      uploadedFiles.length === 1
+        ? `Uploaded ${uploadedFiles[0].filename} as ${uploadedFiles[0].uploadedAs}.`
+        : `Uploaded ${uploadedFiles.length} files: ${uploadedFiles
+            .map((file) => `${file.filename} as ${file.uploadedAs}`)
+            .join('; ')}.`;
+
+    return {
+      uploadedFiles,
+      uploadMessage,
+    };
   }
 
   private async handleSessionFileCdpEvent(info: {
@@ -313,7 +482,8 @@ export class SessionFileManager {
 
     if (info.method === 'Target.attachedToTarget') {
       const params = info.params as Protocol.Target.AttachedToTargetEvent;
-      const subtype = (params.targetInfo as Protocol.Target.TargetInfo & { subtype?: string }).subtype;
+      const subtype = (params.targetInfo as Protocol.Target.TargetInfo & { subtype?: string })
+        .subtype;
       if (params.targetInfo.type === 'page' && subtype !== 'iframe') {
         const session = this.stagehand?.context.conn.getSession(params.sessionId);
         if (session) {
@@ -331,8 +501,13 @@ export class SessionFileManager {
     const backendNodeId = params.backendNodeId;
     const targetStep = this.cloneStepExecutionContext(this.currentStepContext);
 
-    this.enqueueFileChooserTask(() =>
+    console.log(
+      `[SESSION_FILES] File chooser intercepted via CDP (mode=${params.mode ?? 'unknown'}, target=${targetId}, downloadedFiles=${this.downloadedSessionFiles.length})`,
+    );
+
+    this.enqueueFileChooserTask((chooserTaskId) =>
       this.handleFileChooserOpened({
+        chooserTaskId,
         targetId,
         chooserMode: params.mode || 'selectSingle',
         backendNodeId,

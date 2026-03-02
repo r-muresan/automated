@@ -101,9 +101,9 @@ export class OrchestratorAgent {
       const activeUrl = this.getActivePageUrl();
       const provider = getSpreadsheetProvider(activeUrl);
       const activeTools = buildHybridActiveToolsForUrl(activeUrl);
-      console.log(
-        `[ORCHESTRATOR] Active tools scope=${scope} step=${typeof stepNumber === 'number' ? stepNumber : 'unknown'} provider=${provider ?? 'none'} tools=${JSON.stringify(activeTools)}`,
-      );
+      // console.log(
+      //   `[ORCHESTRATOR] Active tools scope=${scope} step=${typeof stepNumber === 'number' ? stepNumber : 'unknown'} provider=${provider ?? 'none'} tools=${JSON.stringify(activeTools)}`,
+      // );
       return { activeTools };
     };
   }
@@ -336,11 +336,15 @@ export class OrchestratorAgent {
               persistChanges: true,
             }
           : undefined,
+        adblock: true,
+        trackers: true,
+        annoyances: true,
+        acceptCookies: true,
       });
 
       this.stagehand = new Stagehand({
         env: 'LOCAL',
-        verbose: 0,
+        verbose: 1,
         model: {
           modelName: models.extract,
           apiKey: process.env.OPENROUTER_API_KEY,
@@ -832,6 +836,7 @@ export class OrchestratorAgent {
         apiKey: process.env.OPENROUTER_API_KEY,
         baseURL: OPENROUTER_BASE_URL,
       },
+      interactionSync: this.sessionFiles.createAgentInteractionSync(),
     } as const;
 
     const usageTotals = {
@@ -980,6 +985,8 @@ export class OrchestratorAgent {
       assertNotAborted: this.assertNotAborted.bind(this),
       executeSteps: this.executeSteps.bind(this),
       getDownloadedFiles: () => this.sessionFiles.getDownloadedFiles(),
+      getUploadedFiles: () => this.sessionFiles.getUploadedFiles(),
+      getAgentInteractionSync: () => this.sessionFiles.createAgentInteractionSync(),
       requestCredentialHandoff: (request) =>
         this.requestCredentialHandoff(
           request,
@@ -1059,6 +1066,7 @@ export class OrchestratorAgent {
         }),
         stream: false,
         mode: 'hybrid',
+        interactionSync: this.sessionFiles.createAgentInteractionSync(),
       });
 
       try {

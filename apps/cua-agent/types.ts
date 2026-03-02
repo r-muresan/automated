@@ -91,8 +91,8 @@ export interface UploadedSessionFileEvent {
   selectedFiles: DownloadedSessionFile[];
   targetStep: StepExecutionContext;
   chooserMode: 'selectSingle' | 'selectMultiple' | string;
+  uploadedAt: string;
   reason?: string;
-  confidence?: 'high' | 'medium' | 'low';
 }
 
 // --- Results ---
