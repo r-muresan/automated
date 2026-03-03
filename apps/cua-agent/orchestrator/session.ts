@@ -98,7 +98,6 @@ export async function initHyperbrowserSession(
       timeoutMinutes: 60,
       saveDownloads: true,
       enableWebRecording: true,
-      enableVideoWebRecording: true,
       profile: profileId
         ? {
             id: profileId,
@@ -106,8 +105,6 @@ export async function initHyperbrowserSession(
           }
         : undefined,
       adblock: true,
-      trackers: true,
-      annoyances: true,
       acceptCookies: true,
     });
 
@@ -153,10 +150,7 @@ export async function initHyperbrowserSession(
   }
 }
 
-export async function closeSession(
-  ctx: OrchestratorContext,
-  session: SessionState,
-): Promise<void> {
+export async function closeSession(ctx: OrchestratorContext, session: SessionState): Promise<void> {
   const sessionId = session.hyperbrowserSessionId ?? session.activeSessionId;
   const isLocal = !!ctx.options.localCdpUrl;
   ctx.sessionFiles.reset();
