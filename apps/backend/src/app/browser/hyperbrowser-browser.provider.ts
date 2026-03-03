@@ -145,9 +145,14 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
       acceptCookies: true,
     });
 
+    const connectUrl = session.wsEndpoint
+      ? `${session.wsEndpoint}${session.wsEndpoint.includes('?') ? '&' : '?'}keepAlive=true`
+      : session.wsEndpoint;
+
     return {
       ...session,
-      connectUrl: session.wsEndpoint,
+      connectUrl,
+      wsEndpoint: connectUrl,
       profileId,
     };
   }
@@ -262,7 +267,9 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
             title: DEFAULT_INITIAL_PAGE_TITLE,
           },
         ],
-        cdpWsUrlTemplate: session.wsEndpoint,
+        cdpWsUrlTemplate: session.wsEndpoint
+          ? `${session.wsEndpoint}${session.wsEndpoint.includes('?') ? '&' : '?'}keepAlive=true`
+          : session.wsEndpoint,
         liveViewUrl: session.liveUrl,
       };
     } catch (error) {

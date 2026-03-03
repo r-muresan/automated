@@ -24,7 +24,7 @@ function buildCdpWsUrlTemplate(
 
   try {
     const url = new URL(connectUrl);
-    return `${url.protocol}//${url.host}/debug/${sessionId}/devtools/page/{pageId}`;
+    return `${url.protocol}//${url.host}/debug/${sessionId}/devtools/page/{pageId}?keepAlive=true`;
   } catch {
     return connectUrl;
   }

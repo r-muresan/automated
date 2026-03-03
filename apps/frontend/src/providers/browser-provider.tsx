@@ -61,7 +61,7 @@ interface BrowserContextType {
 const BrowserContext = createContext<BrowserContextType | undefined>(undefined);
 
 const SESSION_RECREATION_COOLDOWN_MS = 10_000;
-const SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const SESSION_IDLE_TIMEOUT_MS = 60 * 1000;
 const SESSION_PING_INTERVAL_MS = 15_000;
 
 const normalizePages = (
@@ -85,7 +85,6 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   const [fileChooserState, setFileChooserState] = useState<FileChooserState | null>(null);
 
   const lastInteractionRef = useRef(Date.now());
-  const isHandlingDisconnectRef = useRef(false);
   const recreateSessionRef = useRef<(() => Promise<boolean>) | null>(null);
   const addInteractionRef = useRef<
     | ((
@@ -200,18 +199,10 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         }
       },
       onWebSocketDisconnected: () => {
-        if (isHandlingDisconnectRef.current) {
-          return;
-        }
-
-        isHandlingDisconnectRef.current = true;
-        window.setTimeout(async () => {
-          try {
-            await recreateSessionRef.current?.();
-          } finally {
-            isHandlingDisconnectRef.current = false;
-          }
-        }, 500);
+        // With keepAlive=true, the browser session stays alive on the server
+        // even when the CDP WebSocket disconnects. The ping loop will detect
+        // if the session is truly gone (404) and recreate it then.
+        console.log('[FRONTEND] CDP WebSocket disconnected; session kept alive on server');
       },
       onFileChooserOpened: (pageId: string, mode: string, backendNodeId: number) => {
         console.log('[FRONTEND] File chooser opened, showing upload modal');
@@ -363,6 +354,25 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
 
     return () => window.clearInterval(interval);
   }, [handleStopSession, pingSessionMutation, recreateSession, sessionId]);
+
+  // When the user returns to the tab after the session was stopped due to
+  // idle timeout, automatically create a new session.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      // Reset interaction timer so the new session doesn't immediately time out
+      lastInteractionRef.current = Date.now();
+
+      // Only recreate if there's no active session (it was cleaned up while away)
+      if (!sessionId && sessionCreatedAtRef.current > 0) {
+        recreateSessionRef.current?.();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [sessionId]);
 
   useEffect(() => {
     if (!sessionId || !isCDPConnected) return;
