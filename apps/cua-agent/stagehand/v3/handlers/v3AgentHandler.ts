@@ -27,6 +27,7 @@ import {
   AgentState,
   AgentStreamResult,
   AgentStreamCallbacks,
+  AgentInteractionSync,
   AgentToolMode,
   AgentModelConfig,
   Variables,
@@ -71,6 +72,7 @@ export class V3AgentHandler {
   private systemInstructions?: string;
   private mcpTools?: ToolSet;
   private mode: AgentToolMode;
+  private interactionSync?: AgentInteractionSync;
 
   constructor(
     v3: V3,
@@ -80,6 +82,7 @@ export class V3AgentHandler {
     systemInstructions?: string,
     mcpTools?: ToolSet,
     mode?: AgentToolMode,
+    interactionSync?: AgentInteractionSync,
   ) {
     this.v3 = v3;
     this.logger = logger;
@@ -88,6 +91,7 @@ export class V3AgentHandler {
     this.systemInstructions = systemInstructions;
     this.mcpTools = mcpTools;
     this.mode = mode ?? 'dom';
+    this.interactionSync = interactionSync;
   }
 
   private async buildInitialContextMessage(initialPageUrl: string): Promise<ModelMessage | null> {
@@ -658,6 +662,7 @@ export class V3AgentHandler {
       modelId,
       excludeTools,
       variables,
+      interactionSync: this.interactionSync,
     });
   }
 

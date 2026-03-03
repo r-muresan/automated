@@ -16,3 +16,8 @@ export {
   type PaginationCheck,
   type ExtractionItem,
 } from './engine';
+export {
+  buildLoopItemFromDownloadedFile,
+  buildLoopItemsFromDownloadedFilesPrompt,
+  normalizeDownloadedFileLoopSelection,
+} from './files';

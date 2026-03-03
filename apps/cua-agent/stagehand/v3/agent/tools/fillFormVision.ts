@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { V3 } from "../../v3.js";
 import type { Action } from "../../types/public/methods.js";
 import type {
+  AgentInteractionSync,
   FillFormVisionToolResult,
   ModelOutputContentItem,
   Variables,
@@ -12,6 +13,12 @@ import {
   processCoordinates,
 } from "../utils/coordinateNormalization.js";
 import { ensureXPath } from "../utils/xpath.js";
+import {
+  beginInteractionScope,
+  mergeInteractionSyncResult,
+  rethrowInteractionSyncError,
+  settleInteractionScope,
+} from "./interactionSync.js";
 import { waitAndCaptureScreenshot } from "../utils/screenshotHandler.js";
 import { substituteVariables } from "../utils/variables.js";
 
@@ -20,6 +27,7 @@ export const fillFormVisionTool = (
   provider?: string,
   variables?: Variables,
   modelId?: string,
+  interactionSync?: AgentInteractionSync,
 ) => {
   const hasVariables = variables && Object.keys(variables).length > 0;
   const unitScaleCoordinates = isMoonshotModel(modelId);
@@ -70,6 +78,7 @@ MANDATORY USE CASES (always use fillFormVision for these):
         .min(2, "Provide at least two fields to fill"),
     }),
     execute: async ({ fields }): Promise<FillFormVisionToolResult> => {
+      const scope = beginInteractionScope(interactionSync);
       try {
         const page = await v3.context.awaitActivePage();
 
@@ -139,6 +148,7 @@ MANDATORY USE CASES (always use fillFormVision for these):
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
 
+        const syncResult = await settleInteractionScope(scope);
         const screenshotBase64 = await waitAndCaptureScreenshot(page, 100);
 
         // Record as "act" step with proper Actions for deterministic replay (only when caching)
@@ -151,12 +161,14 @@ MANDATORY USE CASES (always use fillFormVision for these):
           });
         }
 
-        return {
+        return mergeInteractionSyncResult({
           success: true,
           playwrightArguments: processedFields,
           screenshotBase64,
-        };
+        }, syncResult);
       } catch (error) {
+        await settleInteractionScope(scope).catch(() => {});
+        rethrowInteractionSyncError(error);
         return {
           success: false,
           error: `Error filling form: ${(error as Error).message}`,
@@ -171,6 +183,8 @@ MANDATORY USE CASES (always use fillFormVision for these):
             text: JSON.stringify({
               success: result.success,
               fieldsCount: result.playwrightArguments?.length ?? 0,
+              ...(result.uploadedFiles ? { uploadedFiles: result.uploadedFiles } : {}),
+              ...(result.uploadMessage ? { uploadMessage: result.uploadMessage } : {}),
             }),
           },
         ];

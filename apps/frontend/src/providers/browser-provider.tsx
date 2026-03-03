@@ -18,7 +18,12 @@ import {
   usePingSession,
   useStopSession,
 } from '../hooks/api';
-import { useBrowserCDP, type Interaction, type InteractionCallbacks } from '../hooks/useBrowserCDP';
+import {
+  useBrowserCDP,
+  type DownloadedFile,
+  type Interaction,
+  type InteractionCallbacks,
+} from '../hooks/useBrowserCDP';
 
 interface BrowserPage {
   id: string;
@@ -26,6 +31,12 @@ interface BrowserPage {
   title: string;
   favicon?: string;
   isSkeleton?: boolean;
+}
+
+interface FileChooserState {
+  pageId: string;
+  mode: string;
+  backendNodeId: number;
 }
 
 interface BrowserContextType {
@@ -39,6 +50,12 @@ interface BrowserContextType {
   handleTakeControl: (width?: number, height?: number) => Promise<void>;
   handleStopSession: () => Promise<void>;
   liveViewUrl: string | null;
+  downloadedFiles: DownloadedFile[];
+  fileChooserState: FileChooserState | null;
+  handleFileChooser: (
+    action: 'accept' | 'cancel',
+    files?: string[],
+  ) => Promise<void>;
 }
 
 const BrowserContext = createContext<BrowserContextType | undefined>(undefined);
@@ -56,7 +73,7 @@ const normalizePages = (
     title: page.title ?? '',
   }));
 
-export { type Interaction };
+export { type DownloadedFile, type Interaction };
 
 export function BrowserProvider({ children }: { children: ReactNode }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -65,6 +82,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [cdpWsUrlTemplate, setCdpWsUrlTemplate] = useState<string | null>(null);
   const [liveViewUrl, setLiveViewUrl] = useState<string | null>(null);
+  const [fileChooserState, setFileChooserState] = useState<FileChooserState | null>(null);
 
   const lastInteractionRef = useRef(Date.now());
   const isHandlingDisconnectRef = useRef(false);
@@ -195,6 +213,10 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
           }
         }, 500);
       },
+      onFileChooserOpened: (pageId: string, mode: string, backendNodeId: number) => {
+        console.log('[FRONTEND] File chooser opened, showing upload modal');
+        setFileChooserState({ pageId, mode, backendNodeId });
+      },
     }),
     [],
   );
@@ -205,9 +227,24 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
     interactions,
     removeInteraction,
     addInteraction,
+    downloadedFiles,
+    handleFileChooser: cdpHandleFileChooser,
   } = useBrowserCDP(sessionId, firstPageId, cdpCallbacks, cdpWsUrlTemplate);
 
   addInteractionRef.current = addInteraction;
+
+  const fileChooserStateRef = useRef(fileChooserState);
+  fileChooserStateRef.current = fileChooserState;
+
+  const handleFileChooser = useCallback(
+    async (action: 'accept' | 'cancel', files?: string[]) => {
+      const state = fileChooserStateRef.current;
+      if (!state) return;
+      setFileChooserState(null);
+      await cdpHandleFileChooser(state.pageId, state.backendNodeId, action, files);
+    },
+    [cdpHandleFileChooser],
+  );
 
   const handleTakeControl = useCallback(
     async (width?: number, height?: number) => {
@@ -349,6 +386,9 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         handleTakeControl,
         handleStopSession,
         liveViewUrl,
+        downloadedFiles,
+        fileChooserState,
+        handleFileChooser,
       }}
     >
       {children}
@@ -362,4 +402,8 @@ export function useBrowser() {
     throw new Error('useBrowser must be used within a BrowserProvider');
   }
   return context;
+}
+
+export function useOptionalBrowser() {
+  return useContext(BrowserContext) ?? null;
 }

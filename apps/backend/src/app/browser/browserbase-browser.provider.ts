@@ -4,7 +4,6 @@ import { chromium } from 'playwright-core';
 import { Browserbase, toFile } from '@browserbasehq/sdk';
 import {
   BrowserProvider,
-  BrowserHandle,
   CreateBrowserSessionOptions,
   BrowserSessionResult,
   InitSessionOptions,
@@ -247,21 +246,10 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
     }
   }
 
-  async connectForKeepalive(sessionId: string, connectUrl?: string): Promise<BrowserHandle | null> {
-    try {
-      const wsUrl =
-        connectUrl ?? `wss://connect.browserbase.com?apiKey=${this.apiKey}&sessionId=${sessionId}`;
-      return await chromium.connectOverCDP(wsUrl);
-    } catch (error) {
-      console.error(
-        `[BrowserbaseBrowserProvider] Failed to connect for keepalive: ${sessionId}`,
-        error,
-      );
-      return null;
-    }
-  }
-
-  async uploadSessionFile(sessionId: string, file: SessionUploadFile): Promise<void> {
+  async uploadSessionFile(
+    sessionId: string,
+    file: SessionUploadFile,
+  ): Promise<{ filePath: string }> {
     if (!this.client) {
       throw new Error('Browserbase API key is not configured');
     }
@@ -275,6 +263,7 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
     });
 
     await this.client.sessions.uploads.create(sessionId, { file: uploadFile });
+    return { filePath: `/tmp/uploads/${file.originalname || 'upload.bin'}` };
   }
 
   async createContext(): Promise<string> {

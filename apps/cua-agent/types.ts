@@ -62,6 +62,39 @@ export interface LoopContext {
   itemIndex?: number;
 }
 
+export interface StepExecutionContext {
+  stepIndex: number | null;
+  stepType: Step['type'] | null;
+  instruction: string | null;
+  loopItemIndex?: number;
+  loopItem?: unknown;
+  pageUrl?: string | null;
+  startedAt: string;
+}
+
+export interface PendingDownloadedFile {
+  id: string;
+  guid: string;
+  filename: string;
+  remotePath: string;
+  downloadUrl?: string;
+  sourceStep: StepExecutionContext;
+}
+
+export interface DownloadedSessionFile extends PendingDownloadedFile {
+  completedAt: string;
+}
+
+export interface UploadedSessionFileEvent {
+  selectedFileIds: string[];
+  selectedRemotePaths: string[];
+  selectedFiles: DownloadedSessionFile[];
+  targetStep: StepExecutionContext;
+  chooserMode: 'selectSingle' | 'selectMultiple' | string;
+  uploadedAt: string;
+  reason?: string;
+}
+
 // --- Results ---
 
 export interface StepResult {
@@ -150,6 +183,14 @@ export type OrchestratorEvent =
       success: boolean;
       error?: string;
       savedFile?: SaveStepOutput;
+    }
+  | {
+      type: 'file:downloaded';
+      file: DownloadedSessionFile;
+    }
+  | {
+      type: 'file:uploaded';
+      upload: UploadedSessionFileEvent;
     }
   | {
       type: 'loop:iteration:start';

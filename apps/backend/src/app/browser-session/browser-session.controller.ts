@@ -130,7 +130,6 @@ export class BrowserSessionController {
     @Param('sessionId') sessionId: string,
   ): Promise<BrowserSessionStopResponse> {
     console.log(`[CONTROLLER] Stopping session: ${sessionId}`);
-    await this.browserSessionService.stopRecordingKeepalive(sessionId);
     await this.browserSessionService.stopSession(sessionId);
     return { success: true };
   }

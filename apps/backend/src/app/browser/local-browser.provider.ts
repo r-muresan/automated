@@ -8,7 +8,6 @@ import * as net from 'net';
 import axios from 'axios';
 import {
   BrowserProvider,
-  BrowserHandle,
   CreateBrowserSessionOptions,
   BrowserSessionResult,
   InitSessionOptions,
@@ -316,12 +315,10 @@ export class LocalBrowserProvider extends BrowserProvider {
     }
   }
 
-  async connectForKeepalive(sessionId: string, _connectUrl?: string): Promise<BrowserHandle | null> {
-    const session = this.sessions.get(sessionId);
-    return session?.context.browser() ?? null;
-  }
-
-  async uploadSessionFile(_sessionId: string, _file: SessionUploadFile): Promise<void> {
+  async uploadSessionFile(
+    _sessionId: string,
+    _file: SessionUploadFile,
+  ): Promise<{ filePath: string }> {
     throw new Error('File uploads are only supported for managed browser sessions');
   }
 

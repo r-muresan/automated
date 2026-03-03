@@ -1,14 +1,3 @@
-/** Minimal browser interface shared across playwright-core and patchright providers */
-export interface BrowserHandle {
-  isConnected(): boolean;
-  close(): Promise<void>;
-  contexts(): Array<{
-    pages(): Array<{
-      evaluate<R>(pageFunction: () => R): Promise<R>;
-    }>;
-  }>;
-}
-
 export interface CreateBrowserSessionOptions {
   colorScheme?: 'light' | 'dark';
   width?: number;
@@ -69,6 +58,8 @@ export abstract class BrowserProvider {
     sessionId: string,
     options?: InitSessionOptions,
   ): Promise<InitSessionResult>;
-  abstract connectForKeepalive(sessionId: string, connectUrl?: string): Promise<BrowserHandle | null>;
-  abstract uploadSessionFile(sessionId: string, file: SessionUploadFile): Promise<void>;
+  abstract uploadSessionFile(
+    sessionId: string,
+    file: SessionUploadFile,
+  ): Promise<{ filePath: string }>;
 }

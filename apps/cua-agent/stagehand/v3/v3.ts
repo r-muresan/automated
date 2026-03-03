@@ -1698,6 +1698,7 @@ export class V3 {
       options?.systemPrompt,
       tools,
       options?.mode,
+      options?.interactionSync,
     );
 
     const resolvedOptions: AgentExecuteOptions | AgentStreamExecuteOptions =

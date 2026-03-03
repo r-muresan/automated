@@ -2,12 +2,27 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import type { V3 } from '../../v3.js';
 import type { Action } from '../../types/public/methods.js';
-import type { ClickToolResult, ModelOutputContentItem } from '../../types/public/agent.js';
+import type {
+  AgentInteractionSync,
+  ClickToolResult,
+  ModelOutputContentItem,
+} from '../../types/public/agent.js';
 import { isMoonshotModel, processCoordinates } from '../utils/coordinateNormalization.js';
+import {
+  beginInteractionScope,
+  mergeInteractionSyncResult,
+  rethrowInteractionSyncError,
+  settleInteractionScope,
+} from './interactionSync.js';
 import { ensureXPath } from '../utils/xpath.js';
 import { waitAndCaptureScreenshot } from '../utils/screenshotHandler.js';
 
-export const clickTool = (v3: V3, provider?: string, modelId?: string) => {
+export const clickTool = (
+  v3: V3,
+  provider?: string,
+  modelId?: string,
+  interactionSync?: AgentInteractionSync,
+) => {
   const unitScaleCoordinates = isMoonshotModel(modelId);
   const coordinateSchema = unitScaleCoordinates ? z.number().min(0).max(1) : z.number();
   const coordinateDescription = unitScaleCoordinates
@@ -26,6 +41,7 @@ export const clickTool = (v3: V3, provider?: string, modelId?: string) => {
       coordinates: z.array(coordinateSchema).describe(coordinateDescription),
     }),
     execute: async ({ describe, coordinates }): Promise<ClickToolResult> => {
+      const scope = beginInteractionScope(interactionSync);
       try {
         const page = await v3.context.awaitActivePage();
         const processed = await processCoordinates(
@@ -54,6 +70,7 @@ export const clickTool = (v3: V3, provider?: string, modelId?: string) => {
         const xpath = await page.click(processed.x, processed.y, {
           returnXpath: shouldCollectXpath,
         });
+        const syncResult = await settleInteractionScope(scope);
 
         const screenshotBase64 = await waitAndCaptureScreenshot(page);
 
@@ -76,13 +93,15 @@ export const clickTool = (v3: V3, provider?: string, modelId?: string) => {
           }
         }
 
-        return {
+        return mergeInteractionSyncResult({
           success: true,
           describe,
           coordinates: [processed.x, processed.y],
           screenshotBase64,
-        };
+        }, syncResult);
       } catch (error) {
+        await settleInteractionScope(scope).catch(() => {});
+        rethrowInteractionSyncError(error);
         return {
           success: false,
           error: `Error clicking: ${(error as Error).message}`,
@@ -98,6 +117,8 @@ export const clickTool = (v3: V3, provider?: string, modelId?: string) => {
               success: result.success,
               describe: result.describe,
               coordinates: result.coordinates,
+              ...(result.uploadedFiles ? { uploadedFiles: result.uploadedFiles } : {}),
+              ...(result.uploadMessage ? { uploadMessage: result.uploadMessage } : {}),
             }),
           },
         ];

@@ -1,21 +1,30 @@
 import OpenAI from 'openai';
-import type { Stagehand } from '../stagehand/v3';
-import type { LoopStep, Step, OrchestratorEvent, LoopContext } from '../types';
+import type { Stagehand } from '../../stagehand/v3';
+import type { AgentInteractionSync } from '../../stagehand/v3/types/public/agent';
+import type {
+  DownloadedSessionFile,
+  LoopStep,
+  Step,
+  OrchestratorEvent,
+  LoopContext,
+  UploadedSessionFileEvent,
+} from '../../types';
 import {
   capturePageScreenshot,
   checkForMoreItemsFromVision,
   identifyItemsWithSharedStrategy,
   type ExtractionMode,
   type ExtractionItem,
-} from './extraction';
+} from '../extraction';
 import {
   buildHybridActiveToolsForUrl,
   createBrowserTabTools,
   getSpreadsheetProvider,
   type CredentialHandoffRequest,
   type CredentialHandoffResult,
-} from './agent-tools';
-import { waitForPageReady } from './page-ready';
+} from '../agent-tools';
+import { waitForPageReady } from '../page-ready';
+import { buildSessionDownloadedFilesSection } from '../session-files';
 
 // ---------------------------------------------------------------------------
 // Dependency contract — everything the loop needs from the orchestrator
@@ -30,6 +39,9 @@ export interface LoopDeps {
   emit: (event: OrchestratorEvent) => void;
   assertNotAborted: () => void;
   executeSteps: (steps: Step[], context?: LoopContext) => Promise<void>;
+  getDownloadedFiles: () => DownloadedSessionFile[];
+  getUploadedFiles: () => UploadedSessionFileEvent[];
+  getAgentInteractionSync: () => AgentInteractionSync;
   requestCredentialHandoff?: (
     request: CredentialHandoffRequest,
     step: LoopStep,
@@ -46,16 +58,16 @@ function resolveCuaModelName(modelName: string): string {
   return CUA_MODEL_ALIASES[modelName] ?? modelName;
 }
 
-function resolveOpenRouterModelName(modelName: string): string {
+export function resolveOpenRouterModelName(modelName: string): string {
   const normalized = resolveCuaModelName(modelName);
-  return normalized.startsWith('openai/') ? normalized : `openai/${normalized}`;
+  return normalized.includes('/') ? normalized : `openai/${normalized}`;
 }
 
 // ---------------------------------------------------------------------------
 // CUA navigation — pure vision + computer-use tools, no DOM
 // ---------------------------------------------------------------------------
 
-async function navigateToNextBatch(
+export async function navigateToNextBatch(
   deps: LoopDeps,
   loopStep: LoopStep,
   loopIndex: number,
@@ -73,12 +85,19 @@ async function navigateToNextBatch(
     actionInstructions[action] ??
     `Navigate to see more "${description}" items.${selectorHint ? ` Look for: ${selectorHint}` : ''}`;
 
-  console.log(`[VISION_LOOP] Navigating to next batch: ${instruction}`);
+  console.log(`[LOOP] Navigating to next batch: ${instruction}`);
   const requestCredentialHandoff = deps.requestCredentialHandoff;
+  const promptSections = [
+    `You are navigating a web page to reveal more list items.`,
+    `Perform exactly the action described. Do not do anything else.`,
+  ];
+  const downloadedFilesSection = buildSessionDownloadedFilesSection(deps.getDownloadedFiles());
+  if (downloadedFilesSection) {
+    promptSections.push('', downloadedFilesSection);
+  }
 
   const agent = deps.stagehand.agent({
-    systemPrompt: `You are navigating a web page to reveal more list items.
-Perform exactly the action described. Do not do anything else.`,
+    systemPrompt: promptSections.join('\n'),
     tools: createBrowserTabTools(
       deps.stagehand,
       requestCredentialHandoff
@@ -95,28 +114,25 @@ Perform exactly the action described. Do not do anything else.`,
       baseURL: deps.openrouterBaseUrl,
     },
     mode: 'hybrid',
+    interactionSync: deps.getAgentInteractionSync(),
   });
 
-  try {
-    await agent.execute({
-      instruction,
-      maxSteps: 10,
-      callbacks: {
-        prepareStep: async ({ stepNumber }: { stepNumber: number }) => {
-          const page = deps.stagehand.context.activePage() ?? deps.stagehand.context.pages()[0];
-          const activeUrl = page?.url?.() ?? '';
-          const provider = getSpreadsheetProvider(activeUrl);
-          const activeTools = buildHybridActiveToolsForUrl(activeUrl);
-          console.log(
-            `[VISION_LOOP] Tool activation step=${stepNumber}: provider=${provider ?? 'none'} spreadsheetTools=${provider ? 'enabled' : 'disabled'} activeTools=${JSON.stringify(activeTools)}`,
-          );
-          return { activeTools };
-        },
+  await agent.execute({
+    instruction,
+    maxSteps: 10,
+    callbacks: {
+      prepareStep: async ({ stepNumber }: { stepNumber: number }) => {
+        const page = deps.stagehand.context.activePage() ?? deps.stagehand.context.pages()[0];
+        const activeUrl = page?.url?.() ?? '';
+        const provider = getSpreadsheetProvider(activeUrl);
+        const activeTools = buildHybridActiveToolsForUrl(activeUrl);
+        console.log(
+          `[LOOP] Tool activation step=${stepNumber}: provider=${provider ?? 'none'} spreadsheetTools=${provider ? 'enabled' : 'disabled'} activeTools=${JSON.stringify(activeTools)}`,
+        );
+        return { activeTools };
       },
-    });
-  } catch (error: any) {
-    console.warn(`[VISION_LOOP] Navigation agent error (continuing): ${error.message}`);
-  }
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -133,7 +149,7 @@ export async function executeLoopStep(
   step: LoopStep,
   index: number,
 ): Promise<void> {
-  console.log(`[VISION_LOOP] Starting: "${step.description}"`);
+  console.log(`[LOOP] Starting: "${step.description}"`);
   deps.assertNotAborted();
 
   const processedFingerprints = new Set<string>();
@@ -167,19 +183,22 @@ export async function executeLoopStep(
         model: deps.models.extract,
         description: step.description,
         knownFingerprints: processedFingerprints,
+        downloadedFiles: deps.getDownloadedFiles(),
       });
 
+      console.log(extractionMode, items);
+
       console.log(
-        `[VISION_LOOP] Page ${pageCount}: ${items.length} new item(s) ` +
+        `[LOOP] Page ${pageCount}: ${items.length} new item(s) ` +
           `via ${extractionMode} extraction ` +
           `(${processedFingerprints.size} already processed)`,
       );
 
       if (items.length === 0) {
         consecutiveEmpty++;
-        console.log(`[VISION_LOOP] Empty page ${consecutiveEmpty}/${MAX_CONSECUTIVE_EMPTY}`);
+        console.log(`[LOOP] Empty page ${consecutiveEmpty}/${MAX_CONSECUTIVE_EMPTY}`);
         if (consecutiveEmpty >= MAX_CONSECUTIVE_EMPTY) {
-          console.log('[VISION_LOOP] Consecutive empty limit reached — stopping');
+          console.log('[LOOP] Consecutive empty limit reached — stopping');
           break;
         }
       } else {
@@ -194,7 +213,7 @@ export async function executeLoopStep(
         // Register fingerprint before executing so a re-visit won't reprocess
         processedFingerprints.add(item.fingerprint);
 
-        console.log(`[VISION_LOOP] Processing item ${totalProcessed + 1}: "${item.fingerprint}"`);
+        console.log(`[LOOP] Processing item ${totalProcessed + 1}: "${item.fingerprint}"`);
 
         deps.emit({
           type: 'loop:iteration:start',
@@ -216,7 +235,7 @@ export async function executeLoopStep(
         } catch (error: any) {
           iterationSuccess = false;
           iterationError = error?.message ?? 'Iteration failed';
-          console.warn(`[VISION_LOOP] Item "${item.fingerprint}" failed: ${iterationError}`);
+          console.warn(`[LOOP] Item "${item.fingerprint}" failed: ${iterationError}`);
         }
 
         totalProcessed++;
@@ -246,52 +265,52 @@ export async function executeLoopStep(
 
       // ── 4. Check for more items (vision, no DOM) ────────────────────────
       if (extractionMode === 'spreadsheet') {
-        console.log(
-          '[VISION_LOOP] Spreadsheet extraction mode has no pagination search — stopping',
-        );
+        console.log('[LOOP] Spreadsheet extraction mode has no pagination search — stopping');
         break;
       }
 
-      const freshScreenshot = await capturePageScreenshot(deps.stagehand);
-      const pagination = await checkForMoreItemsFromVision({
-        llmClient: deps.openai,
-        model: deps.models.extract,
-        screenshotDataUrl: freshScreenshot,
-        description: step.description,
-        totalProcessed,
-      });
+      break;
 
-      console.log(
-        `[VISION_LOOP] Pagination: hasMore=${pagination.hasMore} ` +
-          `action=${pagination.action} hint="${pagination.selectorHint}"`,
-      );
+      // const freshScreenshot = await capturePageScreenshot(deps.stagehand);
+      // const pagination = await checkForMoreItemsFromVision({
+      //   llmClient: deps.openai,
+      //   model: deps.models.extract,
+      //   screenshotDataUrl: freshScreenshot,
+      //   description: step.description,
+      //   totalProcessed,
+      // });
 
-      if (!pagination.hasMore || pagination.action === 'none') {
-        console.log('[VISION_LOOP] No more items — done');
-        break;
-      }
+      // console.log(
+      //   `[LOOP] Pagination: hasMore=${pagination.hasMore} ` +
+      //     `action=${pagination.action} hint="${pagination.selectorHint}"`,
+      // );
 
-      // ── 5. Navigate to next batch via CUA agent (vision + tools) ────────
-      await navigateToNextBatch(
-        deps,
-        step,
-        index,
-        pagination.action,
-        pagination.selectorHint,
-        step.description,
-      );
+      // if (!pagination.hasMore || pagination.action === 'none') {
+      //   console.log('[LOOP] No more items — done');
+      //   break;
+      // }
 
-      await waitForPageReady(deps.stagehand);
+      // // ── 5. Navigate to next batch via CUA agent (vision + tools) ────────
+      // await navigateToNextBatch(
+      //   deps,
+      //   step,
+      //   index,
+      //   pagination.action,
+      //   pagination.selectorHint,
+      //   step.description,
+      // );
+
+      // await waitForPageReady(deps.stagehand);
     }
   } catch (error: any) {
     if ((error as any)?.message === 'Workflow aborted') throw error;
     loopSuccess = false;
     loopError = error?.message ?? 'Loop failed';
-    console.error(`[VISION_LOOP] Error: ${loopError}`);
+    console.error(`[LOOP] Error: ${loopError}`);
   }
 
   console.log(
-    `[VISION_LOOP] Complete: "${step.description}" — ` +
+    `[LOOP] Complete: "${step.description}" — ` +
       `${totalProcessed} item(s) across ${pageCount} page(s)`,
   );
 

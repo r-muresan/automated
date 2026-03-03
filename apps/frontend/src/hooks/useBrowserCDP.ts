@@ -49,6 +49,14 @@ export interface InteractionCallbacks {
   onFaviconUpdate?: (faviconUrl: string, pageId: string) => void;
   onNewTabDetected?: (targetId: string, url: string) => void;
   onWebSocketDisconnected?: () => void;
+  onFileChooserOpened?: (pageId: string, mode: string, backendNodeId: number) => void;
+  onDownloadCompleted?: (filename: string) => void;
+}
+
+export interface DownloadedFile {
+  filename: string;
+  url: string;
+  completedAt: number;
 }
 
 interface UseBrowserCDPReturn extends BrowserCDPState {
@@ -61,6 +69,13 @@ interface UseBrowserCDPReturn extends BrowserCDPState {
     pageId?: string,
     data?: any,
   ) => void;
+  downloadedFiles: DownloadedFile[];
+  handleFileChooser: (
+    pageId: string,
+    backendNodeId: number,
+    action: 'accept' | 'cancel',
+    files?: string[],
+  ) => Promise<void>;
 }
 
 /**
@@ -140,7 +155,11 @@ export function useBrowserCDP(
   });
 
   const [interactions, setInteractions] = useState<Interaction[]>([]);
+  const [downloadedFiles, setDownloadedFiles] = useState<DownloadedFile[]>([]);
   const callbacksRef = useRef(callbacks);
+  const downloadGuidToFilenameRef = useRef<Map<string, { filename: string; url: string }>>(
+    new Map(),
+  );
 
   // Keep callbacks ref updated
   useEffect(() => {
@@ -381,6 +400,14 @@ export function useBrowserCDP(
             params: { name: '__cdpEvent' },
           }),
         );
+        // Intercept file chooser dialogs so we can show a custom upload modal
+        ws.send(
+          JSON.stringify({
+            id: msgId++,
+            method: 'Page.setInterceptFileChooserDialog',
+            params: { enabled: true },
+          }),
+        );
         if (!injectedPagesRef.current.has(pageId)) {
           // Inject listeners for current and future documents so interaction
           // recording works even when the screencast renderer is a proxy iframe.
@@ -538,6 +565,17 @@ export function useBrowserCDP(
               }
             }
           }
+
+          // Handle file chooser interception
+          if (message.method === 'Page.fileChooserOpened') {
+            const params = message.params as any;
+            const mode = params?.mode || 'selectSingle';
+            const backendNodeId = params?.backendNodeId;
+            console.log(`[CDP] File chooser opened for page ${pageId}, mode: ${mode}, backendNodeId: ${backendNodeId}`);
+            if (backendNodeId != null) {
+              callbacksRef.current?.onFileChooserOpened?.(pageId, mode, backendNodeId);
+            }
+          }
         } catch (e) {
           console.warn('[CDP] Failed to parse message:', e);
         }
@@ -630,6 +668,19 @@ export function useBrowserCDP(
             id: discoverMsgId,
             method: 'Target.setDiscoverTargets',
             params: { discover: true },
+          }),
+        );
+
+        // Enable download events on this CDP session so we can track downloaded files
+        ws.send(
+          JSON.stringify({
+            id: messageIdRef.current++,
+            method: 'Browser.setDownloadBehavior',
+            params: {
+              behavior: 'allow',
+              downloadPath: '/tmp/downloads',
+              eventsEnabled: true,
+            },
           }),
         );
       };
@@ -761,6 +812,59 @@ export function useBrowserCDP(
                 }
               }
               return;
+            }
+
+            // Handle file chooser interception on attached targets
+            if (message.method === 'Page.fileChooserOpened') {
+              const params = message.params as any;
+              const mode = params?.mode || 'selectSingle';
+              const backendNodeId = params?.backendNodeId;
+              console.log(
+                `[CDP] File chooser opened for page ${targetPageId}, mode: ${mode}, backendNodeId: ${backendNodeId}`,
+              );
+              if (backendNodeId != null) {
+                callbacksRef.current?.onFileChooserOpened?.(targetPageId, mode, backendNodeId);
+              }
+              return;
+            }
+          }
+
+          // Track download events (browser-level, no sessionId)
+          if (message.method === 'Browser.downloadWillBegin') {
+            const params = message.params as any;
+            const guid = params?.guid;
+            const suggestedFilename = params?.suggestedFilename || 'download';
+            const url = params?.url || '';
+            if (guid) {
+              downloadGuidToFilenameRef.current.set(guid, {
+                filename: suggestedFilename,
+                url,
+              });
+              console.log(`[CDP] Download started: ${suggestedFilename} (${guid})`);
+            }
+          }
+
+          if (message.method === 'Browser.downloadProgress') {
+            const params = message.params as any;
+            const guid = params?.guid;
+            const state = params?.state;
+            if (guid && state === 'completed') {
+              const fileInfo = downloadGuidToFilenameRef.current.get(guid);
+              if (fileInfo) {
+                console.log(`[CDP] Download completed: ${fileInfo.filename}`);
+                setDownloadedFiles((prev) => [
+                  ...prev,
+                  {
+                    filename: fileInfo.filename,
+                    url: fileInfo.url,
+                    completedAt: Date.now(),
+                  },
+                ]);
+                callbacksRef.current?.onDownloadCompleted?.(fileInfo.filename);
+                downloadGuidToFilenameRef.current.delete(guid);
+              }
+            } else if (guid && state === 'canceled') {
+              downloadGuidToFilenameRef.current.delete(guid);
             }
           }
 
@@ -933,6 +1037,15 @@ export function useBrowserCDP(
           injectedPagesRef.current.add(targetId);
         }
 
+        // Intercept file chooser dialogs so we can show a custom upload modal
+        await sendToAttachedTarget(
+          attachedSessionId,
+          'Page.setInterceptFileChooserDialog',
+          { enabled: true },
+        ).catch((err) =>
+          console.warn('[CDP] Failed to enable file chooser interception:', err),
+        );
+
         return attachedSessionId;
       })().finally(() => {
         pendingTargetAttachmentRef.current.delete(targetId);
@@ -1017,6 +1130,25 @@ export function useBrowserCDP(
       });
     },
     [attachToTargetSession, connectToPage, sendToAttachedTarget, sessionId, usesBrowserLevelCdp],
+  );
+
+  const handleFileChooser = useCallback(
+    async (
+      pageId: string,
+      backendNodeId: number,
+      action: 'accept' | 'cancel',
+      files?: string[],
+    ) => {
+      console.log(`[CDP] Handling file chooser for page ${pageId}: ${action}`, files);
+      const filePaths = action === 'accept' && files?.length ? files : [];
+      // DOM domain must be enabled for DOM.setFileInputFiles to work
+      await sendToPage(pageId, 'DOM.enable').catch(() => {});
+      await sendToPage(pageId, 'DOM.setFileInputFiles', {
+        files: filePaths,
+        backendNodeId,
+      });
+    },
+    [sendToPage],
   );
 
   const getRawClickScreenshot = useCallback(
@@ -1373,10 +1505,11 @@ export function useBrowserCDP(
   // Update ref so connectToPage can use it
   handleKeydownRef.current = handleKeydown;
 
-  // Clear interactions when session ends
+  // Clear interactions and downloads when session ends
   useEffect(() => {
     if (!sessionId) {
       setInteractions([]);
+      setDownloadedFiles([]);
       typingBufferRef.current = null;
       injectedPagesRef.current.clear();
       pageTargetSessionIdsRef.current.clear();
@@ -1385,6 +1518,7 @@ export function useBrowserCDP(
       lastNavigationRefreshByPageRef.current.clear();
       lastRawScreenshotByPageRef.current.clear();
       pendingRawScreenshotByPageRef.current.clear();
+      downloadGuidToFilenameRef.current.clear();
     }
   }, [sessionId]);
 
@@ -1394,5 +1528,7 @@ export function useBrowserCDP(
     interactions,
     removeInteraction,
     addInteraction,
+    downloadedFiles,
+    handleFileChooser,
   };
 }

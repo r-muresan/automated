@@ -20,6 +20,7 @@ import type { ToolSet, InferUITools } from "ai";
 import type { V3 } from "../../v3.js";
 import type { LogLine } from "../../types/public/logs.js";
 import type {
+  AgentInteractionSync,
   AgentToolMode,
   AgentModelConfig,
   Variables,
@@ -52,6 +53,7 @@ export interface V3AgentToolOptions {
    * When provided, these tools will have an optional useVariable field.
    */
   variables?: Variables;
+  interactionSync?: AgentInteractionSync;
 }
 
 /**
@@ -95,23 +97,24 @@ export function createAgentTools(v3: V3, options?: V3AgentToolOptions) {
   const modelId = options?.modelId;
   const excludeTools = options?.excludeTools;
   const variables = options?.variables;
+  const interactionSync = options?.interactionSync;
 
   const allTools: ToolSet = {
     act: actTool(v3, executionModel, variables),
     ariaTree: ariaTreeTool(v3),
-    click: clickTool(v3, provider, modelId),
+    click: clickTool(v3, provider, modelId, interactionSync),
     clickAndHold: clickAndHoldTool(v3, provider, modelId),
     dragAndDrop: dragAndDropTool(v3, provider, modelId),
     extract: extractTool(v3, executionModel),
     fillForm: fillFormTool(v3, executionModel, variables),
-    fillFormVision: fillFormVisionTool(v3, provider, variables, modelId),
+    fillFormVision: fillFormVisionTool(v3, provider, variables, modelId, interactionSync),
     goto: gotoTool(v3),
     keys: keysTool(v3),
     navback: navBackTool(v3),
     screenshot: screenshotTool(v3),
     scroll: mode === "hybrid" ? scrollVisionTool(v3, provider, modelId) : scrollTool(v3),
     think: thinkTool(),
-    type: typeTool(v3, provider, variables, modelId),
+    type: typeTool(v3, provider, variables, modelId, interactionSync),
     wait: waitTool(v3, mode),
   };
 
