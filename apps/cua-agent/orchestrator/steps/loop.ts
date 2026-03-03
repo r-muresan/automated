@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
-import type { Stagehand } from '../stagehand/v3';
-import type { AgentInteractionSync } from '../stagehand/v3/types/public/agent';
+import type { Stagehand } from '../../stagehand/v3';
+import type { AgentInteractionSync } from '../../stagehand/v3/types/public/agent';
 import type {
   DownloadedSessionFile,
   LoopStep,
@@ -8,23 +8,23 @@ import type {
   OrchestratorEvent,
   LoopContext,
   UploadedSessionFileEvent,
-} from '../types';
+} from '../../types';
 import {
   capturePageScreenshot,
   checkForMoreItemsFromVision,
   identifyItemsWithSharedStrategy,
   type ExtractionMode,
   type ExtractionItem,
-} from './extraction';
+} from '../extraction';
 import {
   buildHybridActiveToolsForUrl,
   createBrowserTabTools,
   getSpreadsheetProvider,
   type CredentialHandoffRequest,
   type CredentialHandoffResult,
-} from './agent-tools';
-import { waitForPageReady } from './page-ready';
-import { buildSessionDownloadedFilesSection } from './session-files';
+} from '../agent-tools';
+import { waitForPageReady } from '../page-ready';
+import { buildSessionDownloadedFilesSection } from '../session-files';
 
 // ---------------------------------------------------------------------------
 // Dependency contract — everything the loop needs from the orchestrator
