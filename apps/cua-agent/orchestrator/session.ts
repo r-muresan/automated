@@ -106,6 +106,7 @@ export async function initHyperbrowserSession(
         : undefined,
       adblock: true,
       acceptCookies: true,
+      useStealth: true,
     });
 
     ctx.stagehand = new Stagehand({

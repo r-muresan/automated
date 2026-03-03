@@ -140,6 +140,7 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
       enableWebRecording: true,
       adblock: true,
       acceptCookies: true,
+      useStealth: true,
     });
 
     const connectUrl = session.wsEndpoint
