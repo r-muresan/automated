@@ -138,6 +138,7 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
         : undefined,
       saveDownloads: true,
       enableWebRecording: true,
+      enableVideoWebRecording: true,
       adblock: true,
       acceptCookies: true,
       useStealth: true,

@@ -98,6 +98,7 @@ export async function initHyperbrowserSession(
       timeoutMinutes: 60,
       saveDownloads: true,
       enableWebRecording: true,
+      enableVideoWebRecording: true,
       profile: profileId
         ? {
             id: profileId,
