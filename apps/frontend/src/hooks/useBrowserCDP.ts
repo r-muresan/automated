@@ -89,6 +89,7 @@ interface UseBrowserCDPReturn extends BrowserCDPState {
 const DEFAULT_CDP_WS_TEMPLATE = (sessionId: string) =>
   `wss://connect.browserbase.com/debug/${sessionId}/devtools/page/{pageId}`;
 const CLICK_SCREENSHOT_REUSE_WINDOW_MS = 400;
+const CDP_COMMAND_TIMEOUT_MS = 10_000;
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -978,13 +979,12 @@ export function useBrowserCDP(
         reject,
       });
 
-      // Timeout after 30 seconds
       setTimeout(() => {
         if (pendingRequestsRef.current.has(id)) {
           pendingRequestsRef.current.delete(id);
           reject(new Error(`CDP command timeout: ${method}`));
         }
-      }, 30000);
+      }, CDP_COMMAND_TIMEOUT_MS);
 
       wsRef.current.send(JSON.stringify(message));
     });
@@ -1015,7 +1015,7 @@ export function useBrowserCDP(
             pendingRequestsRef.current.delete(id);
             reject(new Error(`CDP target command timeout: ${method}`));
           }
-        }, 30000);
+        }, CDP_COMMAND_TIMEOUT_MS);
 
         wsRef.current.send(JSON.stringify(message));
       });
@@ -1052,30 +1052,34 @@ export function useBrowserCDP(
         pageTargetSessionIdsRef.current.set(targetId, attachedSessionId);
         targetPageIdsBySessionRef.current.set(attachedSessionId, targetId);
 
-        await sendToAttachedTarget(attachedSessionId, 'Page.enable');
-        await sendToAttachedTarget(attachedSessionId, 'Runtime.enable');
-        await sendToAttachedTarget(attachedSessionId, 'Runtime.addBinding', {
-          name: '__cdpEvent',
-        });
+        const setupPromises: Promise<unknown>[] = [
+          sendToAttachedTarget(attachedSessionId, 'Page.enable'),
+          sendToAttachedTarget(attachedSessionId, 'Runtime.enable'),
+          sendToAttachedTarget(attachedSessionId, 'Runtime.addBinding', {
+            name: '__cdpEvent',
+          }),
+          sendToAttachedTarget(
+            attachedSessionId,
+            'Page.setInterceptFileChooserDialog',
+            { enabled: true },
+          ).catch((err) =>
+            console.warn('[CDP] Failed to enable file chooser interception:', err),
+          ),
+        ];
 
         if (!injectedPagesRef.current.has(targetId)) {
-          await sendToAttachedTarget(attachedSessionId, 'Page.addScriptToEvaluateOnNewDocument', {
-            source: EVENT_TRACKING_SCRIPT,
-          });
-          await sendToAttachedTarget(attachedSessionId, 'Runtime.evaluate', {
-            expression: EVENT_TRACKING_SCRIPT,
-          });
+          setupPromises.push(
+            sendToAttachedTarget(attachedSessionId, 'Page.addScriptToEvaluateOnNewDocument', {
+              source: EVENT_TRACKING_SCRIPT,
+            }),
+            sendToAttachedTarget(attachedSessionId, 'Runtime.evaluate', {
+              expression: EVENT_TRACKING_SCRIPT,
+            }),
+          );
           injectedPagesRef.current.add(targetId);
         }
 
-        // Intercept file chooser dialogs so we can show a custom upload modal
-        await sendToAttachedTarget(
-          attachedSessionId,
-          'Page.setInterceptFileChooserDialog',
-          { enabled: true },
-        ).catch((err) =>
-          console.warn('[CDP] Failed to enable file chooser interception:', err),
-        );
+        await Promise.all(setupPromises);
 
         return attachedSessionId;
       })().finally(() => {
@@ -1129,7 +1133,7 @@ export function useBrowserCDP(
           setTimeout(() => {
             pageWs?.removeEventListener('message', handleMessage);
             reject(new Error(`Page CDP command timeout: ${method}`));
-          }, 30000);
+          }, CDP_COMMAND_TIMEOUT_MS);
         };
 
         if (!pageWs || pageWs.readyState !== WebSocket.OPEN) {
@@ -1240,6 +1244,7 @@ export function useBrowserCDP(
           const screenshot = await sendToPage<{ data?: string }>(pageId, 'Page.captureScreenshot', {
             format: 'jpeg',
             quality: 55,
+            captureBeyondViewport: false,
           });
           const base64Data = typeof screenshot?.data === 'string' ? screenshot.data : '';
           if (!base64Data) return null;
