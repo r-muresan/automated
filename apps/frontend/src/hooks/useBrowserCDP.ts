@@ -120,16 +120,47 @@ const EVENT_TRACKING_SCRIPT = `(function() {
   }
   function getElementInfo(el) {
     if (!el) return null;
+    var className = '';
+    if (typeof el.className === 'string') {
+      className = el.className;
+    } else if (el.classList && typeof el.classList.length === 'number') {
+      className = Array.prototype.slice.call(el.classList).join(' ');
+    }
+
+    var text = '';
+    try {
+      if (typeof el.value === 'string' && el.value) {
+        text = el.value.substring(0, 200);
+      } else if (typeof el.getAttribute === 'function') {
+        text = (el.getAttribute('aria-label') || el.getAttribute('title') || '').substring(0, 200);
+      }
+
+      if (!text && el.childNodes && el.childNodes.length) {
+        for (var i = 0; i < el.childNodes.length && text.length < 200; i++) {
+          var child = el.childNodes[i];
+          if (child && child.nodeType === 3 && typeof child.textContent === 'string') {
+            var chunk = child.textContent.trim();
+            if (chunk) {
+              text += (text ? ' ' : '') + chunk;
+            }
+          }
+        }
+        if (text.length > 200) {
+          text = text.substring(0, 200);
+        }
+      }
+    } catch (e) {}
+
     return {
       tagName: el.tagName || 'unknown',
       id: el.id || '',
-      className: el.className || '',
+      className: className,
       selector: getElementSelector(el),
-      text: (el.textContent || '').substring(0, 200),
-      value: el.value || '',
-      href: el.href || '',
-      type: el.type || '',
-      name: el.name || ''
+      text: text,
+      value: typeof el.value === 'string' ? el.value.substring(0, 200) : '',
+      href: typeof el.href === 'string' ? el.href : '',
+      type: typeof el.type === 'string' ? el.type : '',
+      name: typeof el.name === 'string' ? el.name : ''
     };
   }
   document.addEventListener('click', function(e) {
@@ -1152,8 +1183,46 @@ export function useBrowserCDP(
   );
 
   const getRawClickScreenshot = useCallback(
-    async (pageId: string): Promise<string | null> => {
+    async (pageId: string, clickData?: any): Promise<string | null> => {
       if (!pageId) return null;
+
+      const clickX = typeof clickData?.x === 'number' ? clickData.x : null;
+      const clickY = typeof clickData?.y === 'number' ? clickData.y : null;
+      const viewportWidth =
+        typeof clickData?.viewportWidth === 'number' && clickData.viewportWidth > 0
+          ? clickData.viewportWidth
+          : null;
+      const viewportHeight =
+        typeof clickData?.viewportHeight === 'number' && clickData.viewportHeight > 0
+          ? clickData.viewportHeight
+          : null;
+      const canUseClippedCapture =
+        clickX !== null && clickY !== null && viewportWidth !== null && viewportHeight !== null;
+
+      if (canUseClippedCapture) {
+        try {
+          const clipWidth = Math.max(120, Math.round(viewportWidth * 0.4));
+          const clipHeight = Math.max(80, Math.round(viewportHeight * 0.4));
+          const clipLeft = clampNumber(clickX - clipWidth / 2, 0, Math.max(0, viewportWidth - clipWidth));
+          const clipTop = clampNumber(clickY - clipHeight / 2, 0, Math.max(0, viewportHeight - clipHeight));
+          const screenshot = await sendToPage<{ data?: string }>(pageId, 'Page.captureScreenshot', {
+            format: 'jpeg',
+            quality: 55,
+            captureBeyondViewport: false,
+            clip: {
+              x: clipLeft,
+              y: clipTop,
+              width: clipWidth,
+              height: clipHeight,
+              scale: 1,
+            },
+          });
+          const base64Data = typeof screenshot?.data === 'string' ? screenshot.data : '';
+          return base64Data ? `data:image/jpeg;base64,${base64Data}` : null;
+        } catch (error) {
+          console.warn('[CDP] Failed to capture clipped click screenshot, falling back:', error);
+        }
+      }
 
       const now = Date.now();
       const recent = lastRawScreenshotByPageRef.current.get(pageId);
@@ -1288,8 +1357,20 @@ export function useBrowserCDP(
           ? clickData.screenshotUrl
           : null;
 
-      const screenshotUrl = providedScreenshot || (await getRawClickScreenshot(pageId));
+      const clickHasViewportCoordinates =
+        typeof clickData?.x === 'number' &&
+        typeof clickData?.y === 'number' &&
+        typeof clickData?.viewportWidth === 'number' &&
+        clickData.viewportWidth > 0 &&
+        typeof clickData?.viewportHeight === 'number' &&
+        clickData.viewportHeight > 0;
+
+      const screenshotUrl = providedScreenshot || (await getRawClickScreenshot(pageId, clickData));
       if (!screenshotUrl) return null;
+
+      if (clickHasViewportCoordinates) {
+        return screenshotUrl;
+      }
 
       return createClickSnapshot(screenshotUrl, clickData);
     },
