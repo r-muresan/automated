@@ -96,18 +96,17 @@ export async function initHyperbrowserSession(
     session.hyperbrowserClient = new Hyperbrowser({ apiKey: hyperbrowserApiKey });
     const hyperbrowserSession = await session.hyperbrowserClient.sessions.create({
       timeoutMinutes: 60,
-      saveDownloads: true,
-      enableWebRecording: true,
-      enableVideoWebRecording: true,
       profile: profileId
         ? {
             id: profileId,
             persistChanges: true,
           }
         : undefined,
-      adblock: true,
-      acceptCookies: true,
+      saveDownloads: true,
+      enableWebRecording: true,
+      enableVideoWebRecording: true,
       useStealth: true,
+      solveCaptchas: true,
     });
 
     ctx.stagehand = new Stagehand({
