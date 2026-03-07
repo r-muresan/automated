@@ -64,6 +64,8 @@ export default function NewWorkflow() {
     handleTakeControl,
     handleStopSession,
     interactions,
+    addInteractionDirect,
+    updateInteraction,
     vncUrl,
     vncViewerRef,
   } = useBrowser();
@@ -910,6 +912,8 @@ export default function NewWorkflow() {
             vncUrl={vncUrl}
             vncViewerRef={vncViewerRef}
             isLoading={isLoading}
+            onInteraction={addInteractionDirect}
+            onInteractionUpdate={updateInteraction}
           />
         </Box>
       </Box>

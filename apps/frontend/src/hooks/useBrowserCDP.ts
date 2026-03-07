@@ -1,7 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
-import type { NoVNCViewerHandle } from '../app/components/Browser/NoVNCViewer';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type CDPMethod = string;
 type CDPParams = Record<string, unknown>;
@@ -70,6 +69,10 @@ interface UseBrowserCDPReturn extends BrowserCDPState {
     pageId?: string,
     data?: any,
   ) => void;
+  /** Add a complete Interaction object directly (e.g. from VNC viewer) */
+  addInteractionDirect: (interaction: Interaction) => void;
+  /** Update an existing interaction by id (e.g. to attach screenshot or update typing text) */
+  updateInteraction: (id: string, updates: Partial<Interaction>) => void;
   downloadedFiles: DownloadedFile[];
   handleFileChooser: (
     pageId: string,
@@ -90,51 +93,14 @@ interface UseBrowserCDPReturn extends BrowserCDPState {
 const DEFAULT_CDP_WS_TEMPLATE = (sessionId: string) =>
   `wss://connect.browserbase.com/debug/${sessionId}/devtools/page/{pageId}`;
 const CDP_COMMAND_TIMEOUT_MS = 10_000;
-const CLICK_SNAPSHOT_CROP_RATIO = 0.4;
-const CLICK_SNAPSHOT_MARKER_RATIO = 0.02;
-
-const clampNumber = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value));
-
-const getFiniteNumber = (value: unknown): number | null =>
-  typeof value === 'number' && Number.isFinite(value) ? value : null;
-
-const waitForNextPaint = async () => {
-  if (typeof window === 'undefined') return;
-  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-};
-
-// Script injected into pages to report click coordinates through the
-// __cdpEvent Runtime binding.
-const EVENT_TRACKING_SCRIPT = `(function() {
-  if (window.__bbEventListenerInjected) return;
-  window.__bbEventListenerInjected = true;
-  document.addEventListener('click', function(e) {
-    if (typeof window.__cdpEvent !== 'function') return;
-    try {
-      window.__cdpEvent(JSON.stringify({ x: e.clientX, y: e.clientY, clickScreenX: e.screenX, clickScreenY: e.screenY, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, outerWidth: window.outerWidth, outerHeight: window.outerHeight, screenX: window.screenX, screenY: window.screenY, screenWidth: screen.width, screenHeight: screen.height }));
-    } catch (_err) {}
-  }, true);
-})()`;
-
-const extractClickCoordinates = (eventData: any): { x: number; y: number } | null => {
-  const x = getFiniteNumber(eventData?.x);
-  const y = getFiniteNumber(eventData?.y);
-  if (x === null || y === null) return null;
-  return { x, y };
-};
 
 export function useBrowserCDP(
   sessionId: string | null,
   initialPageId?: string,
   callbacks?: InteractionCallbacks,
   cdpWsUrlTemplate?: string | null,
-  vncViewerRef?: RefObject<NoVNCViewerHandle | null>,
 ): UseBrowserCDPReturn {
-  const usesBrowserLevelCdp = Boolean(
-    cdpWsUrlTemplate && !cdpWsUrlTemplate.includes('{pageId}'),
-  );
+  const usesBrowserLevelCdp = Boolean(cdpWsUrlTemplate && !cdpWsUrlTemplate.includes('{pageId}'));
   const [state, setState] = useState<BrowserCDPState>({
     isConnected: false,
     error: null,
@@ -152,14 +118,6 @@ export function useBrowserCDP(
     callbacksRef.current = callbacks;
   }, [callbacks]);
 
-  // Refs for grouping keypresses
-  const typingBufferRef = useRef<{
-    interactionId: string;
-    text: string;
-    lastTimestamp: number;
-    selector: string;
-  } | null>(null);
-
   const wsRef = useRef<WebSocket | null>(null);
   const currentPageIdRef = useRef<string | null>(null);
   const messageIdRef = useRef(1);
@@ -169,14 +127,11 @@ export function useBrowserCDP(
   const targetPageIdsBySessionRef = useRef<Map<string, string>>(new Map());
   const pendingTargetAttachmentRef = useRef<Map<string, Promise<string>>>(new Map());
   const knownPageIdsRef = useRef<Set<string>>(new Set());
-  const injectedPagesRef = useRef<Set<string>>(new Set());
-  const pendingRawScreenshotByPageRef = useRef<Map<string, Promise<string | null>>>(new Map());
 
   // Throttling refs for interaction events
   const lastNavigationRefreshByPageRef = useRef<Map<string, number>>(new Map());
-  const lastClickTimestampRef = useRef<number>(0);
 
-  // Handler refs (set later, used in connectToPage)
+  // Handler ref (set later, used in connectToPage)
   const addInteractionRef = useRef<
     | ((
         type: Interaction['type'],
@@ -186,60 +141,6 @@ export function useBrowserCDP(
       ) => void)
     | null
   >(null);
-  const handleKeydownRef = useRef<((eventData: any, pageId?: string) => void) | null>(null);
-
-  const handleTrackedRuntimeBindingPayload = useCallback(
-    (payload: string, pageId: string) => {
-      try {
-        const eventData = JSON.parse(payload || '{}');
-
-        // Backwards compatibility for any sessions still using the old script.
-        if (eventData?.type === 'keydown') {
-          handleKeydownRef.current?.(eventData, pageId);
-          return;
-        }
-
-        const clickCoordinates = extractClickCoordinates(eventData);
-        if (!clickCoordinates) {
-          return;
-        }
-
-        const now = Date.now();
-        if (now - lastClickTimestampRef.current < 100) {
-          return;
-        }
-        lastClickTimestampRef.current = now;
-
-        addInteractionRef.current?.(
-          'user_event',
-          {
-            tagName: 'CLICK',
-            text: `(${Math.round(clickCoordinates.x)}, ${Math.round(clickCoordinates.y)})`,
-            selector: 'coordinates',
-          },
-          pageId,
-          {
-            type: 'click',
-            x: clickCoordinates.x,
-            y: clickCoordinates.y,
-            clickScreenX: getFiniteNumber(eventData?.clickScreenX) ?? undefined,
-            clickScreenY: getFiniteNumber(eventData?.clickScreenY) ?? undefined,
-            viewportWidth: getFiniteNumber(eventData?.viewportWidth) ?? undefined,
-            viewportHeight: getFiniteNumber(eventData?.viewportHeight) ?? undefined,
-            outerWidth: getFiniteNumber(eventData?.outerWidth) ?? undefined,
-            outerHeight: getFiniteNumber(eventData?.outerHeight) ?? undefined,
-            screenX: getFiniteNumber(eventData?.screenX) ?? undefined,
-            screenY: getFiniteNumber(eventData?.screenY) ?? undefined,
-            screenWidth: getFiniteNumber(eventData?.screenWidth) ?? undefined,
-            screenHeight: getFiniteNumber(eventData?.screenHeight) ?? undefined,
-          },
-        );
-      } catch (e) {
-        console.warn('[CDP] Failed to parse binding event:', e);
-      }
-    },
-    [],
-  );
 
   const queryPageMetadata = useCallback(
     async (
@@ -422,20 +323,8 @@ export function useBrowserCDP(
       ws.onopen = () => {
         console.log(`[CDP] WebSocket connected for page ${pageId}`);
 
-        // Enable Page (for navigation events) and Runtime (required for
-        // Runtime.bindingCalled delivery). DOM.enable is omitted — it is
-        // not needed for event tracking and adds noise.
-        // Note: Runtime.enable on a CDP debugging session is invisible to
-        // web-page JavaScript, so it does NOT affect bot detection.
+        // Enable Page (for navigation events)
         ws.send(JSON.stringify({ id: msgId++, method: 'Page.enable' }));
-        ws.send(JSON.stringify({ id: msgId++, method: 'Runtime.enable' }));
-        ws.send(
-          JSON.stringify({
-            id: msgId++,
-            method: 'Runtime.addBinding',
-            params: { name: '__cdpEvent' },
-          }),
-        );
         // Intercept file chooser dialogs so we can show a custom upload modal
         ws.send(
           JSON.stringify({
@@ -444,25 +333,6 @@ export function useBrowserCDP(
             params: { enabled: true },
           }),
         );
-        if (!injectedPagesRef.current.has(pageId)) {
-          // Inject listeners for current and future documents so interaction
-          // recording works even when the screencast renderer is a proxy iframe.
-          ws.send(
-            JSON.stringify({
-              id: msgId++,
-              method: 'Page.addScriptToEvaluateOnNewDocument',
-              params: { source: EVENT_TRACKING_SCRIPT },
-            }),
-          );
-          ws.send(
-            JSON.stringify({
-              id: msgId++,
-              method: 'Runtime.evaluate',
-              params: { expression: EVENT_TRACKING_SCRIPT },
-            }),
-          );
-          injectedPagesRef.current.add(pageId);
-        }
 
         // Ensure URL/title/favicon are populated even if Page.frameNavigated
         // fired before this WebSocket listener was attached.
@@ -474,7 +344,6 @@ export function useBrowserCDP(
       ws.onclose = (event) => {
         console.log(`[CDP] WebSocket closed for page ${pageId}:`, event.code, event.reason);
         pageSessionsRef.current.delete(pageId);
-        injectedPagesRef.current.delete(pageId);
 
         // Check if all page connections are lost
         const hasActiveConnections = Array.from(pageSessionsRef.current.values()).some(
@@ -511,18 +380,6 @@ export function useBrowserCDP(
                 pending.resolve(message.result || {});
               }
             }
-          }
-
-          // Handle interaction events via Runtime.bindingCalled (stealth
-          // alternative to Runtime.consoleAPICalled).
-          if (
-            message.method === 'Runtime.bindingCalled' &&
-            (message.params as Record<string, unknown>)?.name === '__cdpEvent'
-          ) {
-            handleTrackedRuntimeBindingPayload(
-              ((message.params as Record<string, unknown>)?.payload as string) || '{}',
-              pageId,
-            );
           }
 
           // Handle page load events - re-query title when page finishes loading
@@ -583,7 +440,9 @@ export function useBrowserCDP(
             const params = message.params as any;
             const mode = params?.mode || 'selectSingle';
             const backendNodeId = params?.backendNodeId;
-            console.log(`[CDP] File chooser opened for page ${pageId}, mode: ${mode}, backendNodeId: ${backendNodeId}`);
+            console.log(
+              `[CDP] File chooser opened for page ${pageId}, mode: ${mode}, backendNodeId: ${backendNodeId}`,
+            );
             if (backendNodeId != null) {
               callbacksRef.current?.onFileChooserOpened?.(pageId, mode, backendNodeId);
             }
@@ -740,17 +599,6 @@ export function useBrowserCDP(
             const targetPageId = targetPageIdsBySessionRef.current.get(message.sessionId) || '';
 
             if (
-              message.method === 'Runtime.bindingCalled' &&
-              (message.params as Record<string, unknown>)?.name === '__cdpEvent'
-            ) {
-              handleTrackedRuntimeBindingPayload(
-                ((message.params as Record<string, unknown>)?.payload as string) || '{}',
-                targetPageId,
-              );
-              return;
-            }
-
-            if (
               message.method === 'Page.loadEventFired' ||
               message.method === 'Page.domContentEventFired'
             ) {
@@ -883,7 +731,6 @@ export function useBrowserCDP(
       cdpWsUrlTemplate,
       queryPageMetadata,
       usesBrowserLevelCdp,
-      handleTrackedRuntimeBindingPayload,
     ],
   );
 
@@ -1017,30 +864,10 @@ export function useBrowserCDP(
 
         const setupPromises: Promise<unknown>[] = [
           sendToAttachedTarget(attachedSessionId, 'Page.enable'),
-          sendToAttachedTarget(attachedSessionId, 'Runtime.enable'),
-          sendToAttachedTarget(attachedSessionId, 'Runtime.addBinding', {
-            name: '__cdpEvent',
-          }),
-          sendToAttachedTarget(
-            attachedSessionId,
-            'Page.setInterceptFileChooserDialog',
-            { enabled: true },
-          ).catch((err) =>
-            console.warn('[CDP] Failed to enable file chooser interception:', err),
-          ),
+          sendToAttachedTarget(attachedSessionId, 'Page.setInterceptFileChooserDialog', {
+            enabled: true,
+          }).catch((err) => console.warn('[CDP] Failed to enable file chooser interception:', err)),
         ];
-
-        if (!injectedPagesRef.current.has(targetId)) {
-          setupPromises.push(
-            sendToAttachedTarget(attachedSessionId, 'Page.addScriptToEvaluateOnNewDocument', {
-              source: EVENT_TRACKING_SCRIPT,
-            }),
-            sendToAttachedTarget(attachedSessionId, 'Runtime.evaluate', {
-              expression: EVENT_TRACKING_SCRIPT,
-            }),
-          );
-          injectedPagesRef.current.add(targetId);
-        }
 
         await Promise.all(setupPromises);
 
@@ -1149,264 +976,6 @@ export function useBrowserCDP(
     [sendToPage],
   );
 
-  const getRawClickScreenshot = useCallback(
-    async (pageId: string): Promise<string | null> => {
-      if (!pageId) return null;
-
-      const pendingCapture = pendingRawScreenshotByPageRef.current.get(pageId);
-      if (pendingCapture) {
-        return pendingCapture;
-      }
-
-      const capturePromise = (async () => {
-        try {
-          await waitForNextPaint();
-          const screenshotUrl = vncViewerRef?.current?.captureScreenshot('image/jpeg', 0.55) ?? null;
-          if (!screenshotUrl) return null;
-          return screenshotUrl;
-        } catch (error) {
-          console.warn('[CDP] Failed to capture VNC click screenshot:', error);
-          return null;
-        } finally {
-          pendingRawScreenshotByPageRef.current.delete(pageId);
-        }
-      })();
-
-      pendingRawScreenshotByPageRef.current.set(pageId, capturePromise);
-      return capturePromise;
-    },
-    [vncViewerRef],
-  );
-
-  const createClickSnapshot = useCallback(
-    async (screenshotUrl: string, clickData: any): Promise<string | null> => {
-      const clickX = getFiniteNumber(clickData?.x);
-      const clickY = getFiniteNumber(clickData?.y);
-      if (clickX === null || clickY === null || typeof document === 'undefined') {
-        return screenshotUrl;
-      }
-
-      const liveCanvas = vncViewerRef?.current?.getCanvas() ?? null;
-      let imageSource: CanvasImageSource;
-      let sourceWidth = 0;
-      let sourceHeight = 0;
-      const loadImageFromScreenshotUrl = async (): Promise<HTMLImageElement | null> => {
-        const image = new Image();
-        const loaded = await new Promise<boolean>((resolve) => {
-          image.onload = () => resolve(true);
-          image.onerror = () => resolve(false);
-          image.src = screenshotUrl;
-        });
-        if (!loaded) return null;
-        return image;
-      };
-
-      if (liveCanvas && liveCanvas.width > 0 && liveCanvas.height > 0) {
-        imageSource = liveCanvas;
-        sourceWidth = liveCanvas.width;
-        sourceHeight = liveCanvas.height;
-      } else {
-        const image = await loadImageFromScreenshotUrl();
-        if (!image) return null;
-        imageSource = image;
-        sourceWidth = image.naturalWidth || image.width;
-        sourceHeight = image.naturalHeight || image.height;
-      }
-      if (!sourceWidth || !sourceHeight) return null;
-
-      const viewportWidth = getFiniteNumber(clickData?.viewportWidth);
-      const viewportHeight = getFiniteNumber(clickData?.viewportHeight);
-      const hasViewportMetrics =
-        (viewportWidth ?? 0) > 0 && (viewportHeight ?? 0) > 0;
-      const effectiveViewportWidth = hasViewportMetrics ? viewportWidth! : sourceWidth;
-      const effectiveViewportHeight = hasViewportMetrics ? viewportHeight! : sourceHeight;
-      const outerWidth = getFiniteNumber(clickData?.outerWidth);
-      const outerHeight = getFiniteNumber(clickData?.outerHeight);
-      const effectiveBrowserWidth =
-        hasViewportMetrics && (outerWidth ?? 0) > 0 ? outerWidth! : effectiveViewportWidth;
-      const effectiveBrowserHeight =
-        hasViewportMetrics && (outerHeight ?? 0) > 0 ? outerHeight! : effectiveViewportHeight;
-      const viewportOffsetXFromEvent = getFiniteNumber(clickData?.viewportOffsetX);
-      const viewportOffsetYFromEvent = getFiniteNumber(clickData?.viewportOffsetY);
-      const viewportOffsetX =
-        viewportOffsetXFromEvent !== null
-          ? clampNumber(
-              viewportOffsetXFromEvent,
-              0,
-              Math.max(0, effectiveBrowserWidth - effectiveViewportWidth),
-            )
-          : hasViewportMetrics
-            ? Math.max(0, (effectiveBrowserWidth - effectiveViewportWidth) / 2)
-            : 0;
-      const viewportOffsetY =
-        viewportOffsetYFromEvent !== null
-          ? clampNumber(
-              viewportOffsetYFromEvent,
-              0,
-              Math.max(0, effectiveBrowserHeight - effectiveViewportHeight),
-            )
-          : hasViewportMetrics
-            ? Math.max(0, effectiveBrowserHeight - effectiveViewportHeight)
-            : 0;
-
-      const scaleX = sourceWidth / Math.max(1, effectiveBrowserWidth);
-      const scaleY = sourceHeight / Math.max(1, effectiveBrowserHeight);
-      const clickScreenX = getFiniteNumber(clickData?.clickScreenX);
-      const clickScreenY = getFiniteNumber(clickData?.clickScreenY);
-      const screenX = getFiniteNumber(clickData?.screenX);
-      const screenY = getFiniteNumber(clickData?.screenY);
-      const screenWidth = getFiniteNumber(clickData?.screenWidth);
-      const screenHeight = getFiniteNumber(clickData?.screenHeight);
-
-      // Prefer absolute screen coordinates (e.screenX/Y) when available — they
-      // map directly to VNC canvas pixels and bypass all browser-chrome offset
-      // ambiguities (headless Chrome reports outerHeight == innerHeight).
-      const hasScreenClickCoords =
-        clickScreenX !== null &&
-        clickScreenY !== null &&
-        (screenWidth ?? 0) > 0 &&
-        (screenHeight ?? 0) > 0;
-      const canUseDesktopCoordinates =
-        !hasScreenClickCoords &&
-        screenX !== null &&
-        screenY !== null &&
-        (screenWidth ?? 0) > 0 &&
-        (screenHeight ?? 0) > 0 &&
-        (sourceWidth > effectiveBrowserWidth * 1.02 || sourceHeight > effectiveBrowserHeight * 1.02);
-      const screenScaleX = hasScreenClickCoords ? sourceWidth / Math.max(1, screenWidth!) : 1;
-      const screenScaleY = hasScreenClickCoords ? sourceHeight / Math.max(1, screenHeight!) : 1;
-      const desktopScaleX = canUseDesktopCoordinates ? sourceWidth / Math.max(1, screenWidth!) : 1;
-      const desktopScaleY = canUseDesktopCoordinates ? sourceHeight / Math.max(1, screenHeight!) : 1;
-      const activeScaleX = hasScreenClickCoords ? screenScaleX : canUseDesktopCoordinates ? desktopScaleX : scaleX;
-      const activeScaleY = hasScreenClickCoords ? screenScaleY : canUseDesktopCoordinates ? desktopScaleY : scaleY;
-      // Crop a 40% region around the click. When using screen coordinates the
-      // crop should be relative to the full source (VNC canvas), not just the
-      // viewport, so that the zoom level stays consistent.
-      const cropBaseWidth = hasScreenClickCoords ? sourceWidth : effectiveViewportWidth * activeScaleX;
-      const cropBaseHeight = hasScreenClickCoords ? sourceHeight : effectiveViewportHeight * activeScaleY;
-      const cropWidth = Math.max(
-        1,
-        Math.round(cropBaseWidth * CLICK_SNAPSHOT_CROP_RATIO),
-      );
-      const cropHeight = Math.max(
-        1,
-        Math.round(cropBaseHeight * CLICK_SNAPSHOT_CROP_RATIO),
-      );
-      const xInImage = hasScreenClickCoords
-        ? clampNumber(clickScreenX! * screenScaleX, 0, sourceWidth - 1)
-        : canUseDesktopCoordinates
-          ? clampNumber(
-              (
-                clickScreenX ??
-                (screenX! + viewportOffsetX + clickX)
-              ) * desktopScaleX,
-              0,
-              sourceWidth - 1,
-            )
-          : clampNumber(
-              (viewportOffsetX + clickX) * scaleX,
-              0,
-              sourceWidth - 1,
-            );
-      const yInImage = hasScreenClickCoords
-        ? clampNumber(clickScreenY! * screenScaleY, 0, sourceHeight - 1)
-        : canUseDesktopCoordinates
-          ? clampNumber(
-              (
-                clickScreenY ??
-                (screenY! + viewportOffsetY + clickY)
-              ) * desktopScaleY,
-              0,
-              sourceHeight - 1,
-            )
-          : clampNumber(
-              (viewportOffsetY + clickY) * scaleY,
-              0,
-              sourceHeight - 1,
-            );
-
-      // Keep the click near the center of the output, but shift the crop
-      // window so it stays fully within the source image (no white padding).
-      let cropLeft = xInImage - cropWidth / 2;
-      let cropTop = yInImage - cropHeight / 2;
-      cropLeft = clampNumber(cropLeft, 0, Math.max(0, sourceWidth - cropWidth));
-      cropTop = clampNumber(cropTop, 0, Math.max(0, sourceHeight - cropHeight));
-
-      const canvas = document.createElement('canvas');
-      canvas.width = cropWidth;
-      canvas.height = cropHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return null;
-
-      const srcLeft = clampNumber(cropLeft, 0, sourceWidth);
-      const srcTop = clampNumber(cropTop, 0, sourceHeight);
-      const srcRight = clampNumber(cropLeft + cropWidth, 0, sourceWidth);
-      const srcBottom = clampNumber(cropTop + cropHeight, 0, sourceHeight);
-      const srcWidth = Math.max(0, srcRight - srcLeft);
-      const srcHeight = Math.max(0, srcBottom - srcTop);
-
-      const destX = srcLeft - cropLeft;
-      const destY = srcTop - cropTop;
-
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, cropWidth, cropHeight);
-      if (srcWidth > 0 && srcHeight > 0) {
-        ctx.drawImage(
-          imageSource,
-          srcLeft,
-          srcTop,
-          srcWidth,
-          srcHeight,
-          destX,
-          destY,
-          srcWidth,
-          srcHeight,
-        );
-      }
-
-      const dotRadius = Math.max(
-        3,
-        Math.round(Math.min(cropWidth, cropHeight) * CLICK_SNAPSHOT_MARKER_RATIO),
-      );
-      const markerX = clampNumber(xInImage - cropLeft, 0, cropWidth);
-      const markerY = clampNumber(yInImage - cropTop, 0, cropHeight);
-      ctx.fillStyle = 'rgba(37, 99, 235, 0.92)';
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-      ctx.lineWidth = Math.max(2, Math.round(dotRadius * 0.45));
-      ctx.beginPath();
-      ctx.arc(markerX, markerY, dotRadius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      return canvas.toDataURL('image/jpeg', 0.88);
-    },
-    [vncViewerRef],
-  );
-
-  const getClickScreenshot = useCallback(
-    async (pageId: string, clickData?: any): Promise<string | null> => {
-      const providedScreenshot =
-        typeof clickData?.screenshotUrl === 'string' &&
-        clickData.screenshotUrl.startsWith('data:image/')
-          ? clickData.screenshotUrl
-          : null;
-
-      const clickHasCoordinates =
-        getFiniteNumber(clickData?.x) !== null &&
-        getFiniteNumber(clickData?.y) !== null;
-
-      const screenshotUrl = providedScreenshot || (await getRawClickScreenshot(pageId));
-      if (!screenshotUrl) return null;
-
-      if (!clickHasCoordinates) {
-        return screenshotUrl;
-      }
-
-      return (await createClickSnapshot(screenshotUrl, clickData)) || screenshotUrl;
-    },
-    [createClickSnapshot, getRawClickScreenshot],
-  );
-
   // Interaction handling
   const removeInteraction = useCallback((id: string) => {
     setInteractions((prev) => prev.filter((i) => i.id !== id));
@@ -1414,26 +983,16 @@ export function useBrowserCDP(
 
   const addInteraction = useCallback(
     (type: Interaction['type'], element: Interaction['element'], pageId?: string, data?: any) => {
-      typingBufferRef.current = null;
-
       const timestamp = Date.now();
       const interactionId = `${type}-${timestamp}-${Math.random().toString(36).substring(2, 9)}`;
       const resolvedPageId = pageId ?? '';
-
-      const isClickEvent =
-        type === 'user_event' &&
-        (data?.type === 'click' || extractClickCoordinates(data) !== null);
 
       const interaction: Interaction = {
         id: interactionId,
         type,
         timestamp,
         pageId: resolvedPageId,
-        screenshotUrl: isClickEvent
-          ? undefined
-          : typeof data?.screenshotUrl === 'string'
-            ? data.screenshotUrl
-            : undefined,
+        screenshotUrl: typeof data?.screenshotUrl === 'string' ? data.screenshotUrl : undefined,
         element,
         data,
       };
@@ -1446,190 +1005,54 @@ export function useBrowserCDP(
       });
       setInteractions((prev) => [...prev, interaction]);
 
-      if (isClickEvent && resolvedPageId) {
-        void getClickScreenshot(resolvedPageId, data).then((capturedScreenshotUrl) => {
-          if (!capturedScreenshotUrl) return;
-          setInteractions((prev) => {
-            const index = prev.findIndex((i) => i.id === interactionId);
-            if (index === -1) return prev;
-            if (prev[index].screenshotUrl === capturedScreenshotUrl) return prev;
-            const next = [...prev];
-            next[index] = {
-              ...next[index],
-              screenshotUrl: capturedScreenshotUrl,
-            };
-            return next;
-          });
-        });
-      }
-
       if (callbacksRef.current?.onInteraction) {
         callbacksRef.current.onInteraction(interaction);
       }
     },
-    [getClickScreenshot],
+    [],
   );
 
-  // Update ref so connectToPage can use it
-  addInteractionRef.current = addInteraction;
+  const addInteractionDirect = useCallback((interaction: Interaction) => {
+    console.log('[CDP] Adding interaction (direct):', {
+      type: interaction.type,
+      eventType: interaction.data?.type,
+      element: interaction.element?.tagName,
+    });
+    setInteractions((prev) => [...prev, interaction]);
 
-  const handleKeydown = useCallback((eventData: any, pageId?: string) => {
-    const { key, target, ctrlKey, altKey, metaKey } = eventData;
-
-    if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(key)) return;
-
-    const now = Date.now();
-
-    const selector = target?.selector || 'unknown';
-
-    // Handle modifier key combinations (Ctrl+C, Cmd+V, etc.) as separate "pressed" interactions
-    if (ctrlKey || altKey || metaKey) {
-      const modifiers: string[] = [];
-      if (ctrlKey) modifiers.push('Ctrl');
-      if (altKey) modifiers.push('Alt');
-      if (metaKey) modifiers.push('Cmd');
-      modifiers.push(key.length === 1 ? key.toUpperCase() : key);
-      const combo = modifiers.join('+');
-
-      // Clear typing buffer since this is a command, not typing
-      typingBufferRef.current = null;
-
-      const interactionId = `keypress-${now}-${Math.random().toString(36).substring(2, 9)}`;
-      const newInteraction: Interaction = {
-        id: interactionId,
-        type: 'user_event',
-        timestamp: now,
-        pageId: pageId ?? '',
-        element: {
-          ...target,
-          tagName: 'KEYPRESS',
-          text: combo,
-        },
-        data: { ...eventData, type: 'keypress', combo },
-      };
-
-      setInteractions((prev) => [...prev, newInteraction]);
-      return;
-    }
-
-    // Handle Backspace - remove last character from buffer
-    if (key === 'Backspace') {
-      if (
-        typingBufferRef.current &&
-        typingBufferRef.current.selector === selector &&
-        now - typingBufferRef.current.lastTimestamp < 3000 &&
-        typingBufferRef.current.text.length > 0
-      ) {
-        const interactionId = typingBufferRef.current.interactionId;
-        // Remove last character (handle special keys like [Enter] too)
-        let currentText = typingBufferRef.current.text;
-        if (currentText.endsWith(']')) {
-          // Remove entire bracketed key like [Enter]
-          const bracketStart = currentText.lastIndexOf('[');
-          if (bracketStart !== -1) {
-            currentText = currentText.substring(0, bracketStart);
-          } else {
-            currentText = currentText.slice(0, -1);
-          }
-        } else {
-          currentText = currentText.slice(0, -1);
-        }
-
-        typingBufferRef.current = {
-          ...typingBufferRef.current,
-          text: currentText,
-          lastTimestamp: now,
-        };
-
-        setInteractions((prev) => {
-          const index = prev.findIndex((i) => i.id === interactionId);
-          if (index === -1) return prev;
-          const updated = [...prev];
-          updated[index] = {
-            ...updated[index],
-            timestamp: now,
-            element: {
-              ...updated[index].element,
-              text: currentText,
-            },
-          };
-          return updated;
-        });
-      }
-      return;
-    }
-
-    // Regular character or special key (Enter, Tab, etc.)
-    const char = key.length === 1 ? key : `[${key}]`;
-
-    if (
-      typingBufferRef.current &&
-      typingBufferRef.current.selector === selector &&
-      now - typingBufferRef.current.lastTimestamp < 3000
-    ) {
-      const newText = typingBufferRef.current.text + char;
-      const interactionId = typingBufferRef.current.interactionId;
-
-      typingBufferRef.current = {
-        ...typingBufferRef.current,
-        text: newText,
-        lastTimestamp: now,
-      };
-
-      setInteractions((prev) => {
-        const index = prev.findIndex((i) => i.id === interactionId);
-        if (index === -1) return prev;
-        const updated = [...prev];
-        updated[index] = {
-          ...updated[index],
-          timestamp: now,
-          element: {
-            ...updated[index].element,
-            text: newText,
-          },
-        };
-        return updated;
-      });
-    } else {
-      const interactionId = `typing-${now}-${Math.random().toString(36).substring(2, 9)}`;
-      const newInteraction: Interaction = {
-        id: interactionId,
-        type: 'user_event',
-        timestamp: now,
-        pageId: pageId ?? '',
-        element: {
-          ...target,
-          text: char,
-        },
-        data: { ...eventData, type: 'keydown' },
-      };
-
-      typingBufferRef.current = {
-        interactionId,
-        text: char,
-        lastTimestamp: now,
-        selector,
-      };
-
-      setInteractions((prev) => [...prev, newInteraction]);
+    if (callbacksRef.current?.onInteraction) {
+      callbacksRef.current.onInteraction(interaction);
     }
   }, []);
 
+  const updateInteraction = useCallback((id: string, updates: Partial<Interaction>) => {
+    setInteractions((prev) => {
+      const index = prev.findIndex((i) => i.id === id);
+      if (index === -1) return prev;
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        ...updates,
+        element: updates.element
+          ? { ...next[index].element, ...updates.element }
+          : next[index].element,
+      };
+      return next;
+    });
+  }, []);
+
   // Update ref so connectToPage can use it
-  handleKeydownRef.current = handleKeydown;
+  addInteractionRef.current = addInteraction;
 
   // Clear interactions and downloads when session ends
   useEffect(() => {
     if (!sessionId) {
       setInteractions([]);
       setDownloadedFiles([]);
-      typingBufferRef.current = null;
-      injectedPagesRef.current.clear();
       pageTargetSessionIdsRef.current.clear();
       targetPageIdsBySessionRef.current.clear();
       pendingTargetAttachmentRef.current.clear();
       lastNavigationRefreshByPageRef.current.clear();
-      pendingRawScreenshotByPageRef.current.clear();
       downloadGuidToFilenameRef.current.clear();
     }
   }, [sessionId]);
@@ -1640,6 +1063,8 @@ export function useBrowserCDP(
     interactions,
     removeInteraction,
     addInteraction,
+    addInteractionDirect,
+    updateInteraction,
     downloadedFiles,
     handleFileChooser,
   };

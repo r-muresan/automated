@@ -48,6 +48,8 @@ interface BrowserContextType {
   setIsLoading: (loading: boolean) => void;
   interactions: Interaction[];
   removeInteraction: (id: string) => void;
+  addInteractionDirect: (interaction: Interaction) => void;
+  updateInteraction: (id: string, updates: Partial<Interaction>) => void;
   handleTakeControl: (width?: number, height?: number) => Promise<void>;
   handleStopSession: () => Promise<void>;
   vncUrl: string | null;
@@ -221,9 +223,11 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
     interactions,
     removeInteraction,
     addInteraction,
+    addInteractionDirect,
+    updateInteraction,
     downloadedFiles,
     handleFileChooser: cdpHandleFileChooser,
-  } = useBrowserCDP(sessionId, firstPageId, cdpCallbacks, cdpWsUrlTemplate, vncViewerRef);
+  } = useBrowserCDP(sessionId, firstPageId, cdpCallbacks, cdpWsUrlTemplate);
 
   addInteractionRef.current = addInteraction;
 
@@ -396,6 +400,8 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         setIsLoading,
         interactions,
         removeInteraction,
+        addInteractionDirect,
+        updateInteraction,
         handleTakeControl,
         handleStopSession,
         vncUrl,

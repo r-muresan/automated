@@ -4,6 +4,7 @@ import { FileUploadModal } from './FileUploadModal';
 import { NoVNCViewer } from './NoVNCViewer';
 import { useOptionalBrowser } from '../../../providers/browser-provider';
 import type { NoVNCViewerHandle } from './NoVNCViewer';
+import type { Interaction } from '../../../hooks/useBrowserCDP';
 
 interface VNCBrowserProps {
   contentRef: RefObject<HTMLDivElement | null>;
@@ -16,6 +17,8 @@ interface VNCBrowserProps {
   overlayDescription?: string | null;
   /** Ref to access VNC canvas screenshots */
   vncViewerRef?: RefObject<NoVNCViewerHandle | null>;
+  onInteraction?: (interaction: Interaction) => void;
+  onInteractionUpdate?: (id: string, updates: Partial<Interaction>) => void;
 }
 
 export const VNCBrowser = ({
@@ -28,6 +31,8 @@ export const VNCBrowser = ({
   overlayTitle = null,
   overlayDescription = null,
   vncViewerRef,
+  onInteraction,
+  onInteractionUpdate,
 }: VNCBrowserProps) => {
   const VNC_CONNECT_TIMEOUT_MS = 8_000;
   const browser = useOptionalBrowser();
@@ -130,6 +135,8 @@ export const VNCBrowser = ({
             vncUrl={vncUrl}
             viewOnly={interactionBlocked}
             scaleViewport={true}
+            onInteraction={onInteraction}
+            onInteractionUpdate={onInteractionUpdate}
             onConnect={() => {
               clearConnectTimeout();
               setVncConnected(true);
