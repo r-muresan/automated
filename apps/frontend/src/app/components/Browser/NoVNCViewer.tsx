@@ -25,6 +25,9 @@ interface NoVNCViewerProps {
 
 const CLICK_SNAPSHOT_CROP_RATIO = 0.4;
 const CLICK_SNAPSHOT_MARKER_RATIO = 0.02;
+/** Height in canvas pixels of Chrome's tab bar + address bar. Clicks in this
+ *  region are treated as browser chrome interactions and are NOT recorded. */
+const CHROME_UI_HEIGHT_PX = 85;
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -215,6 +218,9 @@ export const NoVNCViewer = forwardRef<NoVNCViewerHandle, NoVNCViewerProps>(
         const scaleY = canvas.height / rect.height;
         const x = Math.round((event.clientX - rect.left) * scaleX);
         const y = Math.round((event.clientY - rect.top) * scaleY);
+
+        // Ignore clicks in Chrome's tab bar / address bar area
+        if (y < CHROME_UI_HEIGHT_PX) return;
 
         const interactionId = `click-${now}-${Math.random().toString(36).substring(2, 9)}`;
 
