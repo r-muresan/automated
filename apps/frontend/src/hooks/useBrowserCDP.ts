@@ -1325,10 +1325,12 @@ export function useBrowserCDP(
               sourceHeight - 1,
             );
 
-      // Keep the click at the center of the output. If the crop would exceed
-      // image bounds, we pad the out-of-bounds area instead of shifting center.
-      const cropLeft = xInImage - cropWidth / 2;
-      const cropTop = yInImage - cropHeight / 2;
+      // Keep the click near the center of the output, but shift the crop
+      // window so it stays fully within the source image (no white padding).
+      let cropLeft = xInImage - cropWidth / 2;
+      let cropTop = yInImage - cropHeight / 2;
+      cropLeft = clampNumber(cropLeft, 0, Math.max(0, sourceWidth - cropWidth));
+      cropTop = clampNumber(cropTop, 0, Math.max(0, sourceHeight - cropHeight));
 
       const canvas = document.createElement('canvas');
       canvas.width = cropWidth;
