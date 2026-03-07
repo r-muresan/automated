@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import type { NoVNCViewerHandle } from '../app/components/Browser/NoVNCViewer';
 
 type CDPMethod = string;
 type CDPParams = Record<string, unknown>;
@@ -88,95 +89,48 @@ interface UseBrowserCDPReturn extends BrowserCDPState {
 // Default to Browserbase URL pattern if no template provided
 const DEFAULT_CDP_WS_TEMPLATE = (sessionId: string) =>
   `wss://connect.browserbase.com/debug/${sessionId}/devtools/page/{pageId}`;
-const CLICK_SCREENSHOT_REUSE_WINDOW_MS = 400;
 const CDP_COMMAND_TIMEOUT_MS = 10_000;
+const CLICK_SNAPSHOT_CROP_RATIO = 0.4;
+const CLICK_SNAPSHOT_MARKER_RATIO = 0.02;
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
-// Script injected into pages to report click/keydown events through the
+const getFiniteNumber = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+const waitForNextPaint = async () => {
+  if (typeof window === 'undefined') return;
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+};
+
+// Script injected into pages to report click coordinates through the
 // __cdpEvent Runtime binding.
 const EVENT_TRACKING_SCRIPT = `(function() {
   if (window.__bbEventListenerInjected) return;
   window.__bbEventListenerInjected = true;
-  function reportEvent(data) {
-    if (typeof window.__cdpEvent === 'function') {
-      try { window.__cdpEvent(JSON.stringify(data)); } catch(e) {}
-    }
-  }
-  function getElementSelector(el) {
-    if (!el) return '';
-    if (el.id) return '#' + el.id;
-    var path = [];
-    while (el && el.nodeType === 1) {
-      var s = el.nodeName.toLowerCase();
-      if (el.className && typeof el.className === 'string') {
-        s += '.' + el.className.trim().split(/\\s+/).join('.');
-      }
-      path.unshift(s);
-      el = el.parentNode;
-      if (path.length > 3) break;
-    }
-    return path.join(' > ');
-  }
-  function getElementInfo(el) {
-    if (!el) return null;
-    var className = '';
-    if (typeof el.className === 'string') {
-      className = el.className;
-    } else if (el.classList && typeof el.classList.length === 'number') {
-      className = Array.prototype.slice.call(el.classList).join(' ');
-    }
-
-    var text = '';
-    try {
-      if (typeof el.value === 'string' && el.value) {
-        text = el.value.substring(0, 200);
-      } else if (typeof el.getAttribute === 'function') {
-        text = (el.getAttribute('aria-label') || el.getAttribute('title') || '').substring(0, 200);
-      }
-
-      if (!text && el.childNodes && el.childNodes.length) {
-        for (var i = 0; i < el.childNodes.length && text.length < 200; i++) {
-          var child = el.childNodes[i];
-          if (child && child.nodeType === 3 && typeof child.textContent === 'string') {
-            var chunk = child.textContent.trim();
-            if (chunk) {
-              text += (text ? ' ' : '') + chunk;
-            }
-          }
-        }
-        if (text.length > 200) {
-          text = text.substring(0, 200);
-        }
-      }
-    } catch (e) {}
-
-    return {
-      tagName: el.tagName || 'unknown',
-      id: el.id || '',
-      className: className,
-      selector: getElementSelector(el),
-      text: text,
-      value: typeof el.value === 'string' ? el.value.substring(0, 200) : '',
-      href: typeof el.href === 'string' ? el.href : '',
-      type: typeof el.type === 'string' ? el.type : '',
-      name: typeof el.name === 'string' ? el.name : ''
-    };
-  }
   document.addEventListener('click', function(e) {
-    reportEvent({ type: 'click', x: e.clientX, y: e.clientY, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, devicePixelRatio: window.devicePixelRatio || 1, target: getElementInfo(e.target), timestamp: Date.now() });
-  }, true);
-  document.addEventListener('keydown', function(e) {
-    reportEvent({ type: 'keydown', key: e.key, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey, target: getElementInfo(e.target), timestamp: Date.now() });
+    if (typeof window.__cdpEvent !== 'function') return;
+    try {
+      window.__cdpEvent(JSON.stringify({ x: e.clientX, y: e.clientY, clickScreenX: e.screenX, clickScreenY: e.screenY, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, outerWidth: window.outerWidth, outerHeight: window.outerHeight, screenX: window.screenX, screenY: window.screenY, screenWidth: screen.width, screenHeight: screen.height }));
+    } catch (_err) {}
   }, true);
 })()`;
+
+const extractClickCoordinates = (eventData: any): { x: number; y: number } | null => {
+  const x = getFiniteNumber(eventData?.x);
+  const y = getFiniteNumber(eventData?.y);
+  if (x === null || y === null) return null;
+  return { x, y };
+};
 
 export function useBrowserCDP(
   sessionId: string | null,
   initialPageId?: string,
   callbacks?: InteractionCallbacks,
   cdpWsUrlTemplate?: string | null,
+  vncViewerRef?: RefObject<NoVNCViewerHandle | null>,
 ): UseBrowserCDPReturn {
   const usesBrowserLevelCdp = Boolean(
     cdpWsUrlTemplate && !cdpWsUrlTemplate.includes('{pageId}'),
@@ -216,9 +170,6 @@ export function useBrowserCDP(
   const pendingTargetAttachmentRef = useRef<Map<string, Promise<string>>>(new Map());
   const knownPageIdsRef = useRef<Set<string>>(new Set());
   const injectedPagesRef = useRef<Set<string>>(new Set());
-  const lastRawScreenshotByPageRef = useRef<
-    Map<string, { timestamp: number; screenshotUrl: string }>
-  >(new Map());
   const pendingRawScreenshotByPageRef = useRef<Map<string, Promise<string | null>>>(new Map());
 
   // Throttling refs for interaction events
@@ -236,6 +187,59 @@ export function useBrowserCDP(
     | null
   >(null);
   const handleKeydownRef = useRef<((eventData: any, pageId?: string) => void) | null>(null);
+
+  const handleTrackedRuntimeBindingPayload = useCallback(
+    (payload: string, pageId: string) => {
+      try {
+        const eventData = JSON.parse(payload || '{}');
+
+        // Backwards compatibility for any sessions still using the old script.
+        if (eventData?.type === 'keydown') {
+          handleKeydownRef.current?.(eventData, pageId);
+          return;
+        }
+
+        const clickCoordinates = extractClickCoordinates(eventData);
+        if (!clickCoordinates) {
+          return;
+        }
+
+        const now = Date.now();
+        if (now - lastClickTimestampRef.current < 100) {
+          return;
+        }
+        lastClickTimestampRef.current = now;
+
+        addInteractionRef.current?.(
+          'user_event',
+          {
+            tagName: 'CLICK',
+            text: `(${Math.round(clickCoordinates.x)}, ${Math.round(clickCoordinates.y)})`,
+            selector: 'coordinates',
+          },
+          pageId,
+          {
+            type: 'click',
+            x: clickCoordinates.x,
+            y: clickCoordinates.y,
+            clickScreenX: getFiniteNumber(eventData?.clickScreenX) ?? undefined,
+            clickScreenY: getFiniteNumber(eventData?.clickScreenY) ?? undefined,
+            viewportWidth: getFiniteNumber(eventData?.viewportWidth) ?? undefined,
+            viewportHeight: getFiniteNumber(eventData?.viewportHeight) ?? undefined,
+            outerWidth: getFiniteNumber(eventData?.outerWidth) ?? undefined,
+            outerHeight: getFiniteNumber(eventData?.outerHeight) ?? undefined,
+            screenX: getFiniteNumber(eventData?.screenX) ?? undefined,
+            screenY: getFiniteNumber(eventData?.screenY) ?? undefined,
+            screenWidth: getFiniteNumber(eventData?.screenWidth) ?? undefined,
+            screenHeight: getFiniteNumber(eventData?.screenHeight) ?? undefined,
+          },
+        );
+      } catch (e) {
+        console.warn('[CDP] Failed to parse binding event:', e);
+      }
+    },
+    [],
+  );
 
   const queryPageMetadata = useCallback(
     async (
@@ -515,34 +519,10 @@ export function useBrowserCDP(
             message.method === 'Runtime.bindingCalled' &&
             (message.params as Record<string, unknown>)?.name === '__cdpEvent'
           ) {
-            try {
-              const eventData = JSON.parse(
-                ((message.params as Record<string, unknown>)?.payload as string) || '{}',
-              );
-              const now = Date.now();
-
-              if (eventData.type === 'keydown') {
-                handleKeydownRef.current?.(eventData, pageId);
-              } else if (eventData.type === 'click') {
-                // Deduplicate clicks within 100ms to prevent duplicate events
-                if (now - lastClickTimestampRef.current < 100) {
-                  return;
-                }
-                lastClickTimestampRef.current = now;
-                addInteractionRef.current?.(
-                  'user_event',
-                  eventData.target || {
-                    tagName: 'CLICK',
-                    text: 'click',
-                    selector: 'unknown',
-                  },
-                  pageId,
-                  eventData,
-                );
-              }
-            } catch (e) {
-              console.warn('[CDP] Failed to parse binding event:', e);
-            }
+            handleTrackedRuntimeBindingPayload(
+              ((message.params as Record<string, unknown>)?.payload as string) || '{}',
+              pageId,
+            );
           }
 
           // Handle page load events - re-query title when page finishes loading
@@ -763,33 +743,10 @@ export function useBrowserCDP(
               message.method === 'Runtime.bindingCalled' &&
               (message.params as Record<string, unknown>)?.name === '__cdpEvent'
             ) {
-              try {
-                const eventData = JSON.parse(
-                  ((message.params as Record<string, unknown>)?.payload as string) || '{}',
-                );
-                const now = Date.now();
-
-                if (eventData.type === 'keydown') {
-                  handleKeydownRef.current?.(eventData, targetPageId);
-                } else if (eventData.type === 'click') {
-                  if (now - lastClickTimestampRef.current < 100) {
-                    return;
-                  }
-                  lastClickTimestampRef.current = now;
-                  addInteractionRef.current?.(
-                    'user_event',
-                    eventData.target || {
-                      tagName: 'CLICK',
-                      text: 'click',
-                      selector: 'unknown',
-                    },
-                    targetPageId,
-                    eventData,
-                  );
-                }
-              } catch (e) {
-                console.warn('[CDP] Failed to parse binding event:', e);
-              }
+              handleTrackedRuntimeBindingPayload(
+                ((message.params as Record<string, unknown>)?.payload as string) || '{}',
+                targetPageId,
+              );
               return;
             }
 
@@ -921,7 +878,13 @@ export function useBrowserCDP(
       // Note: connectToPage is called separately via ensurePageConnections
       // to avoid duplicate connections
     },
-    [sessionId, cdpWsUrlTemplate, queryPageMetadata, usesBrowserLevelCdp],
+    [
+      sessionId,
+      cdpWsUrlTemplate,
+      queryPageMetadata,
+      usesBrowserLevelCdp,
+      handleTrackedRuntimeBindingPayload,
+    ],
   );
 
   const disconnect = useCallback(() => {
@@ -1187,52 +1150,8 @@ export function useBrowserCDP(
   );
 
   const getRawClickScreenshot = useCallback(
-    async (pageId: string, clickData?: any): Promise<string | null> => {
+    async (pageId: string): Promise<string | null> => {
       if (!pageId) return null;
-
-      const clickX = typeof clickData?.x === 'number' ? clickData.x : null;
-      const clickY = typeof clickData?.y === 'number' ? clickData.y : null;
-      const viewportWidth =
-        typeof clickData?.viewportWidth === 'number' && clickData.viewportWidth > 0
-          ? clickData.viewportWidth
-          : null;
-      const viewportHeight =
-        typeof clickData?.viewportHeight === 'number' && clickData.viewportHeight > 0
-          ? clickData.viewportHeight
-          : null;
-      const canUseClippedCapture =
-        clickX !== null && clickY !== null && viewportWidth !== null && viewportHeight !== null;
-
-      if (canUseClippedCapture) {
-        try {
-          const clipWidth = Math.max(120, Math.round(viewportWidth * 0.4));
-          const clipHeight = Math.max(80, Math.round(viewportHeight * 0.4));
-          const clipLeft = clampNumber(clickX - clipWidth / 2, 0, Math.max(0, viewportWidth - clipWidth));
-          const clipTop = clampNumber(clickY - clipHeight / 2, 0, Math.max(0, viewportHeight - clipHeight));
-          const screenshot = await sendToPage<{ data?: string }>(pageId, 'Page.captureScreenshot', {
-            format: 'jpeg',
-            quality: 55,
-            captureBeyondViewport: false,
-            clip: {
-              x: clipLeft,
-              y: clipTop,
-              width: clipWidth,
-              height: clipHeight,
-              scale: 1,
-            },
-          });
-          const base64Data = typeof screenshot?.data === 'string' ? screenshot.data : '';
-          return base64Data ? `data:image/jpeg;base64,${base64Data}` : null;
-        } catch (error) {
-          console.warn('[CDP] Failed to capture clipped click screenshot, falling back:', error);
-        }
-      }
-
-      const now = Date.now();
-      const recent = lastRawScreenshotByPageRef.current.get(pageId);
-      if (recent && now - recent.timestamp <= CLICK_SCREENSHOT_REUSE_WINDOW_MS) {
-        return recent.screenshotUrl;
-      }
 
       const pendingCapture = pendingRawScreenshotByPageRef.current.get(pageId);
       if (pendingCapture) {
@@ -1241,22 +1160,12 @@ export function useBrowserCDP(
 
       const capturePromise = (async () => {
         try {
-          const screenshot = await sendToPage<{ data?: string }>(pageId, 'Page.captureScreenshot', {
-            format: 'jpeg',
-            quality: 55,
-            captureBeyondViewport: false,
-          });
-          const base64Data = typeof screenshot?.data === 'string' ? screenshot.data : '';
-          if (!base64Data) return null;
-
-          const screenshotUrl = `data:image/jpeg;base64,${base64Data}`;
-          lastRawScreenshotByPageRef.current.set(pageId, {
-            timestamp: Date.now(),
-            screenshotUrl,
-          });
+          await waitForNextPaint();
+          const screenshotUrl = vncViewerRef?.current?.captureScreenshot('image/jpeg', 0.55) ?? null;
+          if (!screenshotUrl) return null;
           return screenshotUrl;
         } catch (error) {
-          console.warn('[CDP] Failed to capture click screenshot:', error);
+          console.warn('[CDP] Failed to capture VNC click screenshot:', error);
           return null;
         } finally {
           pendingRawScreenshotByPageRef.current.delete(pageId);
@@ -1266,45 +1175,155 @@ export function useBrowserCDP(
       pendingRawScreenshotByPageRef.current.set(pageId, capturePromise);
       return capturePromise;
     },
-    [sendToPage],
+    [vncViewerRef],
   );
 
   const createClickSnapshot = useCallback(
     async (screenshotUrl: string, clickData: any): Promise<string | null> => {
-      const clickX = typeof clickData?.x === 'number' ? clickData.x : null;
-      const clickY = typeof clickData?.y === 'number' ? clickData.y : null;
+      const clickX = getFiniteNumber(clickData?.x);
+      const clickY = getFiniteNumber(clickData?.y);
       if (clickX === null || clickY === null || typeof document === 'undefined') {
         return screenshotUrl;
       }
 
-      const viewportWidth =
-        typeof clickData?.viewportWidth === 'number' && clickData.viewportWidth > 0
-          ? clickData.viewportWidth
-          : null;
-      const viewportHeight =
-        typeof clickData?.viewportHeight === 'number' && clickData.viewportHeight > 0
-          ? clickData.viewportHeight
-          : null;
+      const liveCanvas = vncViewerRef?.current?.getCanvas() ?? null;
+      let imageSource: CanvasImageSource;
+      let sourceWidth = 0;
+      let sourceHeight = 0;
+      const loadImageFromScreenshotUrl = async (): Promise<HTMLImageElement | null> => {
+        const image = new Image();
+        const loaded = await new Promise<boolean>((resolve) => {
+          image.onload = () => resolve(true);
+          image.onerror = () => resolve(false);
+          image.src = screenshotUrl;
+        });
+        if (!loaded) return null;
+        return image;
+      };
 
-      const image = new Image();
-      const loaded = await new Promise<boolean>((resolve) => {
-        image.onload = () => resolve(true);
-        image.onerror = () => resolve(false);
-        image.src = screenshotUrl;
-      });
-      if (!loaded) return null;
-
-      const sourceWidth = image.naturalWidth || image.width;
-      const sourceHeight = image.naturalHeight || image.height;
+      if (liveCanvas && liveCanvas.width > 0 && liveCanvas.height > 0) {
+        imageSource = liveCanvas;
+        sourceWidth = liveCanvas.width;
+        sourceHeight = liveCanvas.height;
+      } else {
+        const image = await loadImageFromScreenshotUrl();
+        if (!image) return null;
+        imageSource = image;
+        sourceWidth = image.naturalWidth || image.width;
+        sourceHeight = image.naturalHeight || image.height;
+      }
       if (!sourceWidth || !sourceHeight) return null;
 
-      const cropWidth = Math.max(1, Math.round(sourceWidth * 0.4));
-      const cropHeight = Math.max(1, Math.round(sourceHeight * 0.4));
+      const viewportWidth = getFiniteNumber(clickData?.viewportWidth);
+      const viewportHeight = getFiniteNumber(clickData?.viewportHeight);
+      const hasViewportMetrics =
+        (viewportWidth ?? 0) > 0 && (viewportHeight ?? 0) > 0;
+      const effectiveViewportWidth = hasViewportMetrics ? viewportWidth! : sourceWidth;
+      const effectiveViewportHeight = hasViewportMetrics ? viewportHeight! : sourceHeight;
+      const outerWidth = getFiniteNumber(clickData?.outerWidth);
+      const outerHeight = getFiniteNumber(clickData?.outerHeight);
+      const effectiveBrowserWidth =
+        hasViewportMetrics && (outerWidth ?? 0) > 0 ? outerWidth! : effectiveViewportWidth;
+      const effectiveBrowserHeight =
+        hasViewportMetrics && (outerHeight ?? 0) > 0 ? outerHeight! : effectiveViewportHeight;
+      const viewportOffsetXFromEvent = getFiniteNumber(clickData?.viewportOffsetX);
+      const viewportOffsetYFromEvent = getFiniteNumber(clickData?.viewportOffsetY);
+      const viewportOffsetX =
+        viewportOffsetXFromEvent !== null
+          ? clampNumber(
+              viewportOffsetXFromEvent,
+              0,
+              Math.max(0, effectiveBrowserWidth - effectiveViewportWidth),
+            )
+          : hasViewportMetrics
+            ? Math.max(0, (effectiveBrowserWidth - effectiveViewportWidth) / 2)
+            : 0;
+      const viewportOffsetY =
+        viewportOffsetYFromEvent !== null
+          ? clampNumber(
+              viewportOffsetYFromEvent,
+              0,
+              Math.max(0, effectiveBrowserHeight - effectiveViewportHeight),
+            )
+          : hasViewportMetrics
+            ? Math.max(0, effectiveBrowserHeight - effectiveViewportHeight)
+            : 0;
 
-      const scaleX = viewportWidth ? sourceWidth / viewportWidth : 1;
-      const scaleY = viewportHeight ? sourceHeight / viewportHeight : 1;
-      const xInImage = clampNumber(clickX * scaleX, 0, sourceWidth - 1);
-      const yInImage = clampNumber(clickY * scaleY, 0, sourceHeight - 1);
+      const scaleX = sourceWidth / Math.max(1, effectiveBrowserWidth);
+      const scaleY = sourceHeight / Math.max(1, effectiveBrowserHeight);
+      const clickScreenX = getFiniteNumber(clickData?.clickScreenX);
+      const clickScreenY = getFiniteNumber(clickData?.clickScreenY);
+      const screenX = getFiniteNumber(clickData?.screenX);
+      const screenY = getFiniteNumber(clickData?.screenY);
+      const screenWidth = getFiniteNumber(clickData?.screenWidth);
+      const screenHeight = getFiniteNumber(clickData?.screenHeight);
+
+      // Prefer absolute screen coordinates (e.screenX/Y) when available — they
+      // map directly to VNC canvas pixels and bypass all browser-chrome offset
+      // ambiguities (headless Chrome reports outerHeight == innerHeight).
+      const hasScreenClickCoords =
+        clickScreenX !== null &&
+        clickScreenY !== null &&
+        (screenWidth ?? 0) > 0 &&
+        (screenHeight ?? 0) > 0;
+      const canUseDesktopCoordinates =
+        !hasScreenClickCoords &&
+        screenX !== null &&
+        screenY !== null &&
+        (screenWidth ?? 0) > 0 &&
+        (screenHeight ?? 0) > 0 &&
+        (sourceWidth > effectiveBrowserWidth * 1.02 || sourceHeight > effectiveBrowserHeight * 1.02);
+      const screenScaleX = hasScreenClickCoords ? sourceWidth / Math.max(1, screenWidth!) : 1;
+      const screenScaleY = hasScreenClickCoords ? sourceHeight / Math.max(1, screenHeight!) : 1;
+      const desktopScaleX = canUseDesktopCoordinates ? sourceWidth / Math.max(1, screenWidth!) : 1;
+      const desktopScaleY = canUseDesktopCoordinates ? sourceHeight / Math.max(1, screenHeight!) : 1;
+      const activeScaleX = hasScreenClickCoords ? screenScaleX : canUseDesktopCoordinates ? desktopScaleX : scaleX;
+      const activeScaleY = hasScreenClickCoords ? screenScaleY : canUseDesktopCoordinates ? desktopScaleY : scaleY;
+      // Crop a 40% region around the click. When using screen coordinates the
+      // crop should be relative to the full source (VNC canvas), not just the
+      // viewport, so that the zoom level stays consistent.
+      const cropBaseWidth = hasScreenClickCoords ? sourceWidth : effectiveViewportWidth * activeScaleX;
+      const cropBaseHeight = hasScreenClickCoords ? sourceHeight : effectiveViewportHeight * activeScaleY;
+      const cropWidth = Math.max(
+        1,
+        Math.round(cropBaseWidth * CLICK_SNAPSHOT_CROP_RATIO),
+      );
+      const cropHeight = Math.max(
+        1,
+        Math.round(cropBaseHeight * CLICK_SNAPSHOT_CROP_RATIO),
+      );
+      const xInImage = hasScreenClickCoords
+        ? clampNumber(clickScreenX! * screenScaleX, 0, sourceWidth - 1)
+        : canUseDesktopCoordinates
+          ? clampNumber(
+              (
+                clickScreenX ??
+                (screenX! + viewportOffsetX + clickX)
+              ) * desktopScaleX,
+              0,
+              sourceWidth - 1,
+            )
+          : clampNumber(
+              (viewportOffsetX + clickX) * scaleX,
+              0,
+              sourceWidth - 1,
+            );
+      const yInImage = hasScreenClickCoords
+        ? clampNumber(clickScreenY! * screenScaleY, 0, sourceHeight - 1)
+        : canUseDesktopCoordinates
+          ? clampNumber(
+              (
+                clickScreenY ??
+                (screenY! + viewportOffsetY + clickY)
+              ) * desktopScaleY,
+              0,
+              sourceHeight - 1,
+            )
+          : clampNumber(
+              (viewportOffsetY + clickY) * scaleY,
+              0,
+              sourceHeight - 1,
+            );
 
       // Keep the click at the center of the output. If the crop would exceed
       // image bounds, we pad the out-of-bounds area instead of shifting center.
@@ -1331,7 +1350,7 @@ export function useBrowserCDP(
       ctx.fillRect(0, 0, cropWidth, cropHeight);
       if (srcWidth > 0 && srcHeight > 0) {
         ctx.drawImage(
-          image,
+          imageSource,
           srcLeft,
           srcTop,
           srcWidth,
@@ -1343,15 +1362,23 @@ export function useBrowserCDP(
         );
       }
 
-      const dotRadius = Math.max(3, Math.round(Math.min(cropWidth, cropHeight) * 0.02));
-      ctx.fillStyle = 'rgba(37, 99, 235, 0.5)';
+      const dotRadius = Math.max(
+        3,
+        Math.round(Math.min(cropWidth, cropHeight) * CLICK_SNAPSHOT_MARKER_RATIO),
+      );
+      const markerX = clampNumber(xInImage - cropLeft, 0, cropWidth);
+      const markerY = clampNumber(yInImage - cropTop, 0, cropHeight);
+      ctx.fillStyle = 'rgba(37, 99, 235, 0.92)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.lineWidth = Math.max(2, Math.round(dotRadius * 0.45));
       ctx.beginPath();
-      ctx.arc(cropWidth / 2, cropHeight / 2, dotRadius, 0, Math.PI * 2);
+      ctx.arc(markerX, markerY, dotRadius, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
 
       return canvas.toDataURL('image/jpeg', 0.88);
     },
-    [],
+    [vncViewerRef],
   );
 
   const getClickScreenshot = useCallback(
@@ -1362,22 +1389,18 @@ export function useBrowserCDP(
           ? clickData.screenshotUrl
           : null;
 
-      const clickHasViewportCoordinates =
-        typeof clickData?.x === 'number' &&
-        typeof clickData?.y === 'number' &&
-        typeof clickData?.viewportWidth === 'number' &&
-        clickData.viewportWidth > 0 &&
-        typeof clickData?.viewportHeight === 'number' &&
-        clickData.viewportHeight > 0;
+      const clickHasCoordinates =
+        getFiniteNumber(clickData?.x) !== null &&
+        getFiniteNumber(clickData?.y) !== null;
 
-      const screenshotUrl = providedScreenshot || (await getRawClickScreenshot(pageId, clickData));
+      const screenshotUrl = providedScreenshot || (await getRawClickScreenshot(pageId));
       if (!screenshotUrl) return null;
 
-      if (clickHasViewportCoordinates) {
+      if (!clickHasCoordinates) {
         return screenshotUrl;
       }
 
-      return createClickSnapshot(screenshotUrl, clickData);
+      return (await createClickSnapshot(screenshotUrl, clickData)) || screenshotUrl;
     },
     [createClickSnapshot, getRawClickScreenshot],
   );
@@ -1395,7 +1418,9 @@ export function useBrowserCDP(
       const interactionId = `${type}-${timestamp}-${Math.random().toString(36).substring(2, 9)}`;
       const resolvedPageId = pageId ?? '';
 
-      const isClickEvent = type === 'user_event' && data?.type === 'click';
+      const isClickEvent =
+        type === 'user_event' &&
+        (data?.type === 'click' || extractClickCoordinates(data) !== null);
 
       const interaction: Interaction = {
         id: interactionId,
@@ -1602,7 +1627,6 @@ export function useBrowserCDP(
       targetPageIdsBySessionRef.current.clear();
       pendingTargetAttachmentRef.current.clear();
       lastNavigationRefreshByPageRef.current.clear();
-      lastRawScreenshotByPageRef.current.clear();
       pendingRawScreenshotByPageRef.current.clear();
       downloadGuidToFilenameRef.current.clear();
     }

@@ -5,6 +5,8 @@ import { VncScreen } from 'react-vnc';
 import type { VncScreenHandle } from 'react-vnc';
 
 export interface NoVNCViewerHandle {
+  /** Access the live visible VNC canvas */
+  getCanvas: () => HTMLCanvasElement | null;
   /** Grab a screenshot from the VNC canvas as a data URL */
   captureScreenshot: (type?: string, quality?: number) => string | null;
 }
@@ -32,11 +34,30 @@ export const NoVNCViewer = forwardRef<NoVNCViewerHandle, NoVNCViewerProps>(
         /Mac|iPhone|iPad|iPod/.test(navigator.platform) ||
         ((navigator as any).userAgentData?.platform === 'macOS'));
 
+    const getVisibleCanvas = useCallback(() => {
+      const canvases = Array.from(containerRef.current?.querySelectorAll('canvas') ?? []) as HTMLCanvasElement[];
+      if (canvases.length === 0) return null;
+
+      const nonZeroCanvases = canvases.filter((canvas) => canvas.width > 0 && canvas.height > 0);
+      if (nonZeroCanvases.length === 0) {
+        return canvases[0] ?? null;
+      }
+
+      return nonZeroCanvases.reduce((largest, current) =>
+        current.width * current.height > largest.width * largest.height ? current : largest,
+      );
+    }, []);
+
     useImperativeHandle(ref, () => ({
+      getCanvas: () => getVisibleCanvas(),
       captureScreenshot: (type = 'image/jpeg', quality = 0.55) => {
-        const rfb = vncRef.current?.rfb;
-        if (!rfb) return null;
         try {
+          const visibleCanvas = getVisibleCanvas();
+          if (visibleCanvas && visibleCanvas.width > 0 && visibleCanvas.height > 0) {
+            return visibleCanvas.toDataURL(type, quality);
+          }
+          const rfb = vncRef.current?.rfb;
+          if (!rfb) return null;
           return rfb.toDataURL(type, quality);
         } catch {
           return null;

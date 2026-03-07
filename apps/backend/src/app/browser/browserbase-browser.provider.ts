@@ -215,8 +215,6 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
         return { pages: [] };
       }
 
-      await this.injectInitScript(defaultContext);
-
       const page = defaultContext.pages()[0] || (await defaultContext.newPage());
 
       const [tabId] = await Promise.all([
@@ -278,76 +276,5 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
       },
     );
     return response.data.id;
-  }
-
-  private async injectInitScript(context: any): Promise<void> {
-    await context.addInitScript(`
-      (function() {
-        if (window.__bbEventListenerInjected) return;
-        window.__bbEventListenerInjected = true;
-
-        function reportEvent(data) {
-          var json = JSON.stringify(data);
-          if (typeof window.__cdpEvent === 'function') {
-            try { window.__cdpEvent(json); } catch(e) {}
-          }
-        }
-
-        function getElementSelector(element) {
-          if (!element) return '';
-          if (element.id) return '#' + element.id;
-
-          var path = [];
-          while (element && element.nodeType === Node.ELEMENT_NODE) {
-            var selector = element.nodeName.toLowerCase();
-            if (element.className && typeof element.className === 'string') {
-              selector += '.' + element.className.trim().split(/\\\\s+/).join('.');
-            }
-            path.unshift(selector);
-            element = element.parentNode;
-            if (path.length > 3) break;
-          }
-          return path.join(' > ');
-        }
-
-        function getElementInfo(element) {
-          if (!element) return null;
-          return {
-            tagName: element.tagName || 'unknown',
-            id: element.id || '',
-            className: element.className || '',
-            selector: getElementSelector(element),
-            text: (element.textContent || '').substring(0, 200),
-            value: element.value || '',
-            href: element.href || '',
-            type: element.type || '',
-            name: element.name || ''
-          };
-        }
-
-        document.addEventListener('click', function(e) {
-          reportEvent({
-            type: 'click',
-            x: e.clientX,
-            y: e.clientY,
-            target: getElementInfo(e.target),
-            timestamp: Date.now()
-          });
-        }, true);
-
-        document.addEventListener('keydown', function(e) {
-          reportEvent({
-            type: 'keydown',
-            key: e.key,
-            ctrlKey: e.ctrlKey,
-            shiftKey: e.shiftKey,
-            altKey: e.altKey,
-            metaKey: e.metaKey,
-            target: getElementInfo(e.target),
-            timestamp: Date.now()
-          });
-        }, true);
-      })();
-    `);
   }
 }

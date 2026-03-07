@@ -223,7 +223,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
     addInteraction,
     downloadedFiles,
     handleFileChooser: cdpHandleFileChooser,
-  } = useBrowserCDP(sessionId, firstPageId, cdpCallbacks, cdpWsUrlTemplate);
+  } = useBrowserCDP(sessionId, firstPageId, cdpCallbacks, cdpWsUrlTemplate, vncViewerRef);
 
   addInteractionRef.current = addInteraction;
 
