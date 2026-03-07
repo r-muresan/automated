@@ -65,7 +65,6 @@ interface BrowserContextType {
 const BrowserContext = createContext<BrowserContextType | undefined>(undefined);
 
 const SESSION_RECREATION_COOLDOWN_MS = 10_000;
-const SESSION_IDLE_TIMEOUT_MS = 60 * 1000;
 const SESSION_PING_INTERVAL_MS = 15_000;
 
 const normalizePages = (
@@ -89,7 +88,6 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   const vncViewerRef = useRef<NoVNCViewerHandle | null>(null);
   const [fileChooserState, setFileChooserState] = useState<FileChooserState | null>(null);
 
-  const lastInteractionRef = useRef(Date.now());
   const recreateSessionRef = useRef<(() => Promise<boolean>) | null>(null);
   const addInteractionRef = useRef<
     | ((
@@ -315,38 +313,9 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   }, [activePageIndex, pages.length]);
 
   useEffect(() => {
-    const markInteraction = () => {
-      lastInteractionRef.current = Date.now();
-    };
-
-    const handleWindowBlur = () => {
-      window.setTimeout(() => {
-        if (document.activeElement?.tagName === 'IFRAME') {
-          markInteraction();
-        }
-      }, 100);
-    };
-
-    window.addEventListener('mousedown', markInteraction);
-    window.addEventListener('keydown', markInteraction);
-    window.addEventListener('blur', handleWindowBlur);
-
-    return () => {
-      window.removeEventListener('mousedown', markInteraction);
-      window.removeEventListener('keydown', markInteraction);
-      window.removeEventListener('blur', handleWindowBlur);
-    };
-  }, []);
-
-  useEffect(() => {
     if (!sessionId) return;
 
     const interval = window.setInterval(async () => {
-      if (Date.now() - lastInteractionRef.current > SESSION_IDLE_TIMEOUT_MS) {
-        await handleStopSession();
-        return;
-      }
-
       try {
         await pingSessionMutation.mutateAsync(sessionId);
       } catch (error) {
@@ -360,16 +329,13 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
     }, SESSION_PING_INTERVAL_MS);
 
     return () => window.clearInterval(interval);
-  }, [handleStopSession, pingSessionMutation, recreateSession, sessionId]);
+  }, [pingSessionMutation, recreateSession, sessionId]);
 
-  // When the user returns to the tab after the session was stopped due to
-  // idle timeout, automatically create a new session.
+  // When the user returns to the tab after the session was cleaned up while
+  // hidden, automatically create a new session.
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
-
-      // Reset interaction timer so the new session doesn't immediately time out
-      lastInteractionRef.current = Date.now();
 
       // Only recreate if there's no active session (it was cleaned up while away)
       if (!sessionId && sessionCreatedAtRef.current > 0) {

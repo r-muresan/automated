@@ -224,8 +224,12 @@ export class BrowserSessionService implements OnModuleInit {
     }
   }
 
-  async getDebugUrl(sessionId: string) {
-    this.updateLastUsed(sessionId).catch((err) => console.error('Error updating lastUsedAt:', err));
+  async getDebugUrl(sessionId: string, touchLastUsed = true) {
+    if (touchLastUsed) {
+      this.updateLastUsed(sessionId).catch((err) =>
+        console.error('Error updating lastUsedAt:', err),
+      );
+    }
     return this.browserProvider.getDebugInfo(sessionId);
   }
 
@@ -282,30 +286,48 @@ export class BrowserSessionService implements OnModuleInit {
     }
   }
 
-  async updateLastUsed(sessionId: string) {
-    await this.prisma.browserSession.updateMany({
+  async updateLastUsed(sessionId: string): Promise<boolean> {
+    const result = await this.prisma.browserSession.updateMany({
       where: { browserbaseSessionId: sessionId },
       data: { lastUsedAt: new Date() },
     });
+
+    if (result.count === 0) {
+      console.warn(
+        `[BrowserSessionService] updateLastUsed had no matching session row: ${sessionId}`,
+      );
+      return false;
+    }
+
+    return true;
   }
 
   async cleanupExpiredSessions() {
-    const sixtySecondsAgo = new Date(Date.now() - 60 * 1000);
+    const now = Date.now();
+    const sixtySecondsAgo = new Date(now - 60 * 1000);
 
     const expiredSessions = await this.prisma.browserSession.findMany({
       where: { lastUsedAt: { lt: sixtySecondsAgo } },
     });
 
     for (const session of expiredSessions) {
-      console.log(`Terminating expired session: ${session.browserbaseSessionId}`);
+      const idleMs = now - session.lastUsedAt.getTime();
+      console.log(
+        `[BrowserSessionService] Terminating expired session: ${session.browserbaseSessionId} | idleMs=${idleMs} | lastUsedAt=${session.lastUsedAt.toISOString()} | cutoff=${sixtySecondsAgo.toISOString()}`,
+      );
       await this.stopSession(session.browserbaseSessionId);
     }
   }
 
   async startRecordingKeepalive(sessionId: string) {
     try {
-      await this.updateLastUsed(sessionId);
-      return { success: true, message: 'Recording start acknowledged' };
+      const success = await this.updateLastUsed(sessionId);
+      return {
+        success,
+        message: success
+          ? 'Recording start acknowledged'
+          : 'Recording start acknowledged but session row was not found',
+      };
     } catch (error) {
       console.error(`[BrowserSessionService] Failed to acknowledge recording start for ${sessionId}:`, error);
       return { success: false, message: 'Failed to acknowledge recording start', error: String(error) };

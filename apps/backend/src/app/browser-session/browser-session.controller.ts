@@ -6,6 +6,7 @@ import {
   Headers,
   Param,
   Post,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -80,8 +81,10 @@ export class BrowserSessionController {
   @UseGuards(ClerkAuthGuard)
   async getBrowserSessionDebug(
     @Param('sessionId') sessionId: string,
+    @Query('touch') touch?: string,
   ): Promise<BrowserSessionDebugResponse> {
-    const debugInfo = await this.browserSessionService.getDebugUrl(sessionId);
+    const touchLastUsed = touch !== 'false';
+    const debugInfo = await this.browserSessionService.getDebugUrl(sessionId, touchLastUsed);
     return {
       ...debugInfo,
       pages: debugInfo.pages || [],
@@ -94,8 +97,8 @@ export class BrowserSessionController {
   @Post(':sessionId/ping')
   @UseGuards(ClerkAuthGuard)
   async pingSession(@Param('sessionId') sessionId: string): Promise<BrowserSessionPingResponse> {
-    await this.browserSessionService.updateLastUsed(sessionId);
-    return { success: true };
+    const success = await this.browserSessionService.updateLastUsed(sessionId);
+    return { success };
   }
 
   @Post(':sessionId/recording/start')

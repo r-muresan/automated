@@ -20,6 +20,7 @@ import { Navbar } from '../components/Navbar';
 import { VNCBrowser } from '../components/Browser/VNCBrowser';
 
 export default function NewWorkflow() {
+  const RECORDING_KEEPALIVE_INTERVAL_MS = 15_000;
   const router = useRouter();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -91,6 +92,11 @@ export default function NewWorkflow() {
   const generateFromInteractionsMutation = useGenerateWorkflowFromInteractions();
   const startRecordingKeepaliveMutation = useStartRecordingKeepalive();
   const stopRecordingKeepaliveMutation = useStopRecordingKeepalive();
+  const startRecordingKeepaliveRef = useRef(startRecordingKeepaliveMutation);
+
+  useEffect(() => {
+    startRecordingKeepaliveRef.current = startRecordingKeepaliveMutation;
+  }, [startRecordingKeepaliveMutation]);
 
   // Clear any leftover recording status on mount
   useEffect(() => {
@@ -142,6 +148,22 @@ export default function NewWorkflow() {
       startAudioRecording();
     }
   }, [sessionId, audioStream, startAudioRecording]);
+
+  useEffect(() => {
+    if (!sessionId || !audioStream) return;
+
+    const sendKeepalive = () => {
+      startRecordingKeepaliveRef.current
+        .mutateAsync(sessionId)
+        .catch((err) => console.error('[RECORD PAGE] Failed recording keepalive ping:', err));
+    };
+
+    // Send immediately, then continue on interval while recording is active.
+    sendKeepalive();
+    const interval = window.setInterval(sendKeepalive, RECORDING_KEEPALIVE_INTERVAL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [audioStream, sessionId]);
 
   // Silence detection: show mic switch modal if no audio after 5 seconds
   useEffect(() => {
@@ -350,12 +372,6 @@ export default function NewWorkflow() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       console.log('[RECORD PAGE] Microphone stream obtained');
 
-      // Start backend keepalive for WebSocket connection
-      console.log('[RECORD PAGE] Starting backend recording keepalive');
-      startRecordingKeepaliveMutation
-        .mutateAsync(sessionId)
-        .catch((err) => console.error('[RECORD PAGE] Failed to start recording keepalive:', err));
-
       // Set starting URL immediately when recording starts
       const activePage = pages[activePageIndex] || pages[0];
       if (activePage && !activePage.isSkeleton && !hasSetStartingUrlRef.current) {
@@ -399,7 +415,6 @@ export default function NewWorkflow() {
     pages,
     activePageIndex,
     setVideoRecordingStartTime,
-    startRecordingKeepaliveMutation,
   ]);
 
   const handleStopRecording = useCallback(async () => {
