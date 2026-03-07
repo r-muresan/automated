@@ -1,32 +1,41 @@
 import { Box, Spinner, Text, VStack } from '@chakra-ui/react';
-import { RefObject, useCallback, useEffect, useState } from 'react';
+import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import { FileUploadModal } from './FileUploadModal';
+import { NoVNCViewer } from './NoVNCViewer';
 import { useOptionalBrowser } from '../../../providers/browser-provider';
+import type { NoVNCViewerHandle } from './NoVNCViewer';
 
 interface VNCBrowserProps {
   contentRef: RefObject<HTMLDivElement | null>;
-  liveViewUrl: string | null;
+  sessionId?: string | null;
+  vncUrl?: string | null;
   isLoading: boolean;
   readOnly?: boolean;
   freeze?: boolean;
   overlayTitle?: string | null;
   overlayDescription?: string | null;
+  /** Ref to access VNC canvas screenshots */
+  vncViewerRef?: RefObject<NoVNCViewerHandle | null>;
 }
 
 export const VNCBrowser = ({
   contentRef,
-  liveViewUrl,
+  sessionId: providedSessionId = null,
+  vncUrl,
   isLoading,
   readOnly = false,
   freeze = false,
   overlayTitle = null,
   overlayDescription = null,
+  vncViewerRef,
 }: VNCBrowserProps) => {
+  const VNC_CONNECT_TIMEOUT_MS = 8_000;
   const browser = useOptionalBrowser();
-  const sessionId = browser?.sessionId ?? null;
+  const sessionId = providedSessionId ?? browser?.sessionId ?? null;
   const downloadedFiles = browser?.downloadedFiles ?? [];
   const fileChooserState = browser?.fileChooserState ?? null;
   const handleFileChooser = browser?.handleFileChooser;
+  const connectTimeoutRef = useRef<number | null>(null);
 
   const onFileChooserAccept = useCallback(
     (files: string[]) => {
@@ -38,22 +47,58 @@ export const VNCBrowser = ({
   const onFileChooserCancel = useCallback(() => {
     void handleFileChooser?.('cancel');
   }, [handleFileChooser]);
+
   const interactionBlocked = readOnly || freeze;
-  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [vncConnected, setVncConnected] = useState(false);
   const showTerminalOverlay = Boolean(overlayTitle);
-  const showLoading = !showTerminalOverlay && (isLoading || !liveViewUrl || !iframeLoaded);
+
+  const clearConnectTimeout = useCallback(() => {
+    if (connectTimeoutRef.current !== null) {
+      window.clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handleConnectionError = useCallback(
+    () => {
+      clearConnectTimeout();
+      setVncConnected(false);
+    },
+    [clearConnectTimeout],
+  );
+
+  const showLoading = !showTerminalOverlay && (isLoading || !vncUrl || !vncConnected);
 
   useEffect(() => {
-    setIframeLoaded(false);
-  }, [liveViewUrl]);
+    clearConnectTimeout();
+    setVncConnected(false);
+  }, [clearConnectTimeout, vncUrl]);
+
+  useEffect(
+    () => () => {
+      clearConnectTimeout();
+    },
+    [clearConnectTimeout],
+  );
+
+  useEffect(() => {
+    clearConnectTimeout();
+    if (!vncUrl || vncConnected) return;
+
+    connectTimeoutRef.current = window.setTimeout(() => {
+      handleConnectionError();
+    }, VNC_CONNECT_TIMEOUT_MS);
+
+    return () => clearConnectTimeout();
+  }, [clearConnectTimeout, handleConnectionError, vncConnected, vncUrl]);
 
   useEffect(() => {
     if (!interactionBlocked) return;
-    const iframe = contentRef.current as unknown as HTMLIFrameElement | null;
-    if (iframe && document.activeElement === iframe) {
-      iframe.blur();
+    const activeElement = document.activeElement as HTMLElement | null;
+    if (contentRef.current && activeElement && contentRef.current.contains(activeElement)) {
+      activeElement.blur();
     }
-  }, [interactionBlocked, contentRef, liveViewUrl]);
+  }, [interactionBlocked, contentRef, vncUrl]);
 
   return (
     <Box
@@ -69,28 +114,40 @@ export const VNCBrowser = ({
       bg="white"
       ref={contentRef}
     >
-      {liveViewUrl && (
+      {vncUrl ? (
         <Box
-          as="iframe"
+          key={vncUrl}
           position="absolute"
           inset={0}
-          width="full"
-          height="full"
-          border="none"
-          opacity={showLoading ? 0 : 1}
+          opacity={showTerminalOverlay ? 0 : 1}
           filter={showTerminalOverlay ? 'blur(3px) saturate(0.85)' : 'none'}
           transform={showTerminalOverlay ? 'scale(1.01)' : 'scale(1)'}
           transition="opacity 0.15s ease, filter 0.3s ease, transform 0.3s ease"
-          onLoad={() => setIframeLoaded(true)}
-          {...({
-            src: liveViewUrl,
-            title: 'Live Browser Preview',
-            tabIndex: interactionBlocked ? -1 : 0,
-            pointerEvents: interactionBlocked ? 'none' : 'auto',
-            style: { outline: 'none', colorScheme: 'light' },
-          } as any)}
-        />
-      )}
+          pointerEvents={interactionBlocked ? 'none' : 'auto'}
+        >
+          <NoVNCViewer
+            ref={vncViewerRef}
+            vncUrl={vncUrl}
+            viewOnly={interactionBlocked}
+            scaleViewport={true}
+            onConnect={() => {
+              clearConnectTimeout();
+              setVncConnected(true);
+            }}
+            onDisconnect={(clean) => {
+              clearConnectTimeout();
+              if (clean) {
+                setVncConnected(false);
+                return;
+              }
+              handleConnectionError();
+            }}
+            onError={() => {
+              handleConnectionError();
+            }}
+          />
+        </Box>
+      ) : null}
       <VStack
         position="absolute"
         inset={0}
@@ -131,7 +188,6 @@ export const VNCBrowser = ({
           </Text>
         </VStack>
       )}
-
       {sessionId && fileChooserState && (
         <FileUploadModal
           isOpen={true}

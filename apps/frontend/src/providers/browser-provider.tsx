@@ -24,6 +24,7 @@ import {
   type Interaction,
   type InteractionCallbacks,
 } from '../hooks/useBrowserCDP';
+import type { NoVNCViewerHandle } from '../app/components/Browser/NoVNCViewer';
 
 interface BrowserPage {
   id: string;
@@ -49,7 +50,8 @@ interface BrowserContextType {
   removeInteraction: (id: string) => void;
   handleTakeControl: (width?: number, height?: number) => Promise<void>;
   handleStopSession: () => Promise<void>;
-  liveViewUrl: string | null;
+  vncUrl: string | null;
+  vncViewerRef: React.RefObject<NoVNCViewerHandle | null>;
   downloadedFiles: DownloadedFile[];
   fileChooserState: FileChooserState | null;
   handleFileChooser: (
@@ -81,7 +83,8 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [cdpWsUrlTemplate, setCdpWsUrlTemplate] = useState<string | null>(null);
-  const [liveViewUrl, setLiveViewUrl] = useState<string | null>(null);
+  const [vncUrl, setVncUrl] = useState<string | null>(null);
+  const vncViewerRef = useRef<NoVNCViewerHandle | null>(null);
   const [fileChooserState, setFileChooserState] = useState<FileChooserState | null>(null);
 
   const lastInteractionRef = useRef(Date.now());
@@ -115,7 +118,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
     setSessionId(null);
     setPages([]);
     setActivePageIndex(0);
-    setLiveViewUrl(null);
+    setVncUrl(null);
 
     try {
       const colorScheme = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -125,7 +128,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
       const data = await createSessionMutation.mutateAsync({ colorScheme, width, height });
 
       setCdpWsUrlTemplate(data.cdpWsUrlTemplate || null);
-      setLiveViewUrl(data.liveViewUrl || null);
+      setVncUrl(data.vncUrl || null);
       setSessionId(data.sessionId);
       setPages(normalizePages(data.pages));
       setActivePageIndex(0);
@@ -249,7 +252,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         const data = await createSessionMutation.mutateAsync({ colorScheme, width, height });
 
         setCdpWsUrlTemplate(data.cdpWsUrlTemplate || null);
-        setLiveViewUrl(data.liveViewUrl || null);
+        setVncUrl(data.vncUrl || null);
         setSessionId(data.sessionId);
         setPages(normalizePages(data.pages));
         setActivePageIndex(0);
@@ -290,7 +293,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
       setPages([]);
       setActivePageIndex(0);
       setCdpWsUrlTemplate(null);
-      setLiveViewUrl(null);
+      setVncUrl(null);
     }
   }, [deleteSessionMutation, sessionId, stopSessionMutation]);
 
@@ -395,7 +398,8 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         removeInteraction,
         handleTakeControl,
         handleStopSession,
-        liveViewUrl,
+        vncUrl,
+        vncViewerRef,
         downloadedFiles,
         fileChooserState,
         handleFileChooser,

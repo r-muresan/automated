@@ -29,12 +29,14 @@ export interface BrowserSessionCreateResponse {
   pages: BrowserbasePage[];
   cdpWsUrlTemplate?: string;
   liveViewUrl?: string;
+  vncUrl?: string;
 }
 
 export interface BrowserSessionDebugResponse extends Record<string, unknown> {
   pages: BrowserbasePage[];
   cdpWsUrlTemplate?: string;
   liveViewUrl?: string;
+  vncUrl?: string;
 }
 
 export interface BrowserSessionPingResponse {

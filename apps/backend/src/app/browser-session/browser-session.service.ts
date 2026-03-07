@@ -212,6 +212,7 @@ export class BrowserSessionService implements OnModuleInit {
           initResult.cdpWsUrlTemplate ??
           buildCdpWsUrlTemplate(resolvedConnectUrl, session.id),
         liveViewUrl: session.liveUrl ?? session.liveViewUrl ?? initResult.liveViewUrl,
+        vncUrl: initResult.vncUrl,
       };
     } catch (error) {
       if (!leaseConfirmed) {
@@ -339,4 +340,5 @@ export class BrowserSessionService implements OnModuleInit {
       throw new BadRequestException(message);
     }
   }
+
 }

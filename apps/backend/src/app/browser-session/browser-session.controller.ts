@@ -72,6 +72,7 @@ export class BrowserSessionController {
       pages: session.pages,
       cdpWsUrlTemplate: session.cdpWsUrlTemplate,
       liveViewUrl: session.liveViewUrl,
+      vncUrl: session.vncUrl,
     };
   }
 
@@ -86,6 +87,7 @@ export class BrowserSessionController {
       pages: debugInfo.pages || [],
       cdpWsUrlTemplate: debugInfo.cdpWsUrlTemplate,
       liveViewUrl: debugInfo.liveViewUrl,
+      vncUrl: debugInfo.vncUrl,
     };
   }
 

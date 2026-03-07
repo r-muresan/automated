@@ -100,7 +100,7 @@ export default function WatchWorkflowPage() {
 
   const contentRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef(executionActions);
-  const [stableLiveViewUrl, setStableLiveViewUrl] = useState<string | null>(null);
+  const [stableVncUrl, setStableVncUrl] = useState<string | null>(null);
 
   const sessionId = executionStatus?.sessionId || null;
   const isRunning = executionStatus?.status === 'running';
@@ -135,28 +135,28 @@ export default function WatchWorkflowPage() {
   }, [executionActions]);
 
   useEffect(() => {
-    setStableLiveViewUrl(null);
+    setStableVncUrl(null);
   }, [sessionId]);
 
-  // Hyperbrowser may rotate signed liveView URLs on each debug poll.
-  // Keep iframe src stable unless the underlying stream endpoint changes.
+  // Keep the VNC URL stable across debug polls. Hyperbrowser may rotate tokens,
+  // but the websockify endpoint stays the same — only update when the host/path changes.
   useEffect(() => {
-    const next = (debugInfo?.liveViewUrl as string | undefined) ?? null;
+    const next = (debugInfo?.vncUrl as string | undefined) ?? null;
     if (!next) return;
 
-    setStableLiveViewUrl((prev) => {
+    setStableVncUrl((prev) => {
       if (!prev) return next;
       try {
-        const previousUrl = new URL(prev);
+        const prevUrl = new URL(prev);
         const nextUrl = new URL(next);
-        const sameStream =
-          previousUrl.origin === nextUrl.origin && previousUrl.pathname === nextUrl.pathname;
-        return sameStream ? prev : next;
+        const sameEndpoint =
+          prevUrl.origin === nextUrl.origin && prevUrl.pathname === nextUrl.pathname;
+        return sameEndpoint ? prev : next;
       } catch {
         return prev === next ? prev : next;
       }
     });
-  }, [debugInfo?.liveViewUrl]);
+  }, [debugInfo?.vncUrl]);
 
   // Poll for page updates
   useEffect(() => {
@@ -315,8 +315,9 @@ export default function WatchWorkflowPage() {
           <Box flex={1} minH={0}>
             <VNCBrowser
               contentRef={contentRef}
-              liveViewUrl={stableLiveViewUrl}
-              isLoading={isRunning && !stableLiveViewUrl}
+              sessionId={sessionId}
+              vncUrl={stableVncUrl}
+              isLoading={isRunning && !stableVncUrl}
               readOnly={!canUserControlBrowser}
               freeze={isFinished}
               overlayTitle={browserOverlayTitle}

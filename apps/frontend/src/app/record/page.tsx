@@ -64,7 +64,8 @@ export default function NewWorkflow() {
     handleTakeControl,
     handleStopSession,
     interactions,
-    liveViewUrl,
+    vncUrl,
+    vncViewerRef,
   } = useBrowser();
 
   const {
@@ -905,7 +906,9 @@ export default function NewWorkflow() {
         <Box height="100%" overflow="hidden" width="full" borderRadius="2xl">
           <VNCBrowser
             contentRef={contentRef}
-            liveViewUrl={liveViewUrl}
+            sessionId={sessionId}
+            vncUrl={vncUrl}
+            vncViewerRef={vncViewerRef}
             isLoading={isLoading}
           />
         </Box>
