@@ -335,14 +335,7 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
 
       const page = defaultContext.pages()[0] || (await defaultContext.newPage());
 
-      const [tabId] = await Promise.all([
-        this.getTargetId(page),
-        (async () => {
-          if (width && height) {
-            await page.setViewportSize({ width: Math.round(width), height: Math.round(height) });
-          }
-        })(),
-      ]);
+      const [tabId] = await Promise.all([this.getTargetId(page)]);
 
       page.goto(DEFAULT_INITIAL_PAGE_URL, { waitUntil: 'commit' }).catch(() => {});
 

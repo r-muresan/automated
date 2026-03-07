@@ -233,7 +233,9 @@ export class LocalBrowserProvider extends BrowserProvider {
     // Get browser-level CDP WebSocket URL
     let browserWsUrl = '';
     try {
-      const versionResponse = await axios.get(`http://127.0.0.1:${debugPort}/json/version`, { timeout: 3000 });
+      const versionResponse = await axios.get(`http://127.0.0.1:${debugPort}/json/version`, {
+        timeout: 3000,
+      });
       browserWsUrl = versionResponse.data?.webSocketDebuggerUrl ?? '';
     } catch {
       // fallback: not critical for non-orchestrator usage
@@ -267,12 +269,12 @@ export class LocalBrowserProvider extends BrowserProvider {
     try {
       await this.injectInitScript(session.context);
 
-      if (options?.width && options?.height) {
-        await session.page.setViewportSize({
-          width: Math.round(options.width),
-          height: Math.round(options.height),
-        });
-      }
+      // if (options?.width && options?.height) {
+      //   await session.page.setViewportSize({
+      //     width: Math.round(options.width),
+      //     height: Math.round(options.height),
+      //   });
+      // }
 
       // Navigate to Google
       session.page.goto('https://www.google.com', { waitUntil: 'commit' }).catch(() => {});
@@ -393,6 +395,5 @@ export class LocalBrowserProvider extends BrowserProvider {
             : originalQuery(parameters);
       })();
     `);
-
   }
 }
