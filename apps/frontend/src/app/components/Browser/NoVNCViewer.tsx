@@ -63,6 +63,15 @@ export const NoVNCViewer = forwardRef<NoVNCViewerHandle, NoVNCViewerProps>(
       onInteractionUpdateRef.current = onInteractionUpdate;
     }, [onInteractionUpdate]);
 
+    // Sync viewOnly prop to the underlying RFB object — react-vnc may not
+    // dynamically update it when the prop changes after initial connection.
+    useEffect(() => {
+      const rfb = vncRef.current?.rfb;
+      if (rfb) {
+        rfb.viewOnly = viewOnly;
+      }
+    }, [viewOnly]);
+
     // Detect local OS for Cmd→Ctrl translation
     const isMac =
       typeof navigator !== 'undefined' &&
