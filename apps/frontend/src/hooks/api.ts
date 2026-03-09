@@ -91,7 +91,7 @@ export function useSessionDebug(sessionId: string | null) {
       if (!sessionId) return null;
       const headers = await getHeaders();
       const response = await axios.get<BrowserSessionDebugResponse>(
-        `${API_BASE}/browser-session/${sessionId}/debug`,
+        `${API_BASE}/browser-session/${sessionId}/debug?touch=false`,
         {
           headers,
         },
@@ -110,7 +110,7 @@ export function useRefreshPages() {
     mutationFn: async (sessionId: string) => {
       const headers = await getHeaders();
       const response = await axios.get<BrowserSessionDebugResponse>(
-        `${API_BASE}/browser-session/${sessionId}/debug`,
+        `${API_BASE}/browser-session/${sessionId}/debug?touch=false`,
         {
           headers,
         },

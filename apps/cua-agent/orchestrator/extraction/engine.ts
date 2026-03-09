@@ -17,6 +17,7 @@ import {
   type PaginationCheck,
   type ExtractionItem,
 } from './vision';
+import { buildDeterministicItemKey } from './item-key';
 import { normalizeLoopItems, validateAndFillExtractionResult, type ParsedSchema } from './schema';
 
 export type ExtractionMode = 'spreadsheet' | 'files' | 'dom' | 'vision';
@@ -28,14 +29,14 @@ export type ExtractOutput = {
 
 function toExtractionItems(
   rawItems: Array<Record<string, unknown>>,
-  knownFingerprints: Set<string>,
+  knownItemKeys: Set<string>,
 ): ExtractionItem[] {
   const items: ExtractionItem[] = [];
 
   for (const item of rawItems) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
-    const fingerprint = JSON.stringify(item);
-    if (knownFingerprints.has(fingerprint)) continue;
+    const fingerprint = buildDeterministicItemKey(item);
+    if (knownItemKeys.has(fingerprint)) continue;
     items.push({ fingerprint, data: item });
   }
 
@@ -73,7 +74,7 @@ export async function extractWithSharedStrategy(params: {
 
   const contextualGoal =
     context && context.item != null
-      ? `Context item: ${JSON.stringify(context.item)}\nInstruction: ${dataExtractionGoal}`
+      ? `For this specific item: ${JSON.stringify(context.item)}\nInstruction: ${dataExtractionGoal}`
       : dataExtractionGoal;
   const goalWithMemory =
     extractedVariables && Object.keys(extractedVariables).length > 0
@@ -164,10 +165,10 @@ export async function identifyItemsWithSharedStrategy(params: {
   llmClient: OpenAI;
   model: string;
   description: string;
-  knownFingerprints: Set<string>;
+  knownItemKeys: Set<string>;
   downloadedFiles?: DownloadedSessionFile[];
 }): Promise<{ mode: ExtractionMode; items: ExtractionItem[] }> {
-  const { stagehand, llmClient, model, description, knownFingerprints } = params;
+  const { stagehand, llmClient, model, description, knownItemKeys } = params;
   const downloadedFiles = params.downloadedFiles ?? [];
 
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
@@ -187,7 +188,7 @@ export async function identifyItemsWithSharedStrategy(params: {
     if (spreadsheetRawItems.length > 0) {
       return {
         mode: 'spreadsheet',
-        items: toExtractionItems(spreadsheetRawItems, knownFingerprints),
+        items: toExtractionItems(spreadsheetRawItems, knownItemKeys),
       };
     }
 
@@ -207,7 +208,7 @@ export async function identifyItemsWithSharedStrategy(params: {
         downloadedFiles,
       });
 
-      const fileItems = toExtractionItems(fileRawItems, knownFingerprints);
+      const fileItems = toExtractionItems(fileRawItems, knownItemKeys);
 
       if (fileItems.length > 0) {
         return {
@@ -226,7 +227,7 @@ export async function identifyItemsWithSharedStrategy(params: {
   try {
     const domLoopResult = await extractLoopItemsFromDom({ stagehand, description });
     const normalized = normalizeLoopItems(domLoopResult);
-    const domItems = toExtractionItems(normalized.items, knownFingerprints);
+    const domItems = toExtractionItems(normalized.items, knownItemKeys);
     if (domItems.length > 0) {
       return {
         mode: 'dom',
@@ -246,7 +247,7 @@ export async function identifyItemsWithSharedStrategy(params: {
     model,
     screenshotDataUrl,
     description,
-    knownFingerprints,
+    knownItemKeys,
   });
 
   return {

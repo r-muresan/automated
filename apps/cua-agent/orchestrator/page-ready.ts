@@ -115,84 +115,85 @@ export async function waitForPageReady(
   );
 }
 
+/**
+ * Returns JS that checks all loading selectors in a single evaluate() call,
+ * avoiding 15+ sequential CDP round-trips.
+ */
+function getLoadingCheckJs(): string {
+  const selectors = LOADING_SELECTORS;
+  const ariaSelectors = [
+    '[role="progressbar"]',
+    '[role="status"][aria-busy="true"]',
+    '[aria-busy="true"]',
+    '[aria-live="polite"][aria-busy="true"]',
+  ];
+  return `(() => {
+    const selectors = ${JSON.stringify(selectors)};
+    const ariaSet = new Set(${JSON.stringify(ariaSelectors)});
+    const doneWords = ['complete','done','finished','hidden','inactive','stopped'];
+    for (const selector of selectors) {
+      try {
+        const nodes = document.querySelectorAll(selector);
+        const requireAnimation = !ariaSet.has(selector);
+        for (let i = 0; i < nodes.length; i++) {
+          const node = nodes[i];
+          if (!(node instanceof Element)) continue;
+          const rect = node.getBoundingClientRect();
+          if (rect.width < 4 && rect.height < 4) continue;
+          const style = window.getComputedStyle(node);
+          if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+          const cn = node.className;
+          const className = typeof cn === 'string' ? cn : '';
+          const lcClass = className.toLowerCase();
+          if (doneWords.some(w => lcClass.includes(w))) continue;
+          if (requireAnimation) {
+            const anim = style.animationName;
+            if (!anim || anim === 'none') continue;
+          }
+          return {
+            selector,
+            tag: node.tagName.toLowerCase(),
+            className,
+            id: node.id || '',
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+            animationName: style.animationName,
+          };
+        }
+      } catch (e) {}
+    }
+    return null;
+  })()`;
+}
+
 export async function waitForLoadingIndicatorsGone(
   page: PageLike,
   timeoutMs: number,
 ): Promise<void> {
   const startTime = Date.now();
   const operationTimeoutMs = Math.min(PAGE_READY_OPERATION_TIMEOUT_MS, Math.max(250, timeoutMs));
-
-  const ariaSelectors = new Set([
-    '[role="progressbar"]',
-    '[role="status"][aria-busy="true"]',
-    '[aria-busy="true"]',
-    '[aria-live="polite"][aria-busy="true"]',
-  ]);
+  const js = getLoadingCheckJs();
 
   while (Date.now() - startTime < timeoutMs) {
-    let foundSelector: string | null = null;
-    let foundInfo = '';
+    const found = await withTimeout<{
+      selector: string;
+      tag: string;
+      className: string;
+      id: string;
+      width: number;
+      height: number;
+      animationName: string;
+    } | null>(page.evaluate(js), operationTimeoutMs, '[PAGE_READY] loading check').catch(
+      () => null,
+    );
 
-    for (const selector of LOADING_SELECTORS) {
-      const requireAnimation = !ariaSelectors.has(selector);
-      try {
-        const locator = page.locator(selector);
-        const count = await withTimeout(
-          locator.count(),
-          operationTimeoutMs,
-          `[PAGE_READY] locator.count(${selector})`,
-        );
-
-        for (let i = 0; i < count; i++) {
-          const el = locator.nth(i);
-          const visible = await withTimeout(
-            el.isVisible(),
-            operationTimeoutMs,
-            `[PAGE_READY] isVisible(${selector}, ${i})`,
-          ).catch(() => false);
-          if (!visible) continue;
-
-          const info = await withTimeout<LoadingIndicatorInfo | null>(
-            page.evaluate(getLoadingIndicatorInfoJs(selector, i)),
-            operationTimeoutMs,
-            `[PAGE_READY] evaluate(${selector}, ${i})`,
-          ).catch(() => null);
-
-          if (!info) continue;
-
-          if (info.width < 4 && info.height < 4) continue;
-
-          const lcClass = info.className.toLowerCase();
-          if (
-            lcClass.includes('complete') ||
-            lcClass.includes('done') ||
-            lcClass.includes('finished') ||
-            lcClass.includes('hidden') ||
-            lcClass.includes('inactive') ||
-            lcClass.includes('stopped')
-          )
-            continue;
-
-          if (requireAnimation) {
-            const hasAnimation = info.animationName !== 'none' && info.animationName !== '';
-            if (!hasAnimation) continue;
-          }
-
-          foundSelector = selector;
-          foundInfo = `tag=${info.tag} class="${info.className}" id="${info.id}" size=${info.width}x${info.height} animation=${info.animationName}`;
-          break;
-        }
-      } catch {
-        // selector not supported or page navigated
-      }
-      if (foundSelector) break;
-    }
-
-    if (!foundSelector) {
+    if (!found) {
       return;
     }
 
-    console.log(`[loading-indicator] Waiting for: "${foundSelector}" — ${foundInfo}`);
+    console.log(
+      `[loading-indicator] Waiting for: "${found.selector}" — tag=${found.tag} class="${found.className}" id="${found.id}" size=${found.width}x${found.height} animation=${found.animationName}`,
+    );
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error('Loading indicator timeout');

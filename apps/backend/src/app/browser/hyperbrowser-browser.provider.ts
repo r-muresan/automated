@@ -111,6 +111,91 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function tryParseUrl(value?: string | null): URL | null {
+  if (!value) return null;
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
+function extractTokenFromUrl(value?: string | null): string | null {
+  const url = tryParseUrl(value);
+  if (!url) return null;
+
+  return (
+    url.searchParams.get('vncAuthToken') ||
+    url.searchParams.get('token') ||
+    url.searchParams.get('authToken')
+  );
+}
+
+function extractConnectHostFromUrl(value?: string | null): string | null {
+  const url = tryParseUrl(value);
+  if (!url) return null;
+
+  return /^connect(?:[-.][a-z0-9-]+)?\.hyperbrowser\.ai$/i.test(url.host) ? url.host : null;
+}
+
+function extractConnectHostFromLiveUrl(value?: string | null): string | null {
+  const url = tryParseUrl(value);
+  if (!url) return null;
+
+  const liveDomain = url.searchParams.get('liveDomain');
+  return extractConnectHostFromUrl(liveDomain);
+}
+
+function buildVncUrl(connectHost: string, token: string): string {
+  return `wss://${connectHost}/websockify?vncAuthToken=${encodeURIComponent(token)}`;
+}
+
+function extractVncUrl(session: {
+  liveUrl?: string | null;
+  wsEndpoint?: string | null;
+  computerActionEndpoint?: string | null;
+  token?: string | null;
+}): string | null {
+  const liveUrl = session.liveUrl;
+  const cdpUrl = session.wsEndpoint ?? session.computerActionEndpoint;
+  const tokenCandidates = new Set<string>();
+  const hostCandidates = new Set<string>();
+
+  const addToken = (value?: string | null) => {
+    const token = value?.trim();
+    if (token) tokenCandidates.add(token);
+  };
+
+  const addHost = (value?: string | null) => {
+    const host = value?.trim();
+    if (host) hostCandidates.add(host);
+  };
+
+  const htmlTokenMatch = extractTokenFromUrl(liveUrl);
+  const htmlHostMatch = extractConnectHostFromUrl(cdpUrl);
+  const cdpTokenMatch = extractTokenFromUrl(cdpUrl);
+  const vncToken = htmlTokenMatch ?? cdpTokenMatch ?? session.token;
+  const wsMatch = htmlHostMatch && vncToken ? buildVncUrl(htmlHostMatch, vncToken) : null;
+
+  addToken(htmlTokenMatch);
+  addToken(extractTokenFromUrl(session.wsEndpoint));
+  addToken(extractTokenFromUrl(session.computerActionEndpoint));
+  addToken(session.token);
+
+  addHost(htmlHostMatch);
+  addHost(extractConnectHostFromLiveUrl(liveUrl));
+  addHost(extractConnectHostFromUrl(session.wsEndpoint));
+  addHost(extractConnectHostFromUrl(session.computerActionEndpoint));
+
+  if (wsMatch) {
+    return wsMatch;
+  }
+
+  const connectHost = Array.from(hostCandidates)[0];
+  const token = Array.from(tokenCandidates)[0];
+  return connectHost && token ? buildVncUrl(connectHost, token) : null;
+}
+
 @Injectable()
 export class HyperbrowserBrowserProvider extends BrowserProvider {
   private readonly apiKey = process.env.HYPERBROWSER_API_KEY;
@@ -141,6 +226,9 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
       enableVideoWebRecording: true,
       useStealth: true,
       solveCaptchas: true,
+      // adblock: true,
+      // trackers: true,
+      // annoyances: true,
     });
 
     const connectUrl = session.wsEndpoint
@@ -193,6 +281,7 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
           pages: [],
           cdpWsUrlTemplate: session.wsEndpoint,
           liveViewUrl: session.liveUrl,
+          vncUrl: extractVncUrl(session),
         },
       };
     } catch {
@@ -209,11 +298,14 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
     try {
       const session = await client.sessions.get(sessionId, { liveViewTtlSeconds: 3600 });
 
+      const vncUrl = extractVncUrl(session);
+
       return {
         ...session,
         pages: [],
         cdpWsUrlTemplate: '',
         liveViewUrl: session.liveUrl,
+        vncUrl: vncUrl ?? undefined,
       };
     } catch {
       throw new NotFoundException('Session not found');
@@ -241,20 +333,13 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
         return { pages: [] };
       }
 
-      await this.injectInitScript(defaultContext);
-
       const page = defaultContext.pages()[0] || (await defaultContext.newPage());
 
-      const [tabId] = await Promise.all([
-        this.getTargetId(page),
-        (async () => {
-          if (width && height) {
-            await page.setViewportSize({ width: Math.round(width), height: Math.round(height) });
-          }
-        })(),
-      ]);
+      const [tabId] = await Promise.all([this.getTargetId(page)]);
 
       page.goto(DEFAULT_INITIAL_PAGE_URL, { waitUntil: 'commit' }).catch(() => {});
+
+      const vncUrl = extractVncUrl(session);
 
       console.log(`[HyperbrowserBrowserProvider] Session ${sessionId} initialized successfully`);
       return {
@@ -269,6 +354,7 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
           ? `${session.wsEndpoint}${session.wsEndpoint.includes('?') ? '&' : '?'}keepAlive=true`
           : session.wsEndpoint,
         liveViewUrl: session.liveUrl,
+        vncUrl: vncUrl ?? undefined,
       };
     } catch (error) {
       console.error('[HyperbrowserBrowserProvider] Error initializing session:', error);
@@ -336,10 +422,6 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
     }
   }
 
-  private async injectInitScript(context: any): Promise<void> {
-    await context.addInitScript(INIT_SCRIPT);
-  }
-
   private async enableDownloadBehavior(browser: Browser): Promise<void> {
     const cdp = await browser.newBrowserCDPSession();
     try {
@@ -364,57 +446,3 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
     }
   }
 }
-
-// Injected into every new document to report user interactions back via window.__cdpEvent.
-const INIT_SCRIPT = `
-(function() {
-  if (window.__bbEventListenerInjected) return;
-  window.__bbEventListenerInjected = true;
-
-  function reportEvent(data) {
-    var json = JSON.stringify(data);
-    if (typeof window.__cdpEvent === 'function') {
-      try { window.__cdpEvent(json); } catch(e) {}
-    }
-  }
-
-  function getElementSelector(element) {
-    if (!element) return '';
-    if (element.id) return '#' + element.id;
-    var path = [];
-    while (element && element.nodeType === Node.ELEMENT_NODE) {
-      var selector = element.nodeName.toLowerCase();
-      if (element.className && typeof element.className === 'string') {
-        selector += '.' + element.className.trim().split(/\\s+/).join('.');
-      }
-      path.unshift(selector);
-      element = element.parentNode;
-      if (path.length > 3) break;
-    }
-    return path.join(' > ');
-  }
-
-  function getElementInfo(element) {
-    if (!element) return null;
-    return {
-      tagName: element.tagName || 'unknown',
-      id: element.id || '',
-      className: element.className || '',
-      selector: getElementSelector(element),
-      text: (element.textContent || '').substring(0, 200),
-      value: element.value || '',
-      href: element.href || '',
-      type: element.type || '',
-      name: element.name || ''
-    };
-  }
-
-  document.addEventListener('click', function(e) {
-    reportEvent({ type: 'click', x: e.clientX, y: e.clientY, target: getElementInfo(e.target), timestamp: Date.now() });
-  }, true);
-
-  document.addEventListener('keydown', function(e) {
-    reportEvent({ type: 'keydown', key: e.key, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey, target: getElementInfo(e.target), timestamp: Date.now() });
-  }, true);
-})();
-`;

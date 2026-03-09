@@ -126,7 +126,7 @@ export class WorkflowGenerationService {
         parts.push(`  URL: ${interaction.element?.href || 'unknown'}`);
       } else if (interaction.data?.type === 'click') {
         parts.push(`  Type: Click`);
-        if (interaction.element?.text) parts.push(`  Text: ${interaction.element.text}`);
+        // if (interaction.element?.text) parts.push(`  Text: ${interaction.element.text}`);
       } else if (interaction.data?.type === 'keydown') {
         parts.push(`  Type: Typing`);
         if (interaction.element?.text) parts.push(`  Typed: "${interaction.element.text}"`);
@@ -315,9 +315,7 @@ Only include keys in inputValues when you can infer a useful value.`;
     if (trimmed.length === 0) return '';
 
     const isLikelyBase64 =
-      trimmed.length > 180 &&
-      /^[A-Za-z0-9+/=\s]+$/.test(trimmed) &&
-      !trimmed.includes(' ');
+      trimmed.length > 180 && /^[A-Za-z0-9+/=\s]+$/.test(trimmed) && !trimmed.includes(' ');
     if (isLikelyBase64) {
       return `[base64 omitted, length=${trimmed.length}]`;
     }

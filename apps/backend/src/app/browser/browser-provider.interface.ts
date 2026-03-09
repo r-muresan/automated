@@ -30,6 +30,7 @@ export interface InitSessionResult {
   pages: PageInfo[];
   cdpWsUrlTemplate?: string;
   liveViewUrl?: string;
+  vncUrl?: string;
   debuggerFullscreenUrl?: string;
   debuggerUrl?: string;
   wsUrl?: string;
