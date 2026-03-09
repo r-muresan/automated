@@ -1,802 +1,1712 @@
 [
   {
     "index": 1,
-    "text": "1.\t\n\tAgent Safehouse – macOS-native sandboxing for local agents (agent-safehouse.dev)",
-    "tagName": "tr",
-    "id": "47301085",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47301085&how=up&goto=news"
+    "text": "On Campus\nNebula\n\nAI/ML\n\nYour Super Agent is ready to work.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/nebula/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 2,
-    "text": "2.\t\n\tBlacksky AppView (github.com/blacksky-algorithms)",
-    "tagName": "tr",
-    "id": "47301808",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47301808&how=up&goto=news"
+    "text": "At Garage\nMagical Toys\n\nAI/ML\n\nConsumer\n\nHardware\n\nAI plush toys for screen-free kids’ play.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/magical-toys/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 3,
-    "text": "3.\t\n\tMicroscopes can see video on a laserdisc (youtube.com)",
-    "tagName": "tr",
-    "id": "47291876",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47291876&how=up&goto=news"
+    "text": "Sync Labs\n\nAI/ML\n\nDevTools\n\nAPI for real-time lip sync.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/sync-labs/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 4,
-    "text": "4.\t\n\tWe should revisit literate programming in the agent era (silly.business)",
-    "tagName": "tr",
-    "id": "47300747",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47300747&how=up&goto=news"
+    "text": "Aurelius Systems\n\nHardware\n\nAdvancing C-UAS through Directed Energy.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/aurelius-systems/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 5,
-    "text": "5.\t\n\tEvery single board computer I tested in 2025 (bret.dk)",
-    "tagName": "tr",
-    "id": "47260812",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47260812&how=up&goto=news"
+    "text": "Inference\n\nAI/ML\n\nDevTools\n\nDistributed AI inference network.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/inference/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 6,
-    "text": "6.\t\n\tLil Finder Guy (basicappleguy.com)",
-    "tagName": "tr",
-    "id": "47301241",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47301241&how=up&goto=news"
+    "text": "Anara\n\nAI/ML\n\nAI for researchers.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/anara/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 7,
-    "text": "7.\t\n\tFrameBook (edoo.gg)",
-    "tagName": "tr",
-    "id": "47298044",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47298044&how=up&goto=news"
+    "text": "On Campus\nthirdweb\n\nWeb3\n\nDevTools\n\nFull-stack, open-source web3 development platform.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/thirdweb/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 8,
-    "text": "8.\t\n\tPCB devboard the size of a USB-C plug (github.com/dieu-de-l-elec)",
-    "tagName": "tr",
-    "id": "47294582",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47294582&how=up&goto=news"
+    "text": "On Campus\nTrass Games\n\nAR/VR\n\nGaming\n\nVR game studio.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/trass-games/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 9,
-    "text": "9.\t\n\tShow HN: I built a real-time OSINT dashboard pulling 15 live global feeds (github.com/bigbodycobain)",
-    "tagName": "tr",
-    "id": "47300102",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47300102&how=up&goto=news"
+    "text": "LiveKit\n\nB2B\n\nDevTools\n\nOpen-source real-time communication platform and SDK.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/livekit/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 10,
-    "text": "10.\t\n\tMost of the US economy is in a recession (businessinsider.com)",
-    "tagName": "tr",
-    "id": "47302022",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47302022&how=up&goto=news"
+    "text": "Shapes\n\nAI/ML\n\nConsumer\n\nGeneral Purpose Social Agents.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/shapes/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 11,
-    "text": "11.\t\n\tArtificial-life: A simple (300 lines of code) reproduction of Computational Life (github.com/rabrg)",
-    "tagName": "tr",
-    "id": "47301233",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47301233&how=up&goto=news"
+    "text": "Lexica\n\nAI/ML\n\nConsumer\n\nA search engine for AI-generated images.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/lexica/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 12,
-    "text": "12.\t\n\tMy Homelab Setup (bryananthonio.com)",
-    "tagName": "tr",
-    "id": "47298743",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47298743&how=up&goto=news"
+    "text": "On Campus\nWomp\n\nAI/ML\n\nConcept To Render In Minutes.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/womp/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 13,
-    "text": "13.\t\n\tLinux Internals: How /proc/self/mem writes to unwritable memory (2021) (offlinemark.com)",
-    "tagName": "tr",
-    "id": "47302463",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47302463&how=up&goto=news"
+    "text": "Paraform\n\nAI/ML\n\nB2B\n\nMatch with expert recruiters and fill your hardest roles.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/paraform/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 14,
-    "text": "14.\t\n\tWSL Manager (github.com/bostrot)",
-    "tagName": "tr",
-    "id": "47299505",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47299505&how=up&goto=news"
+    "text": "Syncere\n\nConsumer\n\nHardware\n\nRobots that blend in to your home.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/syncere/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 15,
-    "text": "15.\t\n\tPushing and Pulling: Three reactivity algorithms (jonathan-frere.com)",
-    "tagName": "tr",
-    "id": "47293195",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47293195&how=up&goto=news"
+    "text": "Kontigo\n\nWeb3\n\nUSDC-Smart Neobank for Latinos.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/kontigo/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 16,
-    "text": "16.\t\n\tWhy can't you tune your guitar? (2019) (ethanhein.com)",
-    "tagName": "tr",
-    "id": "47254896",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47254896&how=up&goto=news"
+    "text": "At Garage\nREK\n\nAR/VR\n\nAI/ML\n\nHardware\n\nFull-contact combat robot sports league.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/rek/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 17,
-    "text": "17.\t\n\tLiving human brain cells play DOOM on a CL1 [video] (youtube.com)",
-    "tagName": "tr",
-    "id": "47297919",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47297919&how=up&goto=news"
+    "text": "Rork\n\nAI/ML\n\nDevTools\n\nConsumer\n\nBuild mobile apps with AI, no code.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/rork/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 18,
-    "text": "18.\t\n\tLog messages are mostly for the people operating your software (utcc.utoronto.ca)",
-    "tagName": "tr",
-    "id": "47239117",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47239117&how=up&goto=news"
+    "text": "Tangible\n\nHardware\n\nHumanoid robots for your home.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/tangible/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 19,
-    "text": "19.\t\n\tZ80 Sans – a disassembler in a font (2024) (github.com/nevesnunes)",
-    "tagName": "tr",
-    "id": "47256810",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47256810&how=up&goto=news"
+    "text": "At Garage\nAto\n\nConsumer\n\nHardware\n\nAI companion device for older adults.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/ato/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 20,
-    "text": "20.\t\n\tAsk HN: Please restrict new accounts from posting",
-    "tagName": "tr",
-    "id": "47300329",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47300329&how=up&goto=news"
+    "text": "On Campus\nParse\n\nAI/ML\n\nDevTools\n\nTurn any website into an API.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/parse/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 21,
-    "text": "21.\t\n\tI made a programming language with M&Ms (mufeedvh.com)",
-    "tagName": "tr",
-    "id": "47299606",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47299606&how=up&goto=news"
+    "text": "On Campus\nFluid\n\nAR/VR\n\nSpatial OS with an infinite canvas for teams.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/fluid/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 22,
-    "text": "22.\t\n\tAsk HN: How to be alone?",
-    "tagName": "tr",
-    "id": "47296547",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47296547&how=up&goto=news"
+    "text": "At Garage\nPamir\n\nConsumer\n\nHardware\n\nYour Pocket AI Agent.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/pamir/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 23,
-    "text": "23.\t\n\tNotes on writing Rust-based Wasm (brooklynzelenka.com)",
-    "tagName": "tr",
-    "id": "47295837",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47295837&how=up&goto=news"
+    "text": "At Garage\nOrangewood Labs\n\nHardware\n\nBuilding NLP-powered home robotics systems.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/orangewood-labs/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 24,
-    "text": "24.\t\n\tAn Analysis of User-Space Idle State Instructions on x86 Processors (acm.org)",
-    "tagName": "tr",
-    "id": "47275463",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47275463&how=up&goto=news"
+    "text": "On Campus\nBudbreak \n\nHardware\n\nAutonomous vineyard disease detection systems.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/budbreak/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 25,
-    "text": "25.\t\n\tLibreOffice Writer now supports Markdown (documentfoundation.org)",
-    "tagName": "tr",
-    "id": "47298885",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47298885&how=up&goto=news"
+    "text": "On Campus\nCatalyx Space\n\nHardware\n\nAutonomous labs in space.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/catalyx/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 26,
-    "text": "26.\t\n\tSQG (SQL to Code Generator) v0.10: Java Streams and List Type Support (sqg.dev)",
-    "tagName": "tr",
-    "id": "47265856",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47265856&how=up&goto=news"
+    "text": "Gather\n\nB2B\n\nPeople + knowledge. All in one place.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/gather/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 27,
-    "text": "27.\t\n\tMy “grand vision” for Rust (yoshuawuyts.com)",
-    "tagName": "tr",
-    "id": "47256376",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47256376&how=up&goto=news"
+    "text": "Gym Class VR\n\nAR/VR\n\nGaming\n\nImmersive VR sports platform.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/gym-class/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 28,
-    "text": "28.\t\n\tThe changing goalposts of AGI and timelines (mlumiste.com)",
-    "tagName": "tr",
-    "id": "47299009",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47299009&how=up&goto=news"
+    "text": "Levels.fyi\n\nConsumer\n\nInsights on companies, salaries, jobs and more.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/levels-fyi/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 29,
-    "text": "29.\t\n\tWhat if the Apple ][ had run on Field-Sequential? (nicole.express)",
-    "tagName": "tr",
-    "id": "47297913",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47297913&how=up&goto=news"
+    "text": "buildspace\n\nConsumer\n\nthe place where people build cool stuff.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/buildspace/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 30,
-    "text": "30.\t\n\tDetection Is Not Protection: What WAF Detection Mode Does (and Doesn't) (ebbypeter.com)",
-    "tagName": "tr",
-    "id": "47301967",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47301967&how=up&goto=news"
+    "text": "Stratus\n\nHardware\n\nSafer airports begin with intelligence.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/stratus/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 31,
-    "text": "31.\t\n\tBeagle, a source code management system that stores AST trees (github.com/gritzko)",
-    "tagName": "tr",
-    "id": "47297167",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47297167&how=up&goto=news%3Fp%3D2"
+    "text": "DreamPark\n\nAR/VR\n\nGaming\n\nMixed reality theme parks in your backyard.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/dreampark/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 32,
-    "text": "32.\t\n\tHow important was the Battle of Hastings? (historytoday.com)",
-    "tagName": "tr",
-    "id": "47244274",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47244274&how=up&goto=news%3Fp%3D2"
+    "text": "Atom Limbs\n\nHardware\n\nThe world’s first mind-controlled bionic arm.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/atom-limbs/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 33,
-    "text": "33.\t\n\tRijksmuseum researchers discover new painting by Rembrandt van Rijn (rijksmuseum.nl)",
-    "tagName": "tr",
-    "id": "47249139",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47249139&how=up&goto=news%3Fp%3D2"
+    "text": "Othership\n\nConsumer\n\nImmersive wellness experiences.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/othership/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 34,
-    "text": "34.\t\n\tSwiss vote places right to use cash in country's constitution (politico.eu)",
-    "tagName": "tr",
-    "id": "47301663",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47301663&how=up&goto=news%3Fp%3D2"
+    "text": "At Garage\nAxial Composites industries\n\nHardware\n\nAutomating thermoplastic composites manufacturing.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/axial-composites-industries/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 35,
-    "text": "35.\t\n\tOil Surges Past $100/barrel (oilprice.com)",
-    "tagName": "tr",
-    "id": "47302323",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47302323&how=up&goto=news%3Fp%3D2"
+    "text": "Thermopylae Aerospace\n\nHardware\n\nAutonomous, affordable air defense platforms.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/thermopylae-aerospace/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 36,
-    "text": "36.\t\n\tSWE-CI: Evaluating Agent Capabilities in Maintaining Codebases via CI (arxiv.org)",
-    "tagName": "tr",
-    "id": "47295537",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47295537&how=up&goto=news%3Fp%3D2"
+    "text": "At Garage\nHup\n\nConsumer\n\nHardware\n\nIn-home AI assistant that sees and manages your spaces.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/hup/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 37,
-    "text": "37.\t\n\tLibreOffice: Request to the European Commission to adhere to its own guidances (documentfoundation.org)",
-    "tagName": "tr",
-    "id": "47297453",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47297453&how=up&goto=news%3Fp%3D2"
+    "text": "Atelier Missor\n\nHardware\n\nA classical foundry turned modern in Paris.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/atelier-missor/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 38,
-    "text": "38.\t\n\tAsk HN: Most beautiful personal blog UI you have ever seen?",
-    "tagName": "tr",
-    "id": "47302553",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47302553&how=up&goto=news%3Fp%3D2"
+    "text": "Humansongs\n\nAI/ML",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/humansongs/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 39,
-    "text": "39.\t\n\tShow HN: WolfStack – Proxmox-like server management in a single Rust binary (wolfscale.org)",
-    "tagName": "tr",
-    "id": "47299697",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47299697&how=up&goto=news%3Fp%3D2"
+    "text": "At Garage\n3E8 Robotics\n\nHardware\n\nAutonomous multi-floor delivery robots.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/3e8-robotics/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 40,
-    "text": "40.\t\n\tIceland Foods Surrenders in Trademark Fight with Iceland, the Country (techdirt.com)",
-    "tagName": "tr",
-    "id": "47302924",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47302924&how=up&goto=news%3Fp%3D2"
+    "text": "World Intelligence\n\nData Infrastructure for Physical AI.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/world-intelligence/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 41,
-    "text": "41.\t\n\tCLI RSS/Atom feed reader inspired by Taskwarrior, synced using Git (github.com/kantord)",
-    "tagName": "tr",
-    "id": "47297091",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47297091&how=up&goto=news%3Fp%3D2"
+    "text": "Alakazam\n\nThe World Model Game Engine.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/alakazam/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 42,
-    "text": "42.\t\n\tThe Collective Ambition Behind Odysseus, a Game-Changing Sci-Fi Larp (mssv.net)",
-    "tagName": "tr",
-    "id": "47247248",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47247248&how=up&goto=news%3Fp%3D2"
+    "text": "Sume Labs\n\nTalk to interactive AI clones.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/sume-labs/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 43,
-    "text": "43.\t\n\tI ported Linux to the PS5 and turned it into a Steam Machine (xcancel.com)",
-    "tagName": "tr",
-    "id": "47296849",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47296849&how=up&goto=news%3Fp%3D2"
+    "text": "Enjamb\n\nThe fastest way to revise and publish research.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/enjamb/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 44,
-    "text": "44.\t\n\tThe human.json Protocol (codeberg.org/robida)",
-    "tagName": "tr",
-    "id": "47298655",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47298655&how=up&goto=news%3Fp%3D2"
+    "text": "Null Hypothesis\n\nEmbodied Gameplay AR/VR Platform.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/null-hypothesis/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 45,
-    "text": "45.\t\n\tApple's 512GB Mac Studio vanishes, a quiet acknowledgment of the RAM shortage (arstechnica.com)",
-    "tagName": "tr",
-    "id": "47296302",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47296302&how=up&goto=news%3Fp%3D2"
+    "text": "PieLine\n\n24/7 AI Phone Answering",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/pieline/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 46,
-    "text": "46.\t\n\tSewage-filled Potomac river risks ruining America's birthday (telegraph.co.uk)",
-    "tagName": "tr",
-    "id": "47301943",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47301943&how=up&goto=news%3Fp%3D2"
+    "text": "Lifesim\n\nAI/ML\n\nExperience any life. Anytime. Anywhere.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/lifesim/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 47,
-    "text": "47.\t\n\tHow Big Diaper absorbs billions of extra dollars from American parents (thehustle.co)",
-    "tagName": "tr",
-    "id": "47297054",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47297054&how=up&goto=news%3Fp%3D2"
+    "text": "Eyecandy\n\nAI/ML\n\nHardware\n\nBringing characters to life through robotics and AI.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/eyecandy/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 48,
-    "text": "48.\t\n\tHouse Committee Passes Child \"Safety\" Bills That Push National Age Verification (reclaimthenet.org)",
-    "tagName": "tr",
-    "id": "47301602",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47301602&how=up&goto=news%3Fp%3D2"
+    "text": "On Campus\nDedale\n\nAI/ML\n\nDevTools\n\nGet more quality work done out of Claude Code.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/dedale/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 49,
-    "text": "49.\t\n\tOil prices surge 20% on supply fears (reuters.com)",
-    "tagName": "tr",
-    "id": "47302957",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47302957&how=up&goto=news%3Fp%3D2"
+    "text": "OMGrab\n\nAI/ML\n\nHardware\n\nOpen-source multimodal annotation tools.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/omgrab/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 50,
-    "text": "50.\t\n\tWarn about PyPy being unmaintained (github.com/astral-sh)",
-    "tagName": "tr",
-    "id": "47293415",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47293415&how=up&goto=news%3Fp%3D2"
+    "text": "On Campus\nAisle\n\nAI/ML\n\nHardware\n\nAI shopping assistant redefining in-store retail.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/aisle/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 51,
-    "text": "51.\t\n\tClaude struggles to cope with ChatGPT exodus (forbes.com/sites/barrycollins)",
-    "tagName": "tr",
-    "id": "47298997",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47298997&how=up&goto=news%3Fp%3D2"
+    "text": "On Campus\nPolysynth\n\nHardware\n\nMulti-material resin 3D printer.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/polysynth/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 52,
-    "text": "52.\t\n\tSome Words on WigglyPaint (beyondloom.com)",
-    "tagName": "tr",
-    "id": "47283365",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47283365&how=up&goto=news%3Fp%3D2"
+    "text": "Rareform Metals\n\nHardware\n\nOn-site metal production anywhere on Earth.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/rareform-metals/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 53,
-    "text": "53.\t\n\tIf It Quacks Like a Package Manager (nesbitt.io)",
-    "tagName": "tr",
-    "id": "47296481",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47296481&how=up&goto=news%3Fp%3D2"
+    "text": "On Campus\nHayla\n\nAI/ML\n\nHardware\n\nDirect current network for AI centers.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/hayla/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 54,
-    "text": "54.\t\n\tChamath Palihapitiya Says AI Costs at Startup 8090 Could Hit $10M (businessinsider.com)",
-    "tagName": "tr",
-    "id": "47302577",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47302577&how=up&goto=news%3Fp%3D2"
+    "text": "At Garage\nTrepo\n\nAI/ML\n\nHardware\n\nFridge OS that auto-orders your groceries.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/trepo/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 55,
-    "text": "55.\t\tSigNoz (YC W21) is hiring for engineering, growth and product roles (signoz.io)",
-    "tagName": "tr",
-    "id": "47289357",
-    "className": "athing submission",
-    "href": "https://signoz.io/careers"
+    "text": "On Campus\nInteractionLabs\n\nAI/ML\n\nHardware\n\nLamp robots with vision and voice.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/interactionlabs/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 56,
-    "text": "56.\t\n\tLLM Writing Tropes.md (tropes.fyi)",
-    "tagName": "tr",
-    "id": "47291513",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47291513&how=up&goto=news%3Fp%3D2"
+    "text": "Blueberry\n\nAI/ML\n\nB2B\n\n1:1 AI marketer for ecommerce brands.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/blueberry/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 57,
-    "text": "57.\t\n\tThe new Apple begins to emerge (parkerortolani.blog)",
-    "tagName": "tr",
-    "id": "47297017",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47297017&how=up&goto=news%3Fp%3D2"
+    "text": "At Garage\nThalassa Robotics\n\nHardware\n\nTrue subsea autonomy.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/thalassa-robotics/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 58,
-    "text": "58.\t\n\tShow HN: Eyot, A programming language where the GPU is just another thread (cowleyforniastudios.com)",
-    "tagName": "tr",
-    "id": "47296355",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47296355&how=up&goto=news%3Fp%3D2"
+    "text": "Matrix Biotech\n\nConsumer\n\nHardware\n\nTrue at-home biological testing.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/matrix-biotech/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 59,
-    "text": "59.\t\n\tThe Lobster Programming Language (strlen.com)",
-    "tagName": "tr",
-    "id": "47239955",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47239955&how=up&goto=news%3Fp%3D2"
+    "text": "On Campus\nMakerMods\n\nConsumer\n\nHardware\n\nUSB-C robot modules. Controlled with AI.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/makermods/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 60,
-    "text": "60.\t\n\tSem – Semantic version control. Entity-level diffs on top of Git (github.com/ataraxy-labs)",
-    "tagName": "tr",
-    "id": "47294924",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47294924&how=up&goto=news%3Fp%3D2"
+    "text": "At Garage\nGenie Mobility\n\nHardware\n\nAutonomous delivery e-bikes.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/genie-mobility/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 61,
-    "text": "61.\t\n\tHe saw an abandoned trailer, he uncovered a surveillance network on CA border (themarkup.org)",
-    "tagName": "tr",
-    "id": "47301776",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47301776&how=up&goto=news%3Fp%3D3"
+    "text": "Colossus\n\nWeb3\n\nConsumer\n\nStablecoin credit card network for payments.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/colossus/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 62,
-    "text": "62.\t\n\tAutoresearch: Agents researching on single-GPU nanochat training automatically (github.com/karpathy)",
-    "tagName": "tr",
-    "id": "47291123",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47291123&how=up&goto=news%3Fp%3D3"
+    "text": "At Garage\nDorado\n\nConsumer\n\nHardware\n\nAmerican Full-Size Electric Dirt Bikes.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/dorado/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 63,
-    "text": "63.\t\n\tPhi-4-reasoning-vision and the lessons of training a multimodal reasoning model (microsoft.com)",
-    "tagName": "tr",
-    "id": "47258737",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47258737&how=up&goto=news%3Fp%3D3"
+    "text": "On Campus\nHerdCycle\n\nConsumer\n\nHardware\n\nSmart Cattle Ear Tag.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/herdcycle/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 64,
-    "text": "64.\t\n\tFrom RGB to L*a*b* color space (2024) (kaizoudou.com)",
-    "tagName": "tr",
-    "id": "47245061",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47245061&how=up&goto=news%3Fp%3D3"
+    "text": "kisuke\n\nAI/ML\n\nDevTools\n\nConsumer\n\nA native iOS IDE.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/kisuke/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 65,
-    "text": "65.\t\n\tIn vitro neurons learn and exhibit sentience when embodied in a game-world(2022) (cell.com)",
-    "tagName": "tr",
-    "id": "47299599",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47299599&how=up&goto=news%3Fp%3D3"
+    "text": "RemoteChess\n\nConsumer\n\nHardware\n\nA robotic chessboard that brings online chess IRL.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/remotechess/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 66,
-    "text": "66.\t\n\tHow to run Qwen 3.5 locally (unsloth.ai)",
-    "tagName": "tr",
-    "id": "47292522",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47292522&how=up&goto=news%3Fp%3D3"
+    "text": "On Campus\nQuo Labs\n\nConsumer\n\nHardware\n\nRobot caretakers for the elderly.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/quo-labs/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 67,
-    "text": "67.\t\n\tAccessing inactive union members through char (sandordargo.com)",
-    "tagName": "tr",
-    "id": "47246594",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47246594&how=up&goto=news%3Fp%3D3"
+    "text": "On Campus\nNeuronav\n\nAI/ML\n\nDevTools\n\nSpatial Infrastructure Layer for Robots.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/neuronav/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 68,
-    "text": "68.\t\n\tMonoGame: A .NET framework for making cross-platform games (github.com/monogame)",
-    "tagName": "tr",
-    "id": "47293682",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47293682&how=up&goto=news%3Fp%3D3"
+    "text": "AgentSpark\n\nAI/ML\n\nAI-Native Compliance for Supply Finance.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/agentspark/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 69,
-    "text": "69.\t\n\tThe surprising whimsy of the Time Zone Database (jprs.me)",
-    "tagName": "tr",
-    "id": "47290198",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47290198&how=up&goto=news%3Fp%3D3"
+    "text": "Argos\n\nConsumer\n\nHardware\n\nAI wearable to help improve performance for athletes.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/argos/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 70,
-    "text": "70.\t\n\tEmacs internals: Deconstructing Lisp_Object in C (Part 2) (thecloudlet.github.io)",
-    "tagName": "tr",
-    "id": "47259961",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47259961&how=up&goto=news%3Fp%3D3"
+    "text": "At Garage\nDigital Metal\n\nHardware\n\nA metal casting foundry and digital manufacturing platform.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/digital-metal/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 71,
-    "text": "71.\t\n\tDumping Lego NXT firmware off of an existing brick (2025) (arcanenibble.github.io)",
-    "tagName": "tr",
-    "id": "47271988",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47271988&how=up&goto=news%3Fp%3D3"
+    "text": "On Campus\nMecAgent\n\nAI/ML\n\nAI copilot for mechanical CAD software.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/mecagent/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 72,
-    "text": "72.\t\n\tShow HN: Curiosity – DIY 6\" Newtonian Reflector Telescope (curiosity-telescope.vercel.app)",
-    "tagName": "tr",
-    "id": "47295279",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47295279&how=up&goto=news%3Fp%3D3"
+    "text": "Cinematic\n\nAI/ML\n\nAI Social Media Manager for Businesses.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/cinematic/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 73,
-    "text": "73.\t\n\tFiles are the interface humans and agents interact with (madalitso.me)",
-    "tagName": "tr",
-    "id": "47286408",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47286408&how=up&goto=news%3Fp%3D3"
+    "text": "At Garage\nUnbrkn\n\nConsumer\n\nAI Coach to help you quit Nicotine.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/general-bionix/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 74,
-    "text": "74.\t\n\tThe DMCA Was Built to Stop DVD Piracy. Google Wants to Use It Against Scrapers (thewebscraping.club)",
-    "tagName": "tr",
-    "id": "47299390",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47299390&how=up&goto=news%3Fp%3D3"
+    "text": "On Campus\nSuperworker\n\nAI/ML\n\nYour spreadsheet powered by AI.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/superworker/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 75,
-    "text": "75.\t\n\tIn 1985 Maxell built a bunch of life-size robots for its bad floppy ad (buttondown.com/suchbadtechads)",
-    "tagName": "tr",
-    "id": "47247644",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47247644&how=up&goto=news%3Fp%3D3"
+    "text": "Hurupay\n\nWeb3\n\nGlobal USD banking powered by stablecoins.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/hurupay/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 76,
-    "text": "76.\t\n\tDrone strikes raise doubts over Gulf as AI superpower (theguardian.com)",
-    "tagName": "tr",
-    "id": "47301845",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47301845&how=up&goto=news%3Fp%3D3"
+    "text": "Helios\n\nAI/ML\n\nThe first AI-powered government affairs agent.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/helios/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 77,
-    "text": "77.\t\n\tDave Farber, 'Grandfather of the Internet', dies at 91 (nytimes.com)",
-    "tagName": "tr",
-    "id": "47301819",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47301819&how=up&goto=news%3Fp%3D3"
+    "text": "On Campus\nClova\n\nAI/ML\n\nConsumer\n\nAI assistant for filmmakers.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/clova/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 78,
-    "text": "78.\t\n\tCloud VM benchmarks 2026 (ecuadors.net)",
-    "tagName": "tr",
-    "id": "47293119",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47293119&how=up&goto=news%3Fp%3D3"
+    "text": "Miniba\n\nSupermarkets in your Airbnb.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/miniba/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 79,
-    "text": "79.\t\n\tWhat if the Hormuz closure will not be brief? (lloydslist.com)",
-    "tagName": "tr",
-    "id": "47293482",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47293482&how=up&goto=news%3Fp%3D3"
+    "text": "Astral\n\nAI/ML\n\nWork alongside AI agents.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/astral/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 80,
-    "text": "80.\t\n\tWill Claude Code ruin our team? (justinjackson.ca)",
-    "tagName": "tr",
-    "id": "47293938",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47293938&how=up&goto=news%3Fp%3D3"
+    "text": "Pally\n\nAI/ML\n\nAI for your professional relationships.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/pally/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 81,
-    "text": "81.\t\n\t70% of Australian teens are getting around the social media ban (twitter.com/matthewlesh)",
-    "tagName": "tr",
-    "id": "47301911",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47301911&how=up&goto=news%3Fp%3D3"
+    "text": "LunaBill\n\nAI/ML\n\nAutomate Your AR Calls.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/lunabill/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 82,
-    "text": "82.\t\n\tFLASH radiotherapy's bold approach to cancer treatment (ieee.org)",
-    "tagName": "tr",
-    "id": "47288533",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47288533&how=up&goto=news%3Fp%3D3"
+    "text": "At Garage\nDEFT\n\nHardware\n\nDrop-in robot work cell.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/deft/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 83,
-    "text": "83.\t\n\tAI doesn't replace white collar work (marble.onl)",
-    "tagName": "tr",
-    "id": "47299988",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47299988&how=up&goto=news%3Fp%3D3"
+    "text": "On Campus\nCompiler\n\nAI/ML\n\nDevTools\n\nAdd AI to your app in minutes.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/compiler/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 84,
-    "text": "84.\t\n\tCasNum (github.com/0x0mer)",
-    "tagName": "tr",
-    "id": "47291292",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47291292&how=up&goto=news%3Fp%3D3"
+    "text": "MicroFactory\n\nHardware\n\nRobot that automates manual work, starting with electronics assembly.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/simpleautomation/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 85,
-    "text": "85.\t\n\tThe stagnancy of publishing and the disappearance of the midlist (honest-broker.com)",
-    "tagName": "tr",
-    "id": "47291525",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47291525&how=up&goto=news%3Fp%3D3"
+    "text": "On Campus\nplayscape\n\nAI/ML\n\nGaming\n\nmake a game without code.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/playscape/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 86,
-    "text": "86.\t\n\tmacOS code injection for fun and no profit (2024) (mariozechner.at)",
-    "tagName": "tr",
-    "id": "47250500",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47250500&how=up&goto=news%3Fp%3D3"
+    "text": "On Campus\nBenchFlow\n\nAI/ML\n\nBuilding RL environments for terminal agents.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/everest/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 87,
-    "text": "87.\t\n\tShow HN: A weird thing that detects your pulse from the browser video (pulsefeedback.io)",
-    "tagName": "tr",
-    "id": "47247762",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47247762&how=up&goto=news%3Fp%3D3"
+    "text": "Cavalla\n\nHardware\n\nWaymo for forklifts.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/cavalla/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 88,
-    "text": "88.\t\n\t100 Accounts are behind the majority of conspiracy theory content in Canada (nationalobserver.com)",
-    "tagName": "tr",
-    "id": "47299410",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47299410&how=up&goto=news%3Fp%3D3"
+    "text": "On Campus\nCoplay\n\nAI/ML\n\nGaming\n\nAI copilots for game engines.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/coplay/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 89,
-    "text": "89.\t\n\tBest performance of a C++ singleton (andreasfertig.com)",
-    "tagName": "tr",
-    "id": "47274768",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47274768&how=up&goto=news%3Fp%3D3"
+    "text": "InferenceIndex\n\nAI/ML\n\nAgents that learn in production.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/inferenceindex/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 90,
-    "text": "90.\t\n\tYoghurt delivery women combatting loneliness in Japan (bbc.com)",
-    "tagName": "tr",
-    "id": "47287344",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47287344&how=up&goto=news%3Fp%3D3"
+    "text": "Blobtown\n\nAR/VR\n\nCreative social VR game experiences.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/blobtown/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 91,
-    "text": "91.\t\n\tCompiling Prolog to Forth [pdf] (vfxforth.com)",
-    "tagName": "tr",
-    "id": "47240169",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47240169&how=up&goto=news%3Fp%3D4"
+    "text": "On Campus\nGabber\n\nAI/ML\n\nDevTools\n\nBuild realtime AI.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/gabber/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 92,
-    "text": "92.\t\n\tTen years of deploying to production (brandonvin.github.io)",
-    "tagName": "tr",
-    "id": "47261858",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47261858&how=up&goto=news%3Fp%3D4"
+    "text": "Mediar\n\nAI/ML\n\nAutomate data entry in legacy software like SAP.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/mediar/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 93,
-    "text": "93.\t\n\tPlasma Bigscreen – 10-foot interface for KDE plasma (plasma-bigscreen.org)",
-    "tagName": "tr",
-    "id": "47282736",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47282736&how=up&goto=news%3Fp%3D4"
+    "text": "Flux AI\n\nAI/ML\n\nHigh-quality AI image training for everyone.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/flux-ai/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 94,
-    "text": "94.\t\n\tA decade of Docker containers (acm.org)",
-    "tagName": "tr",
-    "id": "47289311",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47289311&how=up&goto=news%3Fp%3D4"
+    "text": "Sorce\n\nAI/ML\n\nConsumer\n\nAI Talent Marketplace.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/sorce/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 95,
-    "text": "95.\t\n\tAI CEOs worry the government will nationalize AI (slashdot.org)",
-    "tagName": "tr",
-    "id": "47300070",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47300070&how=up&goto=news%3Fp%3D4"
+    "text": "The Privacy and Sovereignty Company\n\nHardware\n\nTools to protect individual privacy and freedom.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/the-privacy-and-sovereignty-company/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 96,
-    "text": "96.\t\n\tGoogle just gave Sundar Pichai a $692M pay package (techcrunch.com)",
-    "tagName": "tr",
-    "id": "47299794",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47299794&how=up&goto=news%3Fp%3D4"
+    "text": "Vime\n\nClient portals for service firms.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/vime/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 97,
-    "text": "97.\t\n\tThe Misconception That Air Supremacy Has Been Achieved over Iran (twz.com)",
-    "tagName": "tr",
-    "id": "47300875",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47300875&how=up&goto=news%3Fp%3D4"
+    "text": "On Campus\nBoxtree\n\nAR/VR\n\nFamily games for spatial computing.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/boxtree/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 98,
-    "text": "98.\t\n\tFatbikes are wreaking havoc in Sydney's wealthy beach suburbs (bbc.com)",
-    "tagName": "tr",
-    "id": "47294487",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47294487&how=up&goto=news%3Fp%3D4"
+    "text": "Boondoggle AI\n\nAI/ML\n\nGenerate AI workflows from all your team's apps.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/boondoggle/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 99,
-    "text": "99.\t\n\tScience Fiction Is Dying. Long Live Post Sci-Fi? (typebarmagazine.com)",
-    "tagName": "tr",
-    "id": "47293191",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47293191&how=up&goto=news%3Fp%3D4"
+    "text": "Lumaa\n\nAI/ML\n\nVendor RFP search and response.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/lumaa/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   },
   {
     "index": 100,
-    "text": "100.\t\n\tKi Editor - an editor that operates on the AST (ki-editor.org)",
-    "tagName": "tr",
-    "id": "47286311",
-    "className": "athing submission",
-    "href": "https://news.ycombinator.com/vote?id=47286311&how=up&goto=news%3Fp%3D4"
+    "text": "Vi\n\nAR/VR\n\nFitness Gaming.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/vi/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 101,
+    "text": "Anytopic\n\nAI/ML\n\nLearn about anything faster with mini audiobooks.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/anytopic/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 102,
+    "text": "On Campus\nJungle\n\nAI/ML\n\nConsumer\n\nCreate practice questions in seconds.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/jungle/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 103,
+    "text": "Comfy Workflows\n\nDevTools\n\nExplore thousands of workflows.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/comfy-workflows/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 104,
+    "text": "Web Transpose\n\nDevTools\n\nTurn the web into clean data.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/web-transpose/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 105,
+    "text": "Ion\n\nAI/ML\n\nAutonomous AI Product Designer.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/ion/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 106,
+    "text": "Leap\n\nAI/ML\n\nAutomate any workflow with AI.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/leap/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 107,
+    "text": "Nexavision\n\nAI/ML\n\nNext Gen AI for Sports Analytics.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/nexavision/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 108,
+    "text": "On Campus\nDeepTrust\n\nAI/ML\n\nB2B\n\nCombat vishing. Identify deepfakes.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/deeptrust/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 109,
+    "text": "Wisdolia\n\nAI/ML\n\nB2B\n\nAI flashcards from PDFs, slides and videos.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/wisdolia/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 110,
+    "text": "everythingelse.ai\n\nAI/ML\n\nAutomate the dreaded invoice hunt with AI.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/everythingelse-ai/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 111,
+    "text": "Musicfy\n\nConsumer\n\nAI tools for artists and musicians around the world.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/musicfy/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 112,
+    "text": "Starlight Labs\n\nAI/ML\n\nGaming\n\nBringing worlds to life.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/starlight-labs/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 113,
+    "text": "Huddle01\n\nDevTools\n\nDePIN for RTC.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/huddle01/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 114,
+    "text": "Red Team Interactive\n\nAR/VR\n\nA Virtual Reality Game Studio.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/red-team-interactive/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 115,
+    "text": "On Campus\nSMASHSEND\n\nB2B\n\nTurns emails into revenue via AI-driven marketing.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/smashsend/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 116,
+    "text": "Myr\n\nAR/VR\n\nVR games studio.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/myr/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 117,
+    "text": "Orb\n\nWeb3\n\nWeb3 social platform.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/orb/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 118,
+    "text": "Scenario\n\nAI/ML\n\nGame art generator for studios.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/scenario/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 119,
+    "text": "Unweave\n\nDevTools\n\nML infra to train/deploy models fast.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/unweave/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 120,
+    "text": "Dataleap\n\nAI/ML\n\nGenAI market-research platform.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/dataleap/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 121,
+    "text": "Kayyo\n\nConsumer\n\nAI MMA trainer in your pocket.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/kayyo/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 122,
+    "text": "Otherside AI\n\nAI/ML\n\nWe're building you an AI Personal Assistant.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/otherside-ai/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 123,
+    "text": "Engold.io",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/engold-io/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 124,
+    "text": "Operand\n\nDevTools\n\nPricing engine for retail brands.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/operand/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 125,
+    "text": "At Garage\nNeurosity\n\nHardware\n\nNext generation BCI headset.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/neurosity/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 126,
+    "text": "At Garage\nClayton Farms\n\nHardware\n\nPutting farms inside restaurants.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/clayton-farms/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 127,
+    "text": "Bonfire",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/bonfire/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 128,
+    "text": "Geppetto AI\n\nAI/ML",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/geppetto-ai/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 129,
+    "text": "Bits\n\nWeb3\n\nInvest spare change from every purchase into crypto.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/bits/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 130,
+    "text": "Macro Audits\n\nWeb3\n\nSecure your next web3 project.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/macro-audits/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 131,
+    "text": "Afriex\n\nWeb3\n\nSend and receive money in minutes.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/afriex/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 132,
+    "text": "Audioread\n\nAI/ML\n\nTurns any article/text into natural-sounding audio/podcasts.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/audioread/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 133,
+    "text": "Causal\n\nB2B\n\nFinancial planning made simple.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/causal/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 134,
+    "text": "Magic Flow\n\nAI/ML\n\nAI productivity tracker.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/magic-flow/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 135,
+    "text": "Matchday\n\nConsumer\n\nBuilding the game for the five billion soccer fans.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/matchday/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 136,
+    "text": "Million Victories\n\nGaming\n\nGame Studio.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/million-victories/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 137,
+    "text": "Pointer.gg\n\nWeb3\n\nInstant work opportunities for devs in crypto.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/pointer-gg/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 138,
+    "text": "Rally\n\nTransforming online meetings.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/rally/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 139,
+    "text": "Ready Player Me\n\nGaming\n\nCross-game 3D avatars for virtual worlds.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/ready-player-me/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 140,
+    "text": "Trexo Robotics\n\nHardware\n\nCrafts exoskeletons aiding kids with cerebral palsy to walk.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/trexo-robotics/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 141,
+    "text": "Ultramail\n\nAI/ML\n\nConsumer\n\nThe Future of Email Is Here.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/ultramail/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 142,
+    "text": "Adauris\n\nAI/ML\n\nCreate a branded podcast and identify high-intent leads.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/adauris/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 143,
+    "text": "Atlas\n\nWeb3\n\nWrite, test, and deploy smart contracts in minutes.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/atlas/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 144,
+    "text": "Betterbrain\n\nAI/ML\n\nAI copilot for company data.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/betterbrain/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 145,
+    "text": "Buoyant\n\nHardware\n\nAutonomous airships for low-cost cargo delivery.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/buoyant/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 146,
+    "text": "Clear Gene\n\nRNA Diagnostics.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/clear-gene/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 147,
+    "text": "Cypherock\n\nWeb3\n\nConsumer\n\nCypherock is building the World's safest web3 wallet.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/cypherock/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 148,
+    "text": "Entelexo Biotherapeutics\n\nNovel methods of engineering therapeutic exosomes.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/entelexo-biotherapeutics/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 149,
+    "text": "GGWP\n\nGaming\n\nAI moderation for holistic game community management.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/ggwp/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 150,
+    "text": "Joon Health\n\nConsumer\n\nVideo game that motivates ADHD kids in real-life.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/joon-health/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 151,
+    "text": "Kendal\n\nAI/ML\n\nAI Assistant for Real Estate Brokerages.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/kendal/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 152,
+    "text": "Promakhos Therapeutics\n\nInnate immunity small-molecule drugs.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/promakhos-therapeutics/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 153,
+    "text": "Simon Says\n\nAI/ML\n\nFigma for video editing.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/simon-says/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 154,
+    "text": "Spindl\n\nWeb3\n\nAttribution and user-acquisition measurement for Web 3.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/spindl/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 155,
+    "text": "Vena Vitals\n\nHardware\n\nWear your health, monitor your pressure continuously.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/vena-vitals/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 156,
+    "text": "Wombo\n\nWeb3\n\nAI entertainment apps for images, video and songs.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/wombo/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 157,
+    "text": "Zeit Medical\n\nAI/ML\n\nSafety for the brain.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/zeit-medical/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 158,
+    "text": "Zeet\n\nDevTools\n\nThe Cloud Companion for Kubernetes & Terraform.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/zeet/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 159,
+    "text": "Lucid Bots\n\nHardware\n\nRobots That Work. Literally.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/lucid-bots/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 160,
+    "text": "SoBrief\n\nAI/ML\n\nAI book summaries and audio narrations for quick learning.​",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/sobrief/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 161,
+    "text": "Yummy Future\n\nHardware\n\nRobotic Coffee That Scales.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/yummy-future/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 162,
+    "text": "Omnipilot\n\nAI/ML\n\nYour AI copilot everywhere on macOS.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/omnipilot/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 163,
+    "text": "Guardian\n\nWeb3\n\nDigital privacy simplified.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/guardian/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 164,
+    "text": "Roots Homes\n\nConsumer\n\nShop homes with assumable mortgage rates as low as 3%.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/roots/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 165,
+    "text": "Heroic Story\n\nWeb3\n\nWeb3 storytelling hub for creators and collectors.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/heroic-story/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 166,
+    "text": "Infactory\n\nAI/ML\n\nTurn archives into AI-ready, licensed datasets.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/infactory/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 167,
+    "text": "Layerup\n\nAI/ML\n\nB2B\n\nAI Agents for Financial Institutions.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/layerup/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 168,
+    "text": "Halo\n\nHardware\n\nSummon a stylish, autonomous electric car with ease.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/halo/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 169,
+    "text": "Adaptyv Bio\n\nDevTools\n\nThe cloud lab for protein designers.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/adaptyv-bio/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 170,
+    "text": "Tarteel\n\nAI/ML\n\nConsumer\n\nAI Quran recitation app.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/tarteel/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
+  },
+  {
+    "index": 171,
+    "text": "Pirouette Pharma\n\nHardware\n\nEasily administer a dose in seconds.",
+    "tagName": "a",
+    "className": "framer-ShEir framer-Ys6Gm framer-MerOm framer-0QQNx framer-umu4ra framer-v-i9xxoo framer-1ftpa36",
+    "href": "https://f.inc/portfolio/pirouette-pharma/",
+    "dataset": {
+      "framerName": "Variant 5"
+    }
   }
 ]
