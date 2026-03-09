@@ -22,7 +22,7 @@ export async function executeExtractStep(
 
   const contextualInstruction =
     context && context.item != null
-      ? `Context item: ${JSON.stringify(context.item)}\nInstruction: ${step.description}`
+      ? `For this specific item: ${JSON.stringify(context.item)}\nInstruction: ${step.description}`
       : step.description;
 
   const pageReadyStart = Date.now();
@@ -37,9 +37,7 @@ export async function executeExtractStep(
   try {
     ctx.assertNotAborted();
     const schema = parseSchemaMap(step.dataSchema);
-    console.log(
-      `[EXTRACT] schema step_index=${index} fields=${Object.keys(schema ?? {}).length}`,
-    );
+    console.log(`[EXTRACT] schema step_index=${index} fields=${Object.keys(schema ?? {}).length}`);
     const sharedStrategyStart = Date.now();
     const result = await extractWithSharedStrategy({
       stagehand: ctx.stagehand,

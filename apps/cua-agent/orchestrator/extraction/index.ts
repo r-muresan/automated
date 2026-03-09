@@ -21,3 +21,10 @@ export {
   buildLoopItemsFromDownloadedFilesPrompt,
   normalizeDownloadedFileLoopSelection,
 } from './files';
+export {
+  resolveCollector,
+  type LoopCollectionMode,
+  type ResolvedCollector,
+  type CollectedItem,
+  type ItemCollector,
+} from './loop';

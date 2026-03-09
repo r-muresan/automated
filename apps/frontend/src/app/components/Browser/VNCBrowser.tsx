@@ -1,10 +1,17 @@
+'use client';
+
 import { Box, Spinner, Text, VStack } from '@chakra-ui/react';
 import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { FileUploadModal } from './FileUploadModal';
-import { NoVNCViewer } from './NoVNCViewer';
 import { useOptionalBrowser } from '../../../providers/browser-provider';
 import type { NoVNCViewerHandle } from './NoVNCViewer';
 import type { Interaction } from '../../../hooks/useBrowserCDP';
+
+const NoVNCViewer = dynamic(
+  () => import('./NoVNCViewer').then((module) => module.NoVNCViewer),
+  { ssr: false },
+);
 
 interface VNCBrowserProps {
   contentRef: RefObject<HTMLDivElement | null>;

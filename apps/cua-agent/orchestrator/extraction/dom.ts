@@ -91,6 +91,7 @@ export async function extractLoopItemsFromDom(params: {
     `Find all currently visible items that match this description: "${description}". ` +
     'Return a JSON object with an "items" array. ' +
     'Each item must be a flat object with a required non-empty "text" field that contains the most recognizable visible identifier for that item. ' +
+    'Include selector/id/href/url fields whenever available so items can be de-duplicated deterministically. ' +
     'You may include any additional useful fields when available.';
 
   const result = await withDomExtractionRetry('DOM loop-item extraction', async () =>

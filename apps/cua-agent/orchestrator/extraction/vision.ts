@@ -3,6 +3,7 @@ import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
 import { buildZodObjectFromMap, type ParsedSchema } from './schema';
 import { parseJsonFromText } from './common';
+import { buildDeterministicItemKey } from './item-key';
 
 export interface ExtractionItem {
   fingerprint: string;
@@ -20,9 +21,9 @@ export async function identifyItemsFromVision(params: {
   model: string;
   screenshotDataUrl: string;
   description: string;
-  knownFingerprints: Set<string>;
+  knownItemKeys: Set<string>;
 }): Promise<ExtractionItem[]> {
-  const { llmClient, model, screenshotDataUrl, description, knownFingerprints } = params;
+  const { llmClient, model, screenshotDataUrl, description, knownItemKeys } = params;
 
   const itemsSchema = z.object({ items: z.array(z.record(z.string(), z.unknown())) });
 
@@ -57,8 +58,8 @@ Return a JSON object with an "items" array where each element is an object with 
   for (const item of parsed.items) {
     if (!item || typeof item !== 'object') continue;
     const normalizedItem = item as Record<string, unknown>;
-    const fingerprint = JSON.stringify(normalizedItem);
-    if (knownFingerprints.has(fingerprint)) continue;
+    const fingerprint = buildDeterministicItemKey(normalizedItem);
+    if (knownItemKeys.has(fingerprint)) continue;
     items.push({ fingerprint, data: normalizedItem });
   }
 
