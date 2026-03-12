@@ -16,8 +16,8 @@ import {
 type HyperbrowserRegion = SessionRegion;
 
 const DEFAULT_HYPERBROWSER_REGION: HyperbrowserRegion = 'us-east';
-const DEFAULT_INITIAL_PAGE_URL = 'https://www.bing.com';
-const DEFAULT_INITIAL_PAGE_TITLE = 'Bing';
+const DEFAULT_INITIAL_PAGE_URL = 'https://duckduckgo.com';
+const DEFAULT_INITIAL_PAGE_TITLE = 'DuckDuckGo';
 const HYPERBROWSER_DOWNLOAD_PATH = '/tmp/downloads';
 const REGION_UTC_OFFSET_HOURS: Record<HyperbrowserRegion, number> = {
   'us-east': -5,

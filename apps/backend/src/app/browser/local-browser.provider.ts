@@ -276,8 +276,8 @@ export class LocalBrowserProvider extends BrowserProvider {
       //   });
       // }
 
-      // Navigate to Google
-      session.page.goto('https://www.google.com', { waitUntil: 'commit' }).catch(() => {});
+      // Navigate to DuckDuckGo
+      session.page.goto('https://duckduckgo.com', { waitUntil: 'commit' }).catch(() => {});
 
       // Wait briefly for navigation to register, then get the real target ID
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -293,7 +293,7 @@ export class LocalBrowserProvider extends BrowserProvider {
           );
           return {
             ...(await this.getDebugInfo(sessionId)),
-            pages: [{ id: mainPage.id, url: 'https://www.google.com', title: 'Google' }],
+            pages: [{ id: mainPage.id, url: 'https://duckduckgo.com', title: 'DuckDuckGo' }],
           };
         }
       } catch (error) {
@@ -303,7 +303,7 @@ export class LocalBrowserProvider extends BrowserProvider {
       console.log(`[LocalBrowserProvider] Session ${sessionId} initialized (fallback)`);
       return {
         ...(await this.getDebugInfo(sessionId)),
-        pages: [{ id: 'page-0', url: 'https://www.google.com', title: 'Google' }],
+        pages: [{ id: 'page-0', url: 'https://duckduckgo.com', title: 'DuckDuckGo' }],
       };
     } catch (error) {
       console.error('[LocalBrowserProvider] Error initializing session:', error);

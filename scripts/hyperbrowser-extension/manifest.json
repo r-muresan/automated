@@ -4,7 +4,7 @@
   "version": "1.2",
   "description": "Automated",
   "permissions": ["declarativeNetRequest", "declarativeNetRequestFeedback", "tabs"],
-  "host_permissions": ["*://www.google.com/*", "*://google.com/*", "*://www.bing.com/*", "*://bing.com/*"],
+  "host_permissions": ["*://www.google.com/*", "*://google.com/*", "*://www.duckduckgo.com/*", "*://duckduckgo.com/*"],
   "background": {
     "service_worker": "background.js"
   },

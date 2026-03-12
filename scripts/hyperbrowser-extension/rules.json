@@ -5,7 +5,7 @@
     "action": {
       "type": "redirect",
       "redirect": {
-        "regexSubstitution": "https://www.bing.com/search\\1"
+        "regexSubstitution": "https://duckduckgo.com/\\1"
       }
     },
     "condition": {

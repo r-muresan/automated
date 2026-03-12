@@ -231,11 +231,11 @@ export class BrowserbaseBrowserProvider extends BrowserProvider {
         })(),
       ]);
 
-      page.goto('https://www.google.com', { waitUntil: 'commit' }).catch(() => {});
+      page.goto('https://duckduckgo.com', { waitUntil: 'commit' }).catch(() => {});
 
       console.log(`[BrowserbaseBrowserProvider] Session ${sessionId} initialized successfully`);
       return {
-        pages: [{ id: tabId, url: 'https://www.google.com', title: 'Google' }],
+        pages: [{ id: tabId, url: 'https://duckduckgo.com', title: 'DuckDuckGo' }],
         cdpWsUrlTemplate: `wss://connect.browserbase.com/debug/${sessionId}/devtools/page/{pageId}`,
       };
     } catch (error) {

@@ -5,8 +5,8 @@ script.src = chrome.runtime.getURL('block-geolocation.js');
 script.onload = () => script.remove();
 (document.head || document.documentElement).appendChild(script);
 
-// Force Bing search result links to open in the same tab
-if (location.hostname.includes('bing.com')) {
+// Force DuckDuckGo search result links to open in the same tab
+if (location.hostname.includes('duckduckgo.com')) {
   function removeTargetBlank() {
     document.querySelectorAll('a[target="_blank"]').forEach(a => {
       a.removeAttribute('target');
@@ -30,8 +30,8 @@ if (location.hostname.includes('bing.com')) {
     }
   }, true);
 
-  // Override window.open only on Bing search result pages
-  if (location.pathname === '/search') {
+  // Override window.open only on DuckDuckGo search result pages
+  if (location.pathname === '/') {
     const openBlocker = document.createElement('script');
     openBlocker.textContent = `
       (function() {
