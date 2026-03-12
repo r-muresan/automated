@@ -15,9 +15,7 @@
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
   <a href="#configuration">Configuration</a> &bull;
-  <a href="#desktop-app">Desktop App</a>
 </p>
-
 
 ---
 
@@ -132,12 +130,12 @@ Data is persisted via a `./data` volume mount. To switch to PostgreSQL, update `
 
 ## Configuration
 
-| Variable                 | Required | Description                                 |
-| ------------------------ | -------- | ------------------------------------------- |
-| `OPENROUTER_API_KEY`     | Yes      | LLM API key for AI workflow execution       |
-| `DATABASE_URL`           | No       | Database connection (default: local SQLite) |
-| `HYPERBROWSER_API_KEY`   | No       | Hyperbrowser API key                        |
-| `RESEND_API_KEY`         | No       | Email service for email-triggered workflows |
+| Variable               | Required | Description                                 |
+| ---------------------- | -------- | ------------------------------------------- |
+| `OPENROUTER_API_KEY`   | Yes      | LLM API key for AI workflow execution       |
+| `DATABASE_URL`         | No       | Database connection (default: local SQLite) |
+| `HYPERBROWSER_API_KEY` | No       | Hyperbrowser API key                        |
+| `RESEND_API_KEY`       | No       | Email service for email-triggered workflows |
 
 ## Local Development
 
@@ -152,19 +150,3 @@ npm run start
 npm run start:backend
 npm run start:frontend
 ```
-
-## Desktop App
-
-The desktop app packages the full Automated experience as a native application.
-
-```bash
-# Development
-npm run desktop:dev
-
-# Build distributables
-npm run desktop:dist:mac      # macOS (DMG + ZIP)
-npm run desktop:dist:win      # Windows (NSIS + ZIP)
-npm run desktop:dist:linux    # Linux (AppImage + DEB)
-```
-
-Supported platforms: **macOS** (Intel & Apple Silicon), **Windows** (x64), **Linux** (x64).
