@@ -16,8 +16,8 @@ import {
 type HyperbrowserRegion = SessionRegion;
 
 const DEFAULT_HYPERBROWSER_REGION: HyperbrowserRegion = 'us-east';
-const DEFAULT_INITIAL_PAGE_URL = 'https://www.google.com';
-const DEFAULT_INITIAL_PAGE_TITLE = 'Google';
+const DEFAULT_INITIAL_PAGE_URL = 'https://www.bing.com';
+const DEFAULT_INITIAL_PAGE_TITLE = 'Bing';
 const HYPERBROWSER_DOWNLOAD_PATH = '/tmp/downloads';
 const REGION_UTC_OFFSET_HOURS: Record<HyperbrowserRegion, number> = {
   'us-east': -5,
@@ -226,9 +226,12 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
       enableVideoWebRecording: true,
       useStealth: true,
       solveCaptchas: true,
-      // adblock: true,
-      // trackers: true,
-      // annoyances: true,
+      extensionIds: process.env.HYPERBROWSER_EXTENSION_IDS
+        ? process.env.HYPERBROWSER_EXTENSION_IDS.split(',')
+        : undefined,
+      adblock: true,
+      trackers: true,
+      annoyances: true,
     });
 
     const connectUrl = session.wsEndpoint

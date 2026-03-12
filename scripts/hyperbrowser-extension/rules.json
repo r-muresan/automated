@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "redirect",
+      "redirect": {
+        "regexSubstitution": "https://www.bing.com/search\\1"
+      }
+    },
+    "condition": {
+      "regexFilter": "^https?://(?:www\\.)?google\\.com/search(\\?.*)",
+      "resourceTypes": ["main_frame"]
+    }
+  }
+]

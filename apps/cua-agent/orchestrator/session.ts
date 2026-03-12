@@ -107,6 +107,9 @@ export async function initHyperbrowserSession(
       enableVideoWebRecording: true,
       useStealth: true,
       solveCaptchas: true,
+      extensionIds: process.env.HYPERBROWSER_EXTENSION_IDS
+        ? process.env.HYPERBROWSER_EXTENSION_IDS.split(',')
+        : undefined,
     });
 
     ctx.stagehand = new Stagehand({
