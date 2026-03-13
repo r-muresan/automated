@@ -225,7 +225,7 @@ export class HyperbrowserBrowserProvider extends BrowserProvider {
       enableWebRecording: true,
       enableVideoWebRecording: true,
       useStealth: true,
-      solveCaptchas: true,
+      solveCaptchas: process.env.HYPERBROWSER_SOLVE_CAPTCHAS === 'true',
       extensionIds: process.env.HYPERBROWSER_EXTENSION_IDS
         ? process.env.HYPERBROWSER_EXTENSION_IDS.split(',')
         : undefined,
