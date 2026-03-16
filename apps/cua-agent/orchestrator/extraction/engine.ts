@@ -3,7 +3,7 @@ import type { Stagehand } from '../../stagehand/v3';
 import type { DownloadedSessionFile, LoopContext } from '../../types';
 import { getSpreadsheetProvider } from '../agent-tools';
 import { capturePageScreenshot } from './common';
-import { extractFromDom, extractLoopItemsFromDom } from './dom';
+import { extractFromDom, extractFromDomWithSelector, extractLoopItemsFromDom } from './dom';
 import { extractLoopItemsFromDownloadedFilesWithLlm } from './files';
 import {
   captureSpreadsheetSnapshot,
@@ -43,6 +43,11 @@ function toExtractionItems(
   return items;
 }
 
+interface Extractor {
+  name: string;
+  tryExtract: () => Promise<ExtractOutput | null>;
+}
+
 export async function extractWithSharedStrategy(params: {
   stagehand: Stagehand;
   llmClient: OpenAI;
@@ -51,7 +56,7 @@ export async function extractWithSharedStrategy(params: {
   schema?: ParsedSchema | null;
   skipValidation?: boolean;
   context?: LoopContext;
-  extractedVariables?: Record<string, string>;
+  globalState?: any[];
 }): Promise<ExtractOutput> {
   const {
     stagehand,
@@ -61,7 +66,7 @@ export async function extractWithSharedStrategy(params: {
     schema,
     skipValidation,
     context,
-    extractedVariables,
+    globalState,
   } = params;
 
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
@@ -77,87 +82,115 @@ export async function extractWithSharedStrategy(params: {
       ? `For this specific item: ${JSON.stringify(context.item)}\nInstruction: ${dataExtractionGoal}`
       : dataExtractionGoal;
   const goalWithMemory =
-    extractedVariables && Object.keys(extractedVariables).length > 0
-      ? `${contextualGoal}\n\nPreviously extracted variables:\n${JSON.stringify(extractedVariables, null, 2)}`
+    globalState && globalState.length > 0
+      ? `${contextualGoal}\n\nPreviously collected data:\n${JSON.stringify(globalState, null, 2)}`
       : contextualGoal;
 
+  function applyValidation(data: unknown): unknown {
+    return schema && !skipValidation ? validateAndFillExtractionResult(data, schema) : data;
+  }
+
+  // Build ordered list of extractors, similar to resolveCollector's factory pattern
+  const extractors: Extractor[] = [];
+
   if (spreadsheetProvider) {
-    const snapshotStart = Date.now();
-    const snapshot = await captureSpreadsheetSnapshot(stagehand);
-    console.log(
-      `[EXTRACTION] spreadsheet:snapshot-ready duration_ms=${Date.now() - snapshotStart} range="${snapshot.sampledRangeA1}"`,
-    );
-    const llmStart = Date.now();
-    const spreadsheetResult = await extractFromSpreadsheetWithLlm({
-      llmClient,
-      model,
-      dataExtractionGoal: goalWithMemory,
-      schema,
-      snapshot,
+    extractors.push({
+      name: 'spreadsheet',
+      tryExtract: async () => {
+        const snapshotStart = Date.now();
+        const snapshot = await captureSpreadsheetSnapshot(stagehand);
+        console.log(
+          `[EXTRACTION] spreadsheet:snapshot-ready duration_ms=${Date.now() - snapshotStart} range="${snapshot.sampledRangeA1}"`,
+        );
+        const llmStart = Date.now();
+        const result = await extractFromSpreadsheetWithLlm({
+          llmClient,
+          model,
+          dataExtractionGoal: goalWithMemory,
+          schema,
+          snapshot,
+        });
+        console.log(`[EXTRACTION] spreadsheet:llm-ready duration_ms=${Date.now() - llmStart}`);
+        return { mode: 'spreadsheet' as ExtractionMode, scraped_data: applyValidation(result) };
+      },
     });
-    console.log(`[EXTRACTION] spreadsheet:llm-ready duration_ms=${Date.now() - llmStart}`);
-    console.log(
-      `[EXTRACTION] extractWithSharedStrategy:end mode=spreadsheet total_ms=${Date.now() - start}`,
-    );
-
-    return {
-      mode: 'spreadsheet',
-      scraped_data:
-        schema && !skipValidation
-          ? validateAndFillExtractionResult(spreadsheetResult, schema)
-          : spreadsheetResult,
-    };
   }
 
-  try {
-    const domStart = Date.now();
-    const domResult = await extractFromDom({
-      stagehand,
-      dataExtractionGoal: goalWithMemory,
-      schema,
-    });
-    console.log(`[EXTRACTION] dom:success duration_ms=${Date.now() - domStart}`);
-    console.log(
-      `[EXTRACTION] extractWithSharedStrategy:end mode=dom total_ms=${Date.now() - start}`,
-    );
-
-    return {
-      mode: 'dom',
-      scraped_data:
-        schema && !skipValidation ? validateAndFillExtractionResult(domResult, schema) : domResult,
-    };
-  } catch (error) {
-    console.warn(
-      `[EXTRACTION] DOM extraction failed after ${Date.now() - start}ms; falling back to vision:`,
-      (error as Error).message,
-    );
-  }
-
-  const screenshotStart = Date.now();
-  const screenshotDataUrl = await capturePageScreenshot(stagehand, { fullPage: true });
-  console.log(
-    `[EXTRACTION] vision:screenshot-ready duration_ms=${Date.now() - screenshotStart} chars=${screenshotDataUrl.length}`,
-  );
-  const visionStart = Date.now();
-  const visionResult = await extractFromVision({
-    llmClient,
-    model,
-    screenshotDataUrl,
-    dataExtractionGoal: goalWithMemory,
-    schema,
+  extractors.push({
+    name: 'dom-selector',
+    tryExtract: async () => {
+      const domSelectorStart = Date.now();
+      const result = await extractFromDomWithSelector({
+        stagehand,
+        llmClient,
+        model,
+        dataExtractionGoal: goalWithMemory,
+        schema,
+      });
+      if (result == null) return null;
+      console.log(
+        `[EXTRACTION] dom-selector:success duration_ms=${Date.now() - domSelectorStart}`,
+      );
+      return { mode: 'dom' as ExtractionMode, scraped_data: applyValidation(result) };
+    },
   });
-  console.log(`[EXTRACTION] vision:llm-ready duration_ms=${Date.now() - visionStart}`);
-  console.log(
-    `[EXTRACTION] extractWithSharedStrategy:end mode=vision total_ms=${Date.now() - start}`,
-  );
 
-  return {
-    mode: 'vision',
-    scraped_data:
-      schema && !skipValidation
-        ? validateAndFillExtractionResult(visionResult, schema)
-        : visionResult,
-  };
+  extractors.push({
+    name: 'dom',
+    tryExtract: async () => {
+      const domStart = Date.now();
+      const result = await extractFromDom({
+        stagehand,
+        dataExtractionGoal: goalWithMemory,
+        schema,
+      });
+      console.log(`[EXTRACTION] dom:success duration_ms=${Date.now() - domStart}`);
+      return { mode: 'dom' as ExtractionMode, scraped_data: applyValidation(result) };
+    },
+  });
+
+  extractors.push({
+    name: 'vision',
+    tryExtract: async () => {
+      const screenshotStart = Date.now();
+      const screenshotDataUrl = await capturePageScreenshot(stagehand, { fullPage: true });
+      console.log(
+        `[EXTRACTION] vision:screenshot-ready duration_ms=${Date.now() - screenshotStart} chars=${screenshotDataUrl.length}`,
+      );
+      const visionStart = Date.now();
+      const result = await extractFromVision({
+        llmClient,
+        model,
+        screenshotDataUrl,
+        dataExtractionGoal: goalWithMemory,
+        schema,
+      });
+      console.log(`[EXTRACTION] vision:llm-ready duration_ms=${Date.now() - visionStart}`);
+      return { mode: 'vision' as ExtractionMode, scraped_data: applyValidation(result) };
+    },
+  });
+
+  // Try extractors in priority order, like resolveCollector
+  for (const extractor of extractors) {
+    try {
+      console.log(`[EXTRACTION] Trying extractor: ${extractor.name}`);
+      const result = await extractor.tryExtract();
+      if (result) {
+        console.log(
+          `[EXTRACTION] extractWithSharedStrategy:end mode=${result.mode} extractor=${extractor.name} total_ms=${Date.now() - start}`,
+        );
+        return result;
+      }
+      console.log(`[EXTRACTION] ${extractor.name}: no result, trying next`);
+    } catch (error) {
+      console.warn(
+        `[EXTRACTION] ${extractor.name} failed after ${Date.now() - start}ms; trying next:`,
+        (error as Error).message,
+      );
+    }
+  }
+
+  throw new Error('All extraction strategies failed');
 }
 
 export async function identifyItemsWithSharedStrategy(params: {

@@ -4,8 +4,54 @@
 import { buildSessionDownloadedFilesSection } from './session-files';
 import type { DownloadedSessionFile, LoopContext } from '../types';
 
+const MAX_GLOBAL_STATE_CHARS = 10_000;
+const MAX_ENTRY_VALUE_CHARS = 200;
+
+/**
+ * Truncate individual values in global state entries that are very long,
+ * then truncate the overall JSON if still too large.
+ */
+function truncateGlobalStateForPrompt(globalState: any[]): string {
+  if (!globalState || globalState.length === 0) return '';
+
+  // Deep clone and truncate individual values
+  const clone: any[] = JSON.parse(JSON.stringify(globalState));
+  for (const entry of clone) {
+    if (!entry?.items?.length) continue;
+    for (const item of entry.items) {
+      if (!item || typeof item !== 'object') continue;
+      for (const [key, value] of Object.entries(item)) {
+        if (typeof value === 'string' && value.length > MAX_ENTRY_VALUE_CHARS) {
+          (item as Record<string, string>)[key] =
+            value.slice(0, MAX_ENTRY_VALUE_CHARS) + '… (truncated)';
+        }
+      }
+    }
+  }
+
+  const json = JSON.stringify(clone, null, 2);
+  if (json.length <= MAX_GLOBAL_STATE_CHARS) return json;
+
+  // Progressively trim items from the last entry backwards
+  for (let i = clone.length - 1; i >= 0; i--) {
+    const entry = clone[i];
+    if (!entry?.items?.length) continue;
+    while (entry.items.length > 0) {
+      entry.items.pop();
+      const attempt = JSON.stringify(clone, null, 2);
+      if (attempt.length <= MAX_GLOBAL_STATE_CHARS) {
+        entry.items.push({ _truncated: 'remaining items omitted to fit context' });
+        return JSON.stringify(clone, null, 2);
+      }
+    }
+    clone.splice(i, 1);
+  }
+
+  return JSON.stringify([{ _truncated: 'data too large, all entries omitted' }], null, 2);
+}
+
 export function buildSystemPrompt(
-  extractedVariables: Record<string, string>,
+  globalState: any[],
   downloadedFiles: DownloadedSessionFile[],
   context?: LoopContext,
 ): string {
@@ -18,12 +64,17 @@ export function buildSystemPrompt(
     `If you hit a login, 2FA, CAPTCHA, passkey, or any credential gate that requires the user's secrets, call the tool "request_user_credentials" with a concise reason and wait.`,
   );
 
-  if (Object.keys(extractedVariables).length > 0) {
+  const globalStateJson = truncateGlobalStateForPrompt(globalState);
+  if (globalStateJson) {
     sections.push('');
-    sections.push('## Extracted Variables');
-    for (const [key, value] of Object.entries(extractedVariables)) {
-      sections.push(`- **${key}**: ${value}`);
-    }
+    sections.push('## Previously Collected Data');
+    sections.push(
+      'The following data has been collected by earlier steps in this workflow. ' +
+        'Use it as context when completing your task.',
+    );
+    sections.push('```json');
+    sections.push(globalStateJson);
+    sections.push('```');
   }
 
   if (context && context.item != null) {

@@ -89,7 +89,7 @@ DEFAULT: Leave inputs empty. Do NOT add inputs unless the user explicitly reques
 - \`navigate\`: Go to a URL. Must be the first step.
 - \`tab_navigate\`: Open a URL in a new tab.
 - \`step\`: A single logical action — what you'd tell a person to do as one instruction. Include all relevant details (what to type, which option to select, what to click).
-- \`extract\`: Extract data from the page for use in other steps.
+- \`extract\`: Extract data from the current page for use in other steps.
 - \`loop\`: Repeat steps over a collection. The loop identifies what to iterate over internally — do not add a separate \`extract\` step before it for the same data.
 - \`conditional\`: Branch based on a condition (trueSteps / falseSteps).
 - \`save\`: Save data to an output file.

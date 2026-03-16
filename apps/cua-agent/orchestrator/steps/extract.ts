@@ -46,32 +46,88 @@ export async function executeExtractStep(
       dataExtractionGoal: contextualInstruction,
       schema,
       context,
-      extractedVariables: ctx.extractedVariables,
+      globalState: ctx.globalState,
     });
     console.log(
       `[EXTRACT] shared-strategy:end step_index=${index} mode=${result.mode} duration_ms=${Date.now() - sharedStrategyStart}`,
     );
 
     const output = result.scraped_data;
-    const map: Record<string, string> = {};
+
+    // Build source label: step description + loop context if any
+    let source = step.description;
+    if (context?.item != null) {
+      source += ` (loop item ${context.itemIndex ?? '?'}: ${JSON.stringify(context.item)})`;
+    }
+
+    // Check if the output is an object with a single key whose value is an array of objects.
+    // In that case, expand the array items directly into globalState instead of stringifying.
+    let expandedItems: Record<string, string>[] | null = null;
     if (output && typeof output === 'object' && !Array.isArray(output)) {
-      for (const [key, value] of Object.entries(output)) {
-        if (typeof value === 'string') {
-          map[key] = value;
-        } else if (value === null || value === undefined) {
-          map[key] = 'null';
-        } else {
-          map[key] = JSON.stringify(value);
+      const entries = Object.entries(output);
+      if (entries.length === 1) {
+        const [, value] = entries[0];
+        if (
+          Array.isArray(value) &&
+          value.length > 0 &&
+          value.every((v) => v && typeof v === 'object' && !Array.isArray(v))
+        ) {
+          expandedItems = value.map((item: Record<string, unknown>) => {
+            const row: Record<string, string> = {};
+            for (const [k, v] of Object.entries(item)) {
+              if (typeof v === 'string') row[k] = v;
+              else if (v === null || v === undefined) row[k] = 'null';
+              else row[k] = JSON.stringify(v);
+            }
+            return row;
+          });
         }
       }
     }
 
-    if (Object.keys(map).length > 0) {
-      Object.assign(ctx.extractedVariables, map);
-      ctx.globalState.push({ ...map });
-      console.log(
-        `[ORCHESTRATOR] Extracted variables (saved to global state): ${JSON.stringify(map)}`,
+    if (expandedItems && expandedItems.length > 0) {
+      // Store each array element as a separate item in globalState
+      const existing = ctx.globalState.find(
+        (entry: any) => entry.source === source,
       );
+      if (existing) {
+        existing.items.push(...expandedItems);
+      } else {
+        ctx.globalState.push({ source, items: expandedItems });
+      }
+
+      console.log(
+        `[ORCHESTRATOR] Extracted ${expandedItems.length} items (expanded array, saved to global state)`,
+      );
+    } else {
+      // Fallback: flatten all values to strings and store as a single item
+      const map: Record<string, string> = {};
+      if (output && typeof output === 'object' && !Array.isArray(output)) {
+        for (const [key, value] of Object.entries(output)) {
+          if (typeof value === 'string') {
+            map[key] = value;
+          } else if (value === null || value === undefined) {
+            map[key] = 'null';
+          } else {
+            map[key] = JSON.stringify(value);
+          }
+        }
+      }
+
+      if (Object.keys(map).length > 0) {
+        const existing = ctx.globalState.find(
+          (entry: any) => entry.source === source,
+        );
+        if (existing) {
+          existing.items.push({ ...map });
+        } else {
+          ctx.globalState.push({ source, items: [{ ...map }] });
+        }
+
+        console.log(
+          `[ORCHESTRATOR] Extracted variables (saved to global state): ${JSON.stringify(map)}`,
+        );
+      }
     }
 
     ctx.stepResults.push({

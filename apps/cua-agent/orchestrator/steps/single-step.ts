@@ -61,7 +61,7 @@ export async function executeSingleStep(
 
   const agentConfig = {
     systemPrompt: buildSystemPrompt(
-      ctx.extractedVariables,
+      ctx.globalState,
       ctx.sessionFiles.getDownloadedFiles(),
       context,
     ),

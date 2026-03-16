@@ -25,7 +25,6 @@ export interface OrchestratorContext {
   // Mutable state
   stagehand: Stagehand | null;
   openai: OpenAI | null;
-  extractedVariables: Record<string, string>;
   globalState: any[];
   savedFiles: SavedFile[];
   stepResults: StepResult[];

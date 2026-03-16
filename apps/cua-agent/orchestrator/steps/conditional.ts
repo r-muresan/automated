@@ -48,7 +48,7 @@ export async function executeConditionalStep(
           },
           {
             role: 'user',
-            content: `Context:\n${formatLoopContext(context)}\n\nExtracted Variables:\n${JSON.stringify(ctx.extractedVariables, null, 2)}\n\nCondition: ${step.condition}`,
+            content: `Context:\n${formatLoopContext(context)}\n\nCollected Data:\n${JSON.stringify(ctx.globalState, null, 2)}\n\nCondition: ${step.condition}`,
           },
         ],
         response_format: { type: 'json_object' },
@@ -77,7 +77,7 @@ export async function executeConditionalStep(
 
     const agent = ctx.stagehand.agent({
       systemPrompt: buildSystemPrompt(
-        ctx.extractedVariables,
+        ctx.globalState,
         ctx.sessionFiles.getDownloadedFiles(),
         context,
       ),

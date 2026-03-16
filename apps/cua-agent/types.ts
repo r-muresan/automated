@@ -117,7 +117,6 @@ export interface SaveStepOutput extends SavedFile {
 export interface WorkflowResult {
   workflowName: string;
   stepResults: StepResult[];
-  extractedVariables: Record<string, string>;
   globalState: any[];
   savedFiles: SavedFile[];
   success: boolean;

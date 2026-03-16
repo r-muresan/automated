@@ -49,7 +49,6 @@ export class OrchestratorAgent {
   };
   private aborted = false;
   private aborting = false;
-  private extractedVariables: Record<string, string> = {};
   private globalState: any[] = [];
   private savedFiles: SavedFile[] = [];
   private sessionFiles: SessionFileManager;
@@ -158,7 +157,6 @@ export class OrchestratorAgent {
       set openai(v) {
         self.openai = v;
       },
-      extractedVariables: this.extractedVariables,
       globalState: this.globalState,
       savedFiles: this.savedFiles,
       stepResults: this.stepResults,
@@ -269,7 +267,6 @@ export class OrchestratorAgent {
     const result = {
       workflowName: workflow.name,
       stepResults: this.stepResults,
-      extractedVariables: { ...this.extractedVariables },
       globalState: [...this.globalState],
       savedFiles: [...this.savedFiles],
       success,
