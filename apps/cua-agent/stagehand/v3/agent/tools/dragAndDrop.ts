@@ -76,17 +76,30 @@ export const dragAndDropTool = (v3: V3, provider?: string, modelId?: string) =>
           },
         });
 
-        // Only request XPath when caching is enabled to avoid unnecessary computation
-        const shouldCollectXpath = v3.isAgentReplayActive();
-        const [fromXpath, toXpath] = await page.dragAndDrop(
-          processedStart.x,
-          processedStart.y,
-          processedEnd.x,
-          processedEnd.y,
-          { returnXpath: shouldCollectXpath },
-        );
+        const screenController = v3.getScreenController();
+        const shouldCollectXpath =
+          !screenController && v3.isAgentReplayActive();
+        const [fromXpath, toXpath] = screenController
+          ? [undefined, undefined]
+          : await page.dragAndDrop(
+              processedStart.x,
+              processedStart.y,
+              processedEnd.x,
+              processedEnd.y,
+              { returnXpath: shouldCollectXpath },
+            );
 
-        const screenshotBase64 = await waitAndCaptureScreenshot(page);
+        if (screenController) {
+          await screenController.drag(
+            processedStart.x,
+            processedStart.y,
+            processedEnd.x,
+            processedEnd.y,
+          );
+          await v3.syncActivePageFromFocus();
+        }
+
+        const screenshotBase64 = await waitAndCaptureScreenshot(v3, page);
 
         // Record as "act" step with proper Action for deterministic replay (only when caching)
         if (shouldCollectXpath) {

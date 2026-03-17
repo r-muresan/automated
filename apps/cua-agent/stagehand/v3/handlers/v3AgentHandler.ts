@@ -95,9 +95,8 @@ export class V3AgentHandler {
   }
 
   private async buildInitialContextMessage(initialPageUrl: string): Promise<ModelMessage | null> {
-    const page = await this.v3.context.awaitActivePage();
-    const screenshotResult = await page
-      .screenshot({ fullPage: false, type: 'jpeg', quality: 70 })
+    const screenshotResult = await this.v3
+      .captureModelScreenshot({ type: 'jpeg', quality: 70 })
       .then((value) => ({ status: 'fulfilled' as const, value }))
       .catch((reason) => ({ status: 'rejected' as const, reason }));
 
@@ -144,6 +143,10 @@ export class V3AgentHandler {
           : instructionOrOptions;
 
       const maxSteps = options.maxSteps || 20;
+
+      if (this.mode === 'hybrid') {
+        this.v3.assertScreenMode('Hybrid agent execution');
+      }
 
       // Get the initial page URL first (needed for the system prompt)
       const initialPageUrl = (await this.v3.context.awaitActivePage()).url();
@@ -733,8 +736,7 @@ export class V3AgentHandler {
    */
   private async captureAndEmitScreenshot(): Promise<void> {
     try {
-      const page = await this.v3.context.awaitActivePage();
-      const screenshot = await page.screenshot({ fullPage: false });
+      const screenshot = await this.v3.captureModelScreenshot({ type: 'png' });
       this.v3.bus.emit('agent_screenshot_taken_event', screenshot);
     } catch (error) {
       this.logger({

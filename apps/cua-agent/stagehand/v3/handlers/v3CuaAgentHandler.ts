@@ -65,8 +65,9 @@ export class V3CuaAgentHandler {
     // Provide screenshots to the agent client
     this.agentClient.setScreenshotProvider(async () => {
       this.ensureNotClosed();
-      const page = await this.v3.context.awaitActivePage();
-      const screenshotBuffer = await page.screenshot({ fullPage: false });
+      const screenshotBuffer = await this.v3.captureModelScreenshot({
+        type: "png",
+      });
       return screenshotBuffer.toString("base64"); // base64 png
     });
 
@@ -146,6 +147,7 @@ export class V3CuaAgentHandler {
   async execute(
     optionsOrInstruction: AgentExecuteOptions | string,
   ): Promise<AgentResult> {
+    this.v3.assertScreenMode("CUA agent execution");
     const options =
       typeof optionsOrInstruction === "string"
         ? { instruction: optionsOrInstruction }
@@ -202,11 +204,18 @@ export class V3CuaAgentHandler {
     action: AgentAction,
   ): Promise<ActionExecutionResult> {
     const page = await this.v3.context.awaitActivePage();
+    const screenController = this.v3.getScreenController();
     const recording = this.v3.isAgentReplayActive();
     switch (action.type) {
       case "click": {
         const { x, y, button = "left", clickCount } = action;
-        if (recording) {
+        if (screenController) {
+          await screenController.click(x as number, y as number, {
+            button: (button as "left" | "right" | "middle") ?? "left",
+            clickCount: (clickCount as number) ?? 1,
+          });
+          await this.v3.syncActivePageFromFocus();
+        } else if (recording) {
           const xpath = await page.click(x as number, y as number, {
             button: (button as "left" | "right" | "middle") ?? "left",
             clickCount: (clickCount as number) ?? 1,
@@ -237,7 +246,13 @@ export class V3CuaAgentHandler {
       case "double_click":
       case "doubleClick": {
         const { x, y } = action;
-        if (recording) {
+        if (screenController) {
+          await screenController.click(x as number, y as number, {
+            button: "left",
+            clickCount: 2,
+          });
+          await this.v3.syncActivePageFromFocus();
+        } else if (recording) {
           const xpath = await page.click(x as number, y as number, {
             button: "left",
             clickCount: 2,
@@ -267,7 +282,12 @@ export class V3CuaAgentHandler {
       }
       case "tripleClick": {
         const { x, y } = action;
-        if (recording) {
+        if (screenController) {
+          await screenController.click(x as number, y as number, {
+            clickCount: 3,
+          });
+          await this.v3.syncActivePageFromFocus();
+        } else if (recording) {
           const xpath = await page.click(x as number, y as number, {
             button: "left",
             clickCount: 3,
@@ -296,8 +316,13 @@ export class V3CuaAgentHandler {
       }
       case "type": {
         const { text } = action;
-        await page.type(String(text ?? ""));
-        if (recording) {
+        if (screenController) {
+          await screenController.typeText(String(text ?? ""));
+          await this.v3.syncActivePageFromFocus();
+        } else {
+          await page.type(String(text ?? ""));
+        }
+        if (recording && !screenController) {
           const xpath = await computeActiveElementXpath(page);
           const normalized = ensureXPath(xpath);
           if (normalized) {
@@ -322,8 +347,12 @@ export class V3CuaAgentHandler {
         const stagehandActions: Action[] = [];
         for (const rawKey of keyList) {
           const mapped = mapKeyToPlaywright(String(rawKey ?? ""));
-          await page.keyPress(mapped);
-          if (recording) {
+          if (screenController) {
+            await screenController.sendKeys(mapped);
+          } else {
+            await page.keyPress(mapped);
+          }
+          if (recording && !screenController) {
             stagehandActions.push({
               selector: "xpath=/html",
               description: `press ${mapped}`,
@@ -332,7 +361,10 @@ export class V3CuaAgentHandler {
             });
           }
         }
-        if (recording && stagehandActions.length > 0) {
+        if (screenController) {
+          await this.v3.syncActivePageFromFocus();
+        }
+        if (recording && !screenController && stagehandActions.length > 0) {
           this.recordCuaActStep(
             action,
             stagehandActions,
@@ -346,21 +378,31 @@ export class V3CuaAgentHandler {
       }
       case "scroll": {
         const { x, y, scroll_x = 0, scroll_y = 0 } = action;
-        await page.scroll(
-          (x as number) ?? 0,
-          (y as number) ?? 0,
-          (scroll_x as number) ?? 0,
-          (scroll_y as number) ?? 0,
-        );
-        this.v3.recordAgentReplayStep({
-          type: "scroll",
-          deltaX: Number(scroll_x ?? 0),
-          deltaY: Number(scroll_y ?? 0),
-          anchor:
-            typeof x === "number" && typeof y === "number"
-              ? { x: Math.round(x), y: Math.round(y) }
-              : undefined,
-        });
+        if (screenController) {
+          await screenController.scroll(
+            (x as number) ?? 0,
+            (y as number) ?? 0,
+            (scroll_x as number) ?? 0,
+            (scroll_y as number) ?? 0,
+          );
+          await this.v3.syncActivePageFromFocus();
+        } else {
+          await page.scroll(
+            (x as number) ?? 0,
+            (y as number) ?? 0,
+            (scroll_x as number) ?? 0,
+            (scroll_y as number) ?? 0,
+          );
+          this.v3.recordAgentReplayStep({
+            type: "scroll",
+            deltaX: Number(scroll_x ?? 0),
+            deltaY: Number(scroll_y ?? 0),
+            anchor:
+              typeof x === "number" && typeof y === "number"
+                ? { x: Math.round(x), y: Math.round(y) }
+                : undefined,
+          });
+        }
         return { success: true };
       }
       case "drag": {
@@ -368,7 +410,13 @@ export class V3CuaAgentHandler {
         if (Array.isArray(path) && path.length >= 2) {
           const start = path[0];
           const end = path[path.length - 1];
-          if (recording) {
+          if (screenController) {
+            await screenController.drag(start.x, start.y, end.x, end.y, {
+              steps: Math.min(20, Math.max(5, path.length)),
+              delayMs: 10,
+            });
+            await this.v3.syncActivePageFromFocus();
+          } else if (recording) {
             const xps = await page.dragAndDrop(start.x, start.y, end.x, end.y, {
               steps: Math.min(20, Math.max(5, path.length)),
               delay: 10,
@@ -402,7 +450,10 @@ export class V3CuaAgentHandler {
       case "move": {
         const { x, y } = action;
         if (typeof x === "number" && typeof y === "number") {
-          if (recording) {
+          if (screenController) {
+            await screenController.move(x, y);
+            await this.v3.syncActivePageFromFocus();
+          } else if (recording) {
             const xpath = await page.hover(x, y, { returnXpath: true });
             const normalized = ensureXPath(xpath);
             if (normalized) {
@@ -555,6 +606,12 @@ export class V3CuaAgentHandler {
 
   private async updateClientViewport(): Promise<void> {
     try {
+      if (this.v3.isScreenModeEnabled) {
+        const size = await this.v3.getScreenSize();
+        this.agentClient.setViewport(size.width, size.height);
+        return;
+      }
+
       if (this.v3.isAdvancedStealth) {
         this.agentClient.setViewport(1288, 711);
         return;
@@ -612,7 +669,9 @@ export class V3CuaAgentHandler {
     });
     try {
       const page = await this.v3.context.awaitActivePage();
-      const screenshotBuffer = await page.screenshot({ fullPage: false });
+      const screenshotBuffer = await this.v3.captureModelScreenshot({
+        type: "png",
+      });
 
       // Emit screenshot event via the bus
       this.v3.bus.emit("agent_screenshot_taken_event", screenshotBuffer);

@@ -82,6 +82,8 @@ import type {
   PuppeteerPage,
   AgentStreamResult,
   StreamingAgentInstance,
+  ScreenCaptureOptions,
+  ScreenController,
 } from "./types/public/index.js";
 import { V3Context } from "./understudy/context.js";
 import { Page } from "./understudy/page.js";
@@ -150,6 +152,7 @@ export class V3 {
   private extractHandler: ExtractHandler | null = null;
   private observeHandler: ObserveHandler | null = null;
   private ctx: V3Context | null = null;
+  private screenController: ScreenController | null = null;
   public llmClient!: LLMClient;
 
   /**
@@ -1392,6 +1395,98 @@ export class V3 {
     return this.ctx;
   }
 
+  public setScreenController(controller: ScreenController | null): void {
+    this.screenController = controller;
+  }
+
+  public getScreenController(): ScreenController | null {
+    return this.screenController;
+  }
+
+  public get isScreenModeEnabled(): boolean {
+    return this.screenController !== null;
+  }
+
+  public assertScreenMode(operation: string): void {
+    if (!this.screenController) {
+      throw new StagehandInvalidArgumentError(
+        `${operation} requires screen mode. Attach a ScreenController (e.g. Hyperbrowser Computer Actions or VNC) to this Stagehand session.`,
+      );
+    }
+  }
+
+  public async captureModelScreenshot(
+    options?: ScreenCaptureOptions,
+  ): Promise<Buffer> {
+    if (this.screenController) {
+      return await this.screenController.captureScreenshot(options);
+    }
+
+    const page = await this.context.awaitActivePage();
+    const type = options?.type ?? "png";
+    const quality =
+      typeof options?.quality === "number"
+        ? options.quality > 1
+          ? Math.round(options.quality)
+          : Math.round(options.quality * 100)
+        : 70;
+
+    return await page.screenshot({
+      fullPage: false,
+      type,
+      ...(type === "jpeg" ? { quality } : {}),
+    });
+  }
+
+  public async getScreenSize(): Promise<{ width: number; height: number }> {
+    if (this.screenController) {
+      return await this.screenController.getScreenSize();
+    }
+
+    return this.configuredViewport;
+  }
+
+  public async syncActivePageFromFocus(): Promise<Page | null> {
+    if (!this.ctx) {
+      throw new StagehandNotInitializedError("syncActivePageFromFocus()");
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const pages = this.ctx.pages();
+    let visiblePage: Page | null = null;
+
+    for (const page of pages) {
+      try {
+        const state = await page.mainFrame().evaluate<{
+          isVisible: boolean;
+          hasFocus: boolean;
+        }>(`(() => ({
+          isVisible: document.visibilityState === "visible",
+          hasFocus: document.hasFocus(),
+        }))()`);
+
+        if (state.hasFocus) {
+          this.ctx.setActivePage(page);
+          return page;
+        }
+
+        if (!visiblePage && state.isVisible) {
+          visiblePage = page;
+        }
+      } catch {
+        // Ignore inaccessible pages while probing focus state.
+      }
+    }
+
+    if (visiblePage) {
+      this.ctx.setActivePage(visiblePage);
+      return visiblePage;
+    }
+
+    return null;
+  }
+
   /** Best-effort cleanup of context and launched resources. */
   async close(opts?: { force?: boolean }): Promise<void> {
     // If we're already closing and this isn't a forced close, no-op.
@@ -1426,6 +1521,12 @@ export class V3 {
       // Close session file logger
       try {
         await SessionFileLogger.close();
+      } catch {
+        // ignore
+      }
+
+      try {
+        await this.screenController?.close();
       } catch {
         // ignore
       }
@@ -1469,6 +1570,7 @@ export class V3 {
       this.actHandler = null;
       this.extractHandler = null;
       this.observeHandler = null;
+      this.screenController = null;
       V3._instances.delete(this);
     }
   }

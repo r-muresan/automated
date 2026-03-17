@@ -65,14 +65,24 @@ export const clickTool = (
           },
         });
 
-        // Only request XPath when caching is enabled to avoid unnecessary computation
-        const shouldCollectXpath = v3.isAgentReplayActive();
-        const xpath = await page.click(processed.x, processed.y, {
-          returnXpath: shouldCollectXpath,
-        });
+        const screenController = v3.getScreenController();
+        const shouldCollectXpath =
+          !screenController && v3.isAgentReplayActive();
+        const xpath = screenController
+          ? undefined
+          : await page.click(processed.x, processed.y, {
+              returnXpath: shouldCollectXpath,
+            });
+        if (screenController) {
+          await screenController.click(processed.x, processed.y, {
+            button: 'left',
+            clickCount: 1,
+          });
+          await v3.syncActivePageFromFocus();
+        }
         const syncResult = await settleInteractionScope(scope);
 
-        const screenshotBase64 = await waitAndCaptureScreenshot(page);
+        const screenshotBase64 = await waitAndCaptureScreenshot(v3, page);
 
         // Record as an "act" step with proper Action for deterministic replay (only when caching)
         if (shouldCollectXpath) {

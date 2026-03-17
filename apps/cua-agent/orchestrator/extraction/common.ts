@@ -44,9 +44,9 @@ export async function capturePageScreenshot(
   stagehand: Stagehand,
   options?: { fullPage?: boolean },
 ): Promise<string> {
-  const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
-  const screenshot = await page.screenshot({
-    fullPage: options?.fullPage ?? false,
+  void options;
+  stagehand.assertScreenMode('orchestrator vision screenshot capture');
+  const screenshot = await stagehand.captureModelScreenshot({
     type: 'jpeg',
     quality: 70,
   });

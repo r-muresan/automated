@@ -6,18 +6,43 @@ import { typeTool } from './type';
 import type { AgentInteractionSyncResult } from '../../types/public/agent';
 
 function createMockPage() {
-  return {
-    click: async () => '//input',
-    type: async () => {},
+  const page = {
+    clickCalls: 0,
+    typeCalls: [] as string[],
+    click: async () => {
+      page.clickCalls += 1;
+      return '//input';
+    },
+    type: async (value?: string) => {
+      if (value) {
+        page.typeCalls.push(value);
+      }
+    },
     waitForTimeout: async () => {},
     screenshot: async () => Buffer.from('image'),
     mainFrame: () => ({
       evaluate: async () => ({ width: 1000, height: 800 }),
     }),
   };
+
+  return page;
 }
 
-function createMockV3(page: ReturnType<typeof createMockPage>) {
+function createMockScreenControllerInstance() {
+  const controller = {
+    clickCalls: [] as Array<{ x: number; y: number }>,
+    typeCalls: [] as string[],
+    click: async (x: number, y: number) => {
+      controller.clickCalls.push({ x, y });
+    },
+    typeText: async (value: string) => {
+      controller.typeCalls.push(value);
+    },
+  };
+  return controller;
+}
+
+function createMockV3(page: ReturnType<typeof createMockPage>, screenController?: any) {
   return {
     context: {
       awaitActivePage: async () => page,
@@ -26,7 +51,11 @@ function createMockV3(page: ReturnType<typeof createMockPage>) {
     isAgentReplayActive: () => false,
     recordAgentReplayStep: () => {},
     isAdvancedStealth: false,
+    isScreenModeEnabled: !!screenController,
     configuredViewport: { width: 1000, height: 800 },
+    getScreenController: () => screenController ?? null,
+    captureModelScreenshot: async () => Buffer.from('image'),
+    syncActivePageFromFocus: async () => {},
   };
 }
 
@@ -159,4 +188,36 @@ test('fillFormVision tool includes upload sync metadata in execute result', asyn
 
   assert.deepEqual(result.uploadedFiles, syncResult.uploadedFiles);
   assert.equal(result.uploadMessage, syncResult.uploadMessage);
+});
+
+test('click tool uses the screen controller when screen mode is enabled', async () => {
+  const page = createMockPage();
+  const screenController = createMockScreenControllerInstance();
+  const tool = clickTool(createMockV3(page, screenController) as any) as any;
+
+  await tool.execute({
+    describe: 'browser tab',
+    coordinates: [120, 240],
+  });
+
+  assert.equal(page.clickCalls, 0);
+  assert.deepEqual(screenController.clickCalls, [{ x: 120, y: 240 }]);
+});
+
+test('type tool uses the screen controller when screen mode is enabled', async () => {
+  const page = createMockPage();
+  const screenController = createMockScreenControllerInstance();
+  const tool = typeTool(
+    createMockV3(page, screenController) as any,
+  ) as any;
+
+  await tool.execute({
+    describe: 'address field',
+    text: 'hello',
+    coordinates: [120, 240],
+  });
+
+  assert.equal(page.clickCalls, 0);
+  assert.deepEqual(screenController.clickCalls, [{ x: 120, y: 240 }]);
+  assert.deepEqual(screenController.typeCalls, ['hello']);
 });
