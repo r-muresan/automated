@@ -129,6 +129,13 @@ export async function executeLoopStep(
     const { mode, collector, firstPage } = resolved;
     console.log(`[LOOP] Using ${mode} collector`);
 
+    const savedLoopItemsJson = JSON.stringify(
+      firstPage.map((i, idx) => ({ index: idx + 1, ...i.data })),
+      null,
+      2,
+    );
+    fs.writeFile('loop-items.json', savedLoopItemsJson);
+
     const processedItems: CollectedItem[] = [];
 
     // Process first page
@@ -150,6 +157,7 @@ export async function executeLoopStep(
       deps.assertNotAborted();
 
       const batch = await collector.collect(pageIndex++);
+
       if (batch.length === 0) break;
 
       console.log(`[LOOP] Page ${pageIndex - 1}: ${batch.length} new item(s) via ${mode}`);
@@ -168,13 +176,6 @@ export async function executeLoopStep(
     }
 
     console.log(`[LOOP] Complete: "${step.description}" — ${totalProcessed} item(s) via ${mode}`);
-
-    const savedLoopItemsJson = JSON.stringify(
-      processedItems.map((i, idx) => ({ index: idx + 1, ...i.data })),
-      null,
-      2,
-    );
-    fs.writeFile('loop-items.json', savedLoopItemsJson);
   } catch (error: any) {
     if ((error as any)?.message === 'Workflow aborted') throw error;
     loopSuccess = false;

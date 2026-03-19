@@ -8,6 +8,7 @@ export interface CandidateSelector {
  * Structural auto-discovery: walks the DOM looking for parents with many
  * similar children. Works on Framer/React sites where classes are hashed
  * and the outline is too noisy for an LLM to parse.
+ * Also detects ARIA role-based tables/lists (e.g. Zoho CRM, Salesforce).
  */
 export function buildStructuralDiscoveryScript(): string {
   return `
@@ -15,12 +16,24 @@ export function buildStructuralDiscoveryScript(): string {
       const MIN_REPEATING = 3;
       const candidates = [];
 
-      const SKIP_TAGS = new Set(['script', 'style', 'noscript', 'link', 'meta', 'br', 'hr', 'img']);
+      const SKIP_TAGS = new Set([
+        'script', 'style', 'noscript', 'link', 'meta', 'br', 'hr', 'img',
+        'svg', 'path', 'symbol', 'use', 'defs', 'clippath', 'g', 'circle', 'rect', 'line', 'polygon', 'polyline', 'ellipse',
+        'template', 'slot',
+      ]);
+
+      // Classes that are framework artifacts and should be ignored
+      const JUNK_CLASSES = new Set(['undefined', 'null', 'false', 'true', 'none']);
+
+      function cleanClasses(raw) {
+        if (typeof raw !== 'string') return '';
+        return raw.trim().split(/\\s+/).filter(c => c && !JUNK_CLASSES.has(c)).join(' ');
+      }
 
       function getSignature(el) {
         const tag = el.tagName?.toLowerCase() || '';
         if (SKIP_TAGS.has(tag)) return '__skip__';
-        const cls = (typeof el.className === 'string' ? el.className : '').trim().split(/\\s+/).sort().join(' ');
+        const cls = cleanClasses(el.className).split(/\\s+/).sort().join(' ');
         const role = el.getAttribute('role') || '';
         const hasHref = el.hasAttribute('href') ? 'href' : '';
         return [tag, cls, role, hasHref].filter(Boolean).join('|');
@@ -28,21 +41,138 @@ export function buildStructuralDiscoveryScript(): string {
 
       function buildSelector(el) {
         const tag = el.tagName?.toLowerCase() || '';
-        const cls = typeof el.className === 'string' ? el.className.trim() : '';
+        const role = el.getAttribute('role');
+        const cls = cleanClasses(el.className);
+
+        // Prefer role-based selectors for semantic elements
+        if (role && ['row', 'listitem', 'option', 'tab', 'treeitem', 'gridcell', 'menuitem'].includes(role)) {
+          return '[role="' + role + '"]';
+        }
+
         if (cls) {
           const first = cls.split(/\\s+/)[0];
           return tag + '.' + first;
         }
-        const role = el.getAttribute('role');
         if (role) return tag + '[role="' + role + '"]';
         return tag;
       }
+
+      function buildParentSelector(parent) {
+        if (parent.id) return '#' + CSS.escape(parent.id);
+        const role = parent.getAttribute('role');
+        if (role && ['table', 'grid', 'list', 'rowgroup', 'tablist', 'tree', 'menu', 'listbox'].includes(role)) {
+          return '[role="' + role + '"]';
+        }
+        const cls = cleanClasses(parent.className);
+        if (cls) {
+          return parent.tagName.toLowerCase() + '.' + cls.split(/\\s+/)[0];
+        }
+        return '';
+      }
+
+      // Bare generic tags that are too broad to be useful selectors on their own
+      const GENERIC_TAGS = new Set(['div', 'span', 'a', 'p', 'li', 'ul', 'ol', 'section', 'article', 'header', 'footer', 'nav', 'main', 'aside']);
 
       function getSampleText(el) {
         return (el.innerText || el.textContent || '').trim().split('\\n')[0].slice(0, 80);
       }
 
-      // Walk all elements looking for parents with many same-signature children
+      // --- Phase 1: ARIA role-based table/list detection ---
+      const roleTables = document.querySelectorAll('[role="table"], [role="grid"]');
+      for (const table of roleTables) {
+        // Find row groups or fall back to all rows within the table
+        const bodyGroup = table.querySelector('[role="rowgroup"]:not(:first-child)') || table;
+        const rows = bodyGroup.querySelectorAll(':scope > [role="row"]');
+        // If no direct children, try descendants (for nested structures)
+        const rowList = rows.length >= MIN_REPEATING ? rows : bodyGroup.querySelectorAll('[role="row"]');
+        if (rowList.length < MIN_REPEATING) continue;
+
+        // Build a reliable selector for these rows
+        let rowSelector = '';
+        const bodyRole = bodyGroup.getAttribute('role');
+        if (bodyGroup.id) {
+          rowSelector = '#' + CSS.escape(bodyGroup.id) + ' > [role="row"]';
+        } else if (bodyRole === 'rowgroup') {
+          // Distinguish body rowgroup from header rowgroup
+          const allRowgroups = Array.from(table.querySelectorAll('[role="rowgroup"]'));
+          const idx = allRowgroups.indexOf(bodyGroup);
+          if (idx > 0) {
+            rowSelector = '[role="rowgroup"]:nth-of-type(' + (idx + 1) + ') > [role="row"]';
+          } else {
+            rowSelector = '[role="rowgroup"] > [role="row"]';
+          }
+        } else {
+          rowSelector = '[role="table"] [role="row"], [role="grid"] [role="row"]';
+        }
+
+        // Verify
+        let count;
+        try { count = document.querySelectorAll(rowSelector).length; } catch { continue; }
+
+        // If the selector also picks up header rows, try to exclude them
+        const headerRows = table.querySelectorAll('[role="rowgroup"]:first-child [role="row"]');
+        if (headerRows.length > 0 && count > rowList.length) {
+          // Try a more specific selector that skips the header rowgroup
+          const betterSelector = '[role="rowgroup"]:last-of-type > [role="row"]';
+          try {
+            const betterCount = document.querySelectorAll(betterSelector).length;
+            if (betterCount >= MIN_REPEATING && betterCount <= count) {
+              rowSelector = betterSelector;
+              count = betterCount;
+            }
+          } catch {}
+        }
+
+        if (count < MIN_REPEATING) continue;
+
+        const sampleRows = Array.from(rowList).slice(0, 10);
+        const hasLinks = sampleRows.some(r => r.querySelector('a[href]'));
+        const hasText = sampleRows.some(r => (r.innerText || '').trim().length > 10);
+
+        // ARIA role-based selectors get a strong boost (10x) — they are semantically correct
+        const countScore = Math.log2(count + 1);
+        candidates.push({
+          selector: rowSelector,
+          count,
+          score: countScore * (hasLinks ? 3 : 1) * (hasText ? 2 : 1) * 10,
+          sampleTexts: sampleRows.map(r => getSampleText(r)),
+        });
+      }
+
+      // Also detect ARIA lists
+      const roleLists = document.querySelectorAll('[role="list"], [role="listbox"], [role="menu"], [role="tablist"]');
+      for (const list of roleLists) {
+        const itemRole = list.getAttribute('role') === 'tablist' ? 'tab'
+          : list.getAttribute('role') === 'menu' ? 'menuitem'
+          : list.getAttribute('role') === 'listbox' ? 'option' : 'listitem';
+        const items = list.querySelectorAll(':scope > [role="' + itemRole + '"]');
+        if (items.length < MIN_REPEATING) continue;
+
+        let selector = '';
+        if (list.id) {
+          selector = '#' + CSS.escape(list.id) + ' > [role="' + itemRole + '"]';
+        } else {
+          selector = '[role="' + list.getAttribute('role') + '"] > [role="' + itemRole + '"]';
+        }
+
+        let count;
+        try { count = document.querySelectorAll(selector).length; } catch { continue; }
+        if (count < MIN_REPEATING) continue;
+
+        const sampleItems = Array.from(items).slice(0, 10);
+        const hasLinks = sampleItems.some(el => el.querySelector('a[href]'));
+        const hasText = sampleItems.some(el => (el.innerText || '').trim().length > 10);
+
+        const countScore = Math.log2(count + 1);
+        candidates.push({
+          selector,
+          count,
+          score: countScore * (hasLinks ? 3 : 1) * (hasText ? 2 : 1) * 10,
+          sampleTexts: sampleItems.map(el => getSampleText(el)),
+        });
+      }
+
+      // --- Phase 2: Signature-based structural discovery ---
       const allElements = document.querySelectorAll('*');
       const checked = new Set();
 
@@ -68,17 +198,7 @@ export function buildStructuralDiscoveryScript(): string {
           // Build a selector for this group
           const representative = members[0];
           const childSel = buildSelector(representative);
-
-          // Try to build a more specific selector using parent context
-          let parentSel = '';
-          if (parent.id) {
-            parentSel = '#' + parent.id;
-          } else {
-            const pCls = typeof parent.className === 'string' ? parent.className.trim() : '';
-            if (pCls) {
-              parentSel = parent.tagName.toLowerCase() + '.' + pCls.split(/\\s+/)[0];
-            }
-          }
+          const parentSel = buildParentSelector(parent);
 
           const fullSelector = parentSel ? parentSel + ' > ' + childSel : childSel;
 
@@ -90,15 +210,30 @@ export function buildStructuralDiscoveryScript(): string {
 
           if (count < MIN_REPEATING) continue;
 
-          // Score: prefer more matches, prefer elements with links/text
+          // Score: prefer elements with meaningful content, penalize overly broad selectors
           const hasLinks = members.some(m => m.querySelector('a[href]'));
           const hasText = members.some(m => (m.innerText || '').trim().length > 10);
+          const samples = members.slice(0, 10).map(m => getSampleText(m));
+          const nonEmptySamples = samples.filter(s => s.length > 0).length;
+
+          // Skip candidates with no visible text at all
+          if (nonEmptySamples === 0) continue;
+
+          // Logarithmic count so 10 items scores similarly to 100 — prevents broad selectors from dominating
+          const countScore = Math.log2(count + 1);
+          // Bare tag without parent context is almost certainly too broad
+          const isBareBroad = !parentSel && GENERIC_TAGS.has(childSel);
+          const specificityBonus = isBareBroad ? 0.1 : 1;
+          // Role-based selectors are more reliable than class-based
+          const roleBonus = childSel.includes('[role=') ? 2 : 1;
+
+          const score = countScore * (hasLinks ? 3 : 1) * (hasText ? 2 : 1) * specificityBonus * roleBonus;
 
           candidates.push({
             selector: fullSelector,
             count,
-            score: count * (hasLinks ? 3 : 1) * (hasText ? 2 : 1),
-            sampleTexts: members.slice(0, 10).map(m => getSampleText(m)),
+            score,
+            sampleTexts: samples,
           });
         }
 
@@ -127,7 +262,7 @@ export function buildStructuralDiscoveryScript(): string {
               candidates.push({
                 selector: hrefSelector,
                 count,
-                score: count * 5,
+                score: Math.log2(count + 1) * 5,
                 sampleTexts: samples,
               });
             }

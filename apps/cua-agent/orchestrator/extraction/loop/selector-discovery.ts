@@ -16,9 +16,7 @@ export interface SelectorDiscoveryResult {
 
 const selectorResponseSchema = z.object({
   selector: z.string().describe('A CSS selector that matches the repeating list/table items'),
-  itemDescription: z
-    .string()
-    .describe('Brief description of what each matched element represents'),
+  itemDescription: z.string().describe('Brief description of what each matched element represents'),
 });
 
 export async function discoverSelector(params: {
@@ -53,7 +51,7 @@ ${structuralCandidates.map((c, i) => `${i + 1}. selector: "${c.selector}" (${c.c
 
 A screenshot of the current page is attached. Use it to understand the visual layout and determine which selector best matches the items the user wants to iterate over. Consider what section of the page the items are in and which sample texts correspond to visible items.
 
-Which selector best matches what the user is looking for? You may return one of the selectors above exactly, or propose a refined version. If none match, return an empty selector.`;
+Which selector best matches what the user is looking for? Return one of the selectors above exactly, or propose a refined version. If none match, return an empty selector.`;
 
     // Capture a screenshot to give the LLM visual context
     let screenshotDataUrl: string | null = null;
@@ -84,27 +82,22 @@ Which selector best matches what the user is looking for? You may return one of 
         const count = await page.evaluate<number>(
           `document.querySelectorAll(${JSON.stringify(parsed.selector)}).length`,
         );
-        console.log(
-          `[SELECTOR-DISCOVERY] LLM picked: "${parsed.selector}" count=${count}`,
-        );
+        console.log(`[SELECTOR-DISCOVERY] LLM picked: "${parsed.selector}" count=${count}`);
         if (count >= 2) {
           return parsed;
         }
 
         // LLM's pick didn't work — fall back to best structural candidate
-        const best = structuralCandidates[0];
-        if (best && best.count >= 2) {
-          console.log(
-            `[SELECTOR-DISCOVERY] Falling back to top structural candidate: "${best.selector}" count=${best.count}`,
-          );
-          return { selector: best.selector, itemDescription: best.sampleTexts[0] ?? '' };
-        }
+        // const best = structuralCandidates[0];
+        // if (best && best.count >= 2) {
+        //   console.log(
+        //     `[SELECTOR-DISCOVERY] Falling back to top structural candidate: "${best.selector}" count=${best.count}`,
+        //   );
+        //   return { selector: best.selector, itemDescription: best.sampleTexts[0] ?? '' };
+        // }
       }
     } catch (error) {
-      console.warn(
-        '[SELECTOR-DISCOVERY] LLM pick failed:',
-        (error as Error).message,
-      );
+      console.warn('[SELECTOR-DISCOVERY] LLM pick failed:', (error as Error).message);
 
       // Fall back to best structural candidate
       const best = structuralCandidates[0];
@@ -189,10 +182,7 @@ Return the selector and a brief description of what each matched element represe
         `[SELECTOR-DISCOVERY] Selector "${parsed.selector}" matched only ${count} element(s)`,
       );
     } catch (error) {
-      console.warn(
-        `[SELECTOR-DISCOVERY] attempt=${attempt + 1} failed:`,
-        (error as Error).message,
-      );
+      console.warn(`[SELECTOR-DISCOVERY] attempt=${attempt + 1} failed:`, (error as Error).message);
     }
   }
 
