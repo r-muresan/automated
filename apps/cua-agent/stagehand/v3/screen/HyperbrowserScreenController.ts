@@ -185,9 +185,9 @@ const KEY_MAP: Record<string, string> = {
   // Modifiers
   Control: "Control_L",
   Ctrl: "Control_L",
-  Meta: "Super_L",
-  Cmd: "Super_L",
-  Command: "Super_L",
+  Meta: "Control_L",
+  Cmd: "Control_L",
+  Command: "Control_L",
   Alt: "Alt_L",
   Option: "Alt_L",
   Shift: "Shift_L",

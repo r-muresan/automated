@@ -179,7 +179,7 @@ function normalizeKeyName(raw) {
   const upper = trimmed.toUpperCase();
   if (upper === "CTRL") return "Control";
   if (upper === "CONTROLORMETA") return "Control";
-  if (upper === "CMD" || upper === "COMMAND") return "Meta";
+  if (upper === "CMD" || upper === "COMMAND" || upper === "META") return "Control";
   if (upper === "OPTION") return "Alt";
   if (upper === "SPACE") return "Space";
   if (upper === "ESC") return "Escape";
