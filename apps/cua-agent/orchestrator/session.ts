@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { Stagehand } from '../stagehand/v3';
+import { HyperbrowserScreenController } from '../stagehand/v3/screen/HyperbrowserScreenController.js';
 import { Hyperbrowser } from '@hyperbrowser/sdk';
 import { DEFAULT_SESSION_DOWNLOAD_PATH } from './session-file-manager';
 import {
@@ -7,6 +8,8 @@ import {
   releaseBrowserSession,
 } from '../browser-session-limiter';
 import { OPENROUTER_BASE_URL, type OrchestratorContext } from './orchestrator-context';
+import { wrapOpenAIWithTracking } from './llm-tracking';
+import type { ScreenController } from '../stagehand/v3/types/public/screen.js';
 
 // ---------------------------------------------------------------------------
 // Session lifecycle — extracted from OrchestratorAgent
@@ -26,7 +29,7 @@ export async function initSession(
   ctx.assertNotAborted();
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('Missing OPENROUTER_API_KEY for OpenRouter');
-  ctx.openai = new OpenAI({ baseURL: OPENROUTER_BASE_URL, apiKey });
+  ctx.openai = wrapOpenAIWithTracking(new OpenAI({ baseURL: OPENROUTER_BASE_URL, apiKey }));
 
   if (ctx.options.localCdpUrl) {
     await initLocalSession(ctx, session, startingUrl);
@@ -62,6 +65,13 @@ export async function initLocalSession(
   });
 
   await ctx.stagehand.init();
+
+  // For local sessions, attach an external screen controller if provided
+  if (ctx.options.screenController) {
+    await ctx.options.screenController.connect();
+    ctx.stagehand.setScreenController(ctx.options.screenController);
+  }
+
   await ctx.sessionFiles.attach(ctx.stagehand, ctx.openai!);
   const sessionId = ctx.options.localSessionId ?? 'local';
   session.activeSessionId = sessionId;
@@ -89,6 +99,8 @@ export async function initHyperbrowserSession(
 
   const profileId = ctx.options.hyperbrowserProfileId ?? process.env.HYPERBROWSER_PROFILE_ID;
 
+  const screenSize = ctx.options.screenSize ?? { width: 1280, height: 720 };
+
   const createLease = await acquireBrowserSessionCreateLease('orchestrator:init');
   let leaseConfirmed = false;
 
@@ -96,6 +108,7 @@ export async function initHyperbrowserSession(
     session.hyperbrowserClient = new Hyperbrowser({ apiKey: hyperbrowserApiKey });
     const hyperbrowserSession = await session.hyperbrowserClient.sessions.create({
       timeoutMinutes: 60,
+      screen: screenSize,
       profile: profileId
         ? {
             id: profileId,
@@ -130,6 +143,20 @@ export async function initHyperbrowserSession(
     });
 
     await ctx.stagehand.init();
+
+    // Attach screen controller — use externally-provided one, or default to
+    // the Hyperbrowser Computer Actions API.
+    const screenController: ScreenController =
+      ctx.options.screenController ??
+      new HyperbrowserScreenController({
+        client: session.hyperbrowserClient,
+        sessionId: hyperbrowserSession.id,
+        screenSize,
+      });
+
+    await screenController.connect();
+    ctx.stagehand.setScreenController(screenController);
+
     await ctx.sessionFiles.attach(ctx.stagehand, ctx.openai!);
     const sessionId = hyperbrowserSession.id;
     createLease.confirmCreated(sessionId);

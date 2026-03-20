@@ -132,6 +132,22 @@ function normalizeBridgeErrorCode(input: unknown): SpreadsheetErrorCode {
   return 'UNSUPPORTED_PROVIDER_STATE';
 }
 
+/**
+ * Cache for the last successful execution strategy, keyed by page URL origin.
+ * Avoids expensive frame scanning on every bridge call.
+ */
+const bridgeContextCache = new WeakMap<
+  CdpPageLike,
+  {
+    /** 'frame' = use page.evaluate via frameIndex, 'context' = use Runtime.evaluate with contextId, 'top' = top-level */
+    strategy: 'frame' | 'context' | 'top';
+    frameIndex?: number;
+    contextId?: number;
+    /** Page URL at time of caching, used to invalidate on navigation */
+    url: string;
+  }
+>();
+
 export async function runBridge(
   page: CdpPageLike,
   method: string,
@@ -537,9 +553,99 @@ export async function runBridge(
     return best;
   };
 
+  // ── Fast path: try cached execution context first ──
+  const cached = bridgeContextCache.get(page);
+  const currentUrl = page.url();
+  if (cached && cached.url === currentUrl) {
+    try {
+      let fastResult: BridgeRunResult | null = null;
+
+      if (cached.strategy === 'frame' && typeof cached.frameIndex === 'number') {
+        const pageWithFrames = page as unknown as {
+          evaluate?: (expression: string) => Promise<unknown>;
+          frames?: () => unknown[];
+        };
+        const frameCandidates: unknown[] = [];
+        if (typeof pageWithFrames.evaluate === 'function') frameCandidates.push(pageWithFrames);
+        if (typeof pageWithFrames.frames === 'function') {
+          try {
+            const frames = pageWithFrames.frames();
+            if (Array.isArray(frames)) frameCandidates.push(...frames);
+          } catch { /* ignore */ }
+        }
+        const cachedFrame = frameCandidates[cached.frameIndex] as {
+          evaluate?: (expression: string) => Promise<unknown>;
+          url?: (() => string) | string;
+        } | undefined;
+        if (cachedFrame && typeof cachedFrame.evaluate === 'function') {
+          const frameUrl =
+            typeof cachedFrame.url === 'function'
+              ? cachedFrame.url()
+              : typeof cachedFrame.url === 'string'
+                ? cachedFrame.url
+                : null;
+          const bridgeScript = getBridgeScriptForUrl(frameUrl ?? currentUrl, pageProvider);
+          await cachedFrame.evaluate(bridgeScript);
+          const payload = await cachedFrame.evaluate(expression);
+          fastResult = parseBridgePayload(payload);
+        }
+      } else if (cached.strategy === 'context' && typeof cached.contextId === 'number') {
+        fastResult = await executeInContext(cached.contextId);
+      } else if (cached.strategy === 'top') {
+        fastResult = await executeInContext();
+      }
+
+      if (fastResult && isSuccessfulPayload(fastResult)) {
+        return fastResult;
+      }
+    } catch {
+      // Cache miss or stale context — fall through to full scan
+    }
+    // Invalidate cache on failure
+    bridgeContextCache.delete(page);
+  }
+
+  // ── Full scan (original logic) — also populates cache on success ──
   try {
     const frameEvalResult = await executeViaFrameEvaluate();
     if (frameEvalResult && isSuccessfulPayload(frameEvalResult)) {
+      // Cache the winning frame — find which frame index produced it
+      const pageWithFrames = page as unknown as {
+        evaluate?: (expression: string) => Promise<unknown>;
+        frames?: () => unknown[];
+      };
+      const frameCandidates: unknown[] = [];
+      if (typeof pageWithFrames.evaluate === 'function') frameCandidates.push(pageWithFrames);
+      if (typeof pageWithFrames.frames === 'function') {
+        try {
+          const frames = pageWithFrames.frames();
+          if (Array.isArray(frames)) frameCandidates.push(...frames);
+        } catch { /* ignore */ }
+      }
+      // We need to find the winning frame index — re-check quickly
+      for (let fi = 0; fi < frameCandidates.length; fi++) {
+        const frameLike = frameCandidates[fi] as {
+          evaluate?: (expression: string) => Promise<unknown>;
+          url?: (() => string) | string;
+        };
+        if (typeof frameLike.evaluate !== 'function') continue;
+        try {
+          const frameUrl =
+            typeof frameLike.url === 'function'
+              ? frameLike.url()
+              : typeof frameLike.url === 'string'
+                ? frameLike.url
+                : null;
+          const bridgeScript = getBridgeScriptForUrl(frameUrl ?? currentUrl, pageProvider);
+          await frameLike.evaluate(bridgeScript);
+          const payload = await frameLike.evaluate(expression);
+          const result = parseBridgePayload(payload);
+          if (isSuccessfulPayload(result)) {
+            bridgeContextCache.set(page, { strategy: 'frame', frameIndex: fi, url: currentUrl });
+            break;
+          }
+        } catch { /* ignore */ }
+      }
       return frameEvalResult;
     }
     if (method === 'getWorkbookInfo' && frameEvalResult) {
@@ -604,6 +710,12 @@ export async function runBridge(
       for (const candidate of rankedCandidates) {
         const candidateResult = await executeInContext(candidate.contextId);
         if (isSuccessfulPayload(candidateResult)) {
+          // Cache the winning context
+          if (typeof candidate.contextId === 'number') {
+            bridgeContextCache.set(page, { strategy: 'context', contextId: candidate.contextId, url: currentUrl });
+          } else {
+            bridgeContextCache.set(page, { strategy: 'top', url: currentUrl });
+          }
           return candidateResult;
         }
         if (!firstFailureResult) {
@@ -617,6 +729,7 @@ export async function runBridge(
 
     const topResult = await executeInContext();
     if (method !== 'getWorkbookInfo' && isSuccessfulPayload(topResult)) {
+      bridgeContextCache.set(page, { strategy: 'top', url: currentUrl });
       return topResult;
     }
 
@@ -632,6 +745,7 @@ export async function runBridge(
       const frameResult = await executeInContext(executionContextId);
       if (method !== 'getWorkbookInfo') {
         if (isSuccessfulPayload(frameResult)) {
+          bridgeContextCache.set(page, { strategy: 'context', contextId: executionContextId, url: currentUrl });
           return frameResult;
         }
         if (!firstFrameFailureResult) {

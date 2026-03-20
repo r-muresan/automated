@@ -3,6 +3,19 @@
  */
 import { buildSessionDownloadedFilesSection } from './session-files';
 import type { DownloadedSessionFile, LoopContext } from '../types';
+import { getSpreadsheetProvider } from './agent-tools/spreadsheet/detection';
+import type { SpreadsheetProvider } from './agent-tools/types';
+
+function buildSpreadsheetInstructions(provider: SpreadsheetProvider): string {
+  const toolPrefix = provider === 'google_sheets' ? 'spreadsheet' : 'excel';
+  const appName = provider === 'google_sheets' ? 'Google Sheets' : 'Excel';
+  return [
+    `You are currently on a ${appName} spreadsheet. Use the spreadsheet tools over manual browser interactions for reading, writing, and navigating cells:`,
+    `- Use \`${toolPrefix}_read_cell\` or \`${toolPrefix}_read_sheet\` to read data instead of trying to visually parse the spreadsheet.`,
+    `- Use \`${toolPrefix}_write_cells\` to write data instead of clicking on cells and typing.`,
+    `- Use \`${toolPrefix}_select_cell\` to navigate to a specific cell.`,
+  ].join('\n');
+}
 
 const MAX_GLOBAL_STATE_CHARS = 10_000;
 const MAX_ENTRY_VALUE_CHARS = 200;
@@ -54,15 +67,24 @@ export function buildSystemPrompt(
   globalState: any[],
   downloadedFiles: DownloadedSessionFile[],
   context?: LoopContext,
+  currentUrl?: string,
 ): string {
   const sections: string[] = [];
 
   sections.push(
-    `You are a helpful assistant that can use a web browser. Do not ask follow up questions, the user will trust your judgement.`,
+    `You are a helpful assistant that can use a web browser. Do not ask the user for help, the user will trust your judgement.`,
   );
   sections.push(
     `If you hit a login, 2FA, CAPTCHA, passkey, or any credential gate that requires the user's secrets, call the tool "request_user_credentials" with a concise reason and wait.`,
   );
+
+  if (currentUrl) {
+    const provider = getSpreadsheetProvider(currentUrl);
+    if (provider) {
+      sections.push('');
+      sections.push(buildSpreadsheetInstructions(provider));
+    }
+  }
 
   const globalStateJson = truncateGlobalStateForPrompt(globalState);
   if (globalStateJson) {
@@ -89,6 +111,8 @@ export function buildSystemPrompt(
   //   sections.push('');
   //   sections.push(downloadedFilesSection);
   // }
+
+  console.log(sections.join('\n'));
 
   return sections.join('\n');
 }

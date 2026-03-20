@@ -34,7 +34,7 @@ export const waitTool = (v3: V3, mode?: AgentToolMode) =>
       // Take screenshot after wait in hybrid mode for visual feedback
       if (mode === "hybrid") {
         const page = await v3.context.awaitActivePage();
-        const screenshotBase64 = await waitAndCaptureScreenshot(page, 0);
+        const screenshotBase64 = await waitAndCaptureScreenshot(v3, page, 0);
         return { success: true, waited: timeMs, screenshotBase64 };
       }
 

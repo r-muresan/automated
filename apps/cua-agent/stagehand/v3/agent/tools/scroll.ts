@@ -226,16 +226,17 @@ export const scrollVisionTool = (v3: V3, provider?: string, modelId?: string) =>
       const scrollDistance = Math.round((containerHeight * percentage) / 100);
       const deltaY = direction === "up" ? -scrollDistance : scrollDistance;
 
-      await page.scroll(cx, cy, 0, deltaY);
+      const screenController = v3.getScreenController();
+      if (!screenController) {
+        throw new Error(
+          "Hybrid scroll requires screen mode. Attach a ScreenController to this session.",
+        );
+      }
 
-      const screenshotBase64 = await waitAndCaptureScreenshot(page, 100);
+      await screenController.scroll(cx, cy, 0, deltaY);
+      await v3.syncActivePageFromFocus();
 
-      v3.recordAgentReplayStep({
-        type: "scroll",
-        deltaX: 0,
-        deltaY,
-        anchor: { x: cx, y: cy },
-      });
+      const screenshotBase64 = await waitAndCaptureScreenshot(v3, page, 100);
 
       return {
         success: true,

@@ -1,3 +1,4 @@
+import type { V3 } from "../../v3.js";
 import type { Page } from "../../understudy/page.js";
 
 /**
@@ -15,6 +16,7 @@ const DEFAULT_DELAY_MS = 500;
  * @param delayMs - Delay before capturing (default: 500ms, pass 0 to skip delay)
  */
 export async function waitAndCaptureScreenshot(
+  v3: V3,
   page: Page,
   delayMs: number = DEFAULT_DELAY_MS,
 ): Promise<string | undefined> {
@@ -23,7 +25,7 @@ export async function waitAndCaptureScreenshot(
   }
 
   try {
-    const buffer = await page.screenshot({ fullPage: false });
+    const buffer = await v3.captureModelScreenshot({ type: "png" });
     return buffer.toString("base64");
   } catch {
     return undefined;

@@ -538,6 +538,7 @@ export class AnthropicCUAClient extends AgentClient {
         output: formatCuaResponsePreview(response.content),
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,
+        cachedInputTokens: (response.usage as any).cache_read_input_tokens ?? 0,
       });
 
       // Store the message ID for future use

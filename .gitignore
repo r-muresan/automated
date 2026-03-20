@@ -41,6 +41,7 @@ testem.log
 apps/backend/logs
 ngrok.yaml
 /.playwright-mcp
+.cua-agent/sessions
 
 # System Files
 .DS_Store

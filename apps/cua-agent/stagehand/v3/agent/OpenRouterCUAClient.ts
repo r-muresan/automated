@@ -1,17 +1,18 @@
-import OpenAI from "openai";
-import { ToolSet } from "ai";
-import { toJsonSchema } from "../zodCompat.js";
-import { AgentClient } from "./AgentClient.js";
+import OpenAI from 'openai';
+import { ToolSet } from 'ai';
+import { toJsonSchema } from '../zodCompat.js';
+import { AgentClient } from './AgentClient.js';
+import { wrapOpenAIWithTracking } from '../../../orchestrator/llm-tracking.js';
 import type {
   AgentAction,
   AgentExecutionOptions,
   AgentResult,
   AgentType,
-} from "../types/public/agent.js";
-import type { ClientOptions } from "../types/public/model.js";
+} from '../types/public/agent.js';
+import type { ClientOptions } from '../types/public/model.js';
 
 type OpenRouterTool = {
-  type: "function";
+  type: 'function';
   function: {
     name: string;
     description: string;
@@ -41,44 +42,41 @@ export class OpenRouterCUAClient extends AgentClient {
   ) {
     super(type, modelName, userProvidedInstructions);
 
-    this.apiKey =
-      (clientOptions?.apiKey as string) ||
-      process.env.OPENROUTER_API_KEY ||
-      "";
+    this.apiKey = (clientOptions?.apiKey as string) || process.env.OPENROUTER_API_KEY || '';
     this.baseURL =
       (clientOptions?.baseURL as string) ||
       process.env.OPENROUTER_BASE_URL ||
-      "https://openrouter.ai/api/v1";
+      'https://openrouter.ai/api/v1';
 
-    const maybeProvider = (clientOptions as Record<string, unknown> | undefined)
-      ?.provider;
-    if (maybeProvider && typeof maybeProvider === "object") {
+    const maybeProvider = (clientOptions as Record<string, unknown> | undefined)?.provider;
+    if (maybeProvider && typeof maybeProvider === 'object') {
       this.providerOptions = maybeProvider as Record<string, unknown>;
     }
 
-    const maybeReasoning = (clientOptions as Record<string, unknown> | undefined)
-      ?.reasoning;
-    if (maybeReasoning && typeof maybeReasoning === "object") {
+    const maybeReasoning = (clientOptions as Record<string, unknown> | undefined)?.reasoning;
+    if (maybeReasoning && typeof maybeReasoning === 'object') {
       this.reasoningOptions = maybeReasoning as Record<string, unknown>;
     }
 
     const defaultHeaders: Record<string, string> = {};
     if (process.env.OPENROUTER_SITE_URL) {
-      defaultHeaders["HTTP-Referer"] = process.env.OPENROUTER_SITE_URL;
+      defaultHeaders['HTTP-Referer'] = process.env.OPENROUTER_SITE_URL;
     }
     if (process.env.OPENROUTER_APP_NAME) {
-      defaultHeaders["X-Title"] = process.env.OPENROUTER_APP_NAME;
+      defaultHeaders['X-Title'] = process.env.OPENROUTER_APP_NAME;
     }
 
     this.clientOptions = {
       apiKey: this.apiKey,
       baseURL: this.baseURL,
     };
-    this.client = new OpenAI({
-      apiKey: this.apiKey,
-      baseURL: this.baseURL,
-      defaultHeaders,
-    });
+    this.client = wrapOpenAIWithTracking(
+      new OpenAI({
+        apiKey: this.apiKey,
+        baseURL: this.baseURL,
+        defaultHeaders,
+      }),
+    );
     this.tools = tools;
   }
 
@@ -100,17 +98,17 @@ export class OpenRouterCUAClient extends AgentClient {
 
   async captureScreenshot(options?: Record<string, unknown>): Promise<unknown> {
     const currentUrl = options?.currentUrl;
-    if (typeof currentUrl === "string") {
+    if (typeof currentUrl === 'string') {
       this.currentUrl = currentUrl;
     }
 
     const base64Image = options?.base64Image;
-    if (typeof base64Image === "string" && base64Image.length > 0) {
+    if (typeof base64Image === 'string' && base64Image.length > 0) {
       this.lastScreenshotBase64 = base64Image;
       return `data:image/png;base64,${base64Image}`;
     }
 
-    if (!this.screenshotProvider) return "";
+    if (!this.screenshotProvider) return '';
     const screenshot = await this.screenshotProvider();
     this.lastScreenshotBase64 = screenshot;
     return `data:image/png;base64,${screenshot}`;
@@ -118,7 +116,7 @@ export class OpenRouterCUAClient extends AgentClient {
 
   private normalizeCoordinates(x: number, y: number): { x: number; y: number } {
     const unitScaleModels: Record<string, boolean> = {
-      "moonshotai/kimi-k2.5": true,
+      'moonshotai/kimi-k2.5': true,
     };
 
     if (unitScaleModels[this.modelName]) {
@@ -139,111 +137,111 @@ export class OpenRouterCUAClient extends AgentClient {
   private getCuaTools(): OpenRouterTool[] {
     const cuaTools: OpenRouterTool[] = [
       {
-        type: "function",
+        type: 'function',
         function: {
-          name: "click",
-          description: "Click at (x, y) on the screen.",
+          name: 'click',
+          description: 'Click at (x, y) on the screen.',
           parameters: {
-            type: "object",
+            type: 'object',
             properties: {
-              x: { type: "number" },
-              y: { type: "number" },
-              button: { type: "string", enum: ["left", "right", "middle"] },
+              x: { type: 'number' },
+              y: { type: 'number' },
+              button: { type: 'string', enum: ['left', 'right', 'middle'] },
             },
-            required: ["x", "y"],
+            required: ['x', 'y'],
           },
         },
       },
       {
-        type: "function",
+        type: 'function',
         function: {
-          name: "double_click",
-          description: "Double click at (x, y).",
+          name: 'double_click',
+          description: 'Double click at (x, y).',
           parameters: {
-            type: "object",
-            properties: { x: { type: "number" }, y: { type: "number" } },
-            required: ["x", "y"],
+            type: 'object',
+            properties: { x: { type: 'number' }, y: { type: 'number' } },
+            required: ['x', 'y'],
           },
         },
       },
       {
-        type: "function",
+        type: 'function',
         function: {
-          name: "type",
-          description: "Type text into the currently focused element.",
+          name: 'type',
+          description: 'Type text into the currently focused element.',
           parameters: {
-            type: "object",
-            properties: { text: { type: "string" } },
-            required: ["text"],
+            type: 'object',
+            properties: { text: { type: 'string' } },
+            required: ['text'],
           },
         },
       },
       {
-        type: "function",
+        type: 'function',
         function: {
-          name: "keypress",
+          name: 'keypress',
           description: "Press keyboard keys. Example: ['Enter']",
           parameters: {
-            type: "object",
-            properties: { keys: { type: "array", items: { type: "string" } } },
-            required: ["keys"],
+            type: 'object',
+            properties: { keys: { type: 'array', items: { type: 'string' } } },
+            required: ['keys'],
           },
         },
       },
       {
-        type: "function",
+        type: 'function',
         function: {
-          name: "scroll",
+          name: 'scroll',
           description:
-            "Scroll at position (x, y). Positive scroll_y scrolls down, negative scrolls up.",
+            'Scroll at position (x, y). Positive scroll_y scrolls down, negative scrolls up.',
           parameters: {
-            type: "object",
+            type: 'object',
             properties: {
-              x: { type: "number" },
-              y: { type: "number" },
-              scroll_x: { type: "number" },
-              scroll_y: { type: "number" },
+              x: { type: 'number' },
+              y: { type: 'number' },
+              scroll_x: { type: 'number' },
+              scroll_y: { type: 'number' },
             },
-            required: ["x", "y", "scroll_y"],
+            required: ['x', 'y', 'scroll_y'],
           },
         },
       },
       {
-        type: "function",
+        type: 'function',
         function: {
-          name: "move",
-          description: "Move the mouse to (x, y).",
+          name: 'move',
+          description: 'Move the mouse to (x, y).',
           parameters: {
-            type: "object",
-            properties: { x: { type: "number" }, y: { type: "number" } },
-            required: ["x", "y"],
+            type: 'object',
+            properties: { x: { type: 'number' }, y: { type: 'number' } },
+            required: ['x', 'y'],
           },
         },
       },
       {
-        type: "function",
+        type: 'function',
         function: {
-          name: "goto",
-          description: "Navigate browser to URL.",
+          name: 'goto',
+          description: 'Navigate browser to URL.',
           parameters: {
-            type: "object",
-            properties: { url: { type: "string" } },
-            required: ["url"],
+            type: 'object',
+            properties: { url: { type: 'string' } },
+            required: ['url'],
           },
         },
       },
       {
-        type: "function",
+        type: 'function',
         function: {
-          name: "done",
-          description: "Signal task completion.",
+          name: 'done',
+          description: 'Signal task completion.',
           parameters: {
-            type: "object",
+            type: 'object',
             properties: {
-              success: { type: "boolean" },
-              message: { type: "string" },
+              success: { type: 'boolean' },
+              message: { type: 'string' },
             },
-            required: ["success", "message"],
+            required: ['success', 'message'],
           },
         },
       },
@@ -254,7 +252,7 @@ export class OpenRouterCUAClient extends AgentClient {
         if (!tool || !tool.description || !tool.inputSchema) continue;
         try {
           cuaTools.push({
-            type: "function",
+            type: 'function',
             function: {
               name,
               description: tool.description,
@@ -276,23 +274,23 @@ export class OpenRouterCUAClient extends AgentClient {
     const maxSteps = options.maxSteps || 10;
 
     if (!this.screenshotProvider) {
-      throw new Error("Screenshot provider is not set");
+      throw new Error('Screenshot provider is not set');
     }
     if (!this.actionHandler) {
-      throw new Error("Action handler is not set");
+      throw new Error('Action handler is not set');
     }
 
     let completed = false;
     let currentStep = 0;
     const actions: AgentAction[] = [];
-    let finalMessage = "";
+    let finalMessage = '';
 
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let totalCachedTokens = 0;
     const logUsageAfterToolCall = (toolName: string) => {
       logger({
-        category: "agent",
+        category: 'agent',
         message:
           `Usage after tool call "${toolName}": ` +
           `input_tokens=${totalInputTokens}, ` +
@@ -305,26 +303,26 @@ export class OpenRouterCUAClient extends AgentClient {
     const messages: Array<Record<string, unknown>> = [];
     const systemPrompt =
       this.userProvidedInstructions ||
-      "You are a computer use agent controlling a web browser. Use tools and call done() when finished.";
-    messages.push({ role: "system", content: systemPrompt });
+      'You are a computer use agent controlling a web browser. Use tools and call done() when finished.';
+    messages.push({ role: 'system', content: systemPrompt });
 
     try {
       const initialScreenshot = await this.screenshotProvider();
       const viewport = this.currentViewport;
       messages.push({
-        role: "user",
+        role: 'user',
         content: [
           {
-            type: "text",
+            type: 'text',
             text:
-              `Viewport: ${viewport.width}x${viewport.height}. URL: ${this.currentUrl || "unknown"}\n\n` +
+              `Viewport: ${viewport.width}x${viewport.height}. URL: ${this.currentUrl || 'unknown'}\n\n` +
               `Task: ${instruction}`,
           },
           {
-            type: "image_url",
+            type: 'image_url',
             image_url: {
               url: `data:image/png;base64,${initialScreenshot}`,
-              detail: "high",
+              detail: 'high',
             },
           },
         ],
@@ -335,7 +333,7 @@ export class OpenRouterCUAClient extends AgentClient {
           model: this.modelName,
           messages,
           tools: this.getCuaTools(),
-          tool_choice: "auto",
+          tool_choice: 'auto',
           max_tokens: 4096,
         };
         if (this.providerOptions) {
@@ -345,12 +343,13 @@ export class OpenRouterCUAClient extends AgentClient {
           requestBody.reasoning = this.reasoningOptions;
         }
 
-        const response = await this.client.chat.completions.create(
-          requestBody as never,
-        );
+        const response = await this.client.chat.completions.create(requestBody as never);
         const stepIn = response.usage?.prompt_tokens ?? 0;
         const stepOut = response.usage?.completion_tokens ?? 0;
-        const stepCached = response.usage?.prompt_tokens_details?.cached_tokens ?? 0;
+        const stepCached =
+          response.usage?.prompt_tokens_details?.cached_tokens ??
+          (response.usage as any)?.cache_read_input_tokens ??
+          0;
         totalInputTokens += stepIn;
         totalOutputTokens += stepOut;
         totalCachedTokens += stepCached;
@@ -365,9 +364,8 @@ export class OpenRouterCUAClient extends AgentClient {
 
         if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
           finalMessage =
-            (typeof assistantMessage.content === "string"
-              ? assistantMessage.content
-              : "") || "Task completed";
+            (typeof assistantMessage.content === 'string' ? assistantMessage.content : '') ||
+            'Task completed';
           completed = true;
           break;
         }
@@ -376,23 +374,23 @@ export class OpenRouterCUAClient extends AgentClient {
         let doneSignaled = false;
 
         for (const toolCall of assistantMessage.tool_calls) {
-          if (!("function" in toolCall)) {
+          if (!('function' in toolCall)) {
             continue;
           }
           const toolName = toolCall.function.name;
           let args: Record<string, unknown> = {};
           try {
-            args = JSON.parse(toolCall.function.arguments || "{}");
+            args = JSON.parse(toolCall.function.arguments || '{}');
           } catch {
             args = {};
           }
 
-          if (toolName === "done") {
+          if (toolName === 'done') {
             doneSignaled = true;
-            finalMessage = String(args.message ?? "Task completed");
+            finalMessage = String(args.message ?? 'Task completed');
             toolResults.push({
               tool_call_id: toolCall.id,
-              role: "tool",
+              role: 'tool',
               content: JSON.stringify({ success: true }),
             });
             logUsageAfterToolCall(toolName);
@@ -408,13 +406,13 @@ export class OpenRouterCUAClient extends AgentClient {
               });
               toolResults.push({
                 tool_call_id: toolCall.id,
-                role: "tool",
+                role: 'tool',
                 content: JSON.stringify(result ?? { success: true }),
               });
             } catch (error) {
               toolResults.push({
                 tool_call_id: toolCall.id,
-                role: "tool",
+                role: 'tool',
                 content: JSON.stringify({
                   error: error instanceof Error ? error.message : String(error),
                 }),
@@ -425,58 +423,44 @@ export class OpenRouterCUAClient extends AgentClient {
           }
 
           let action: AgentAction | null = null;
-          if (toolName === "click") {
-            const { x, y } = this.normalizeCoordinates(
-              Number(args.x ?? 0),
-              Number(args.y ?? 0),
-            );
+          if (toolName === 'click') {
+            const { x, y } = this.normalizeCoordinates(Number(args.x ?? 0), Number(args.y ?? 0));
             action = {
-              type: "click",
+              type: 'click',
               x,
               y,
-              button: String(args.button ?? "left"),
+              button: String(args.button ?? 'left'),
             };
-          } else if (toolName === "double_click") {
-            const { x, y } = this.normalizeCoordinates(
-              Number(args.x ?? 0),
-              Number(args.y ?? 0),
-            );
-            action = { type: "double_click", x, y };
-          } else if (toolName === "type") {
-            action = { type: "type", text: String(args.text ?? "") };
-          } else if (toolName === "keypress") {
+          } else if (toolName === 'double_click') {
+            const { x, y } = this.normalizeCoordinates(Number(args.x ?? 0), Number(args.y ?? 0));
+            action = { type: 'double_click', x, y };
+          } else if (toolName === 'type') {
+            action = { type: 'type', text: String(args.text ?? '') };
+          } else if (toolName === 'keypress') {
             action = {
-              type: "keypress",
-              keys: Array.isArray(args.keys)
-                ? (args.keys as unknown[]).map((k) => String(k))
-                : [],
+              type: 'keypress',
+              keys: Array.isArray(args.keys) ? (args.keys as unknown[]).map((k) => String(k)) : [],
             };
-          } else if (toolName === "scroll") {
-            const { x, y } = this.normalizeCoordinates(
-              Number(args.x ?? 0),
-              Number(args.y ?? 0),
-            );
+          } else if (toolName === 'scroll') {
+            const { x, y } = this.normalizeCoordinates(Number(args.x ?? 0), Number(args.y ?? 0));
             action = {
-              type: "scroll",
+              type: 'scroll',
               x,
               y,
               scroll_x: Number(args.scroll_x ?? 0),
               scroll_y: Number(args.scroll_y ?? 0),
             };
-          } else if (toolName === "move") {
-            const { x, y } = this.normalizeCoordinates(
-              Number(args.x ?? 0),
-              Number(args.y ?? 0),
-            );
-            action = { type: "move", x, y };
-          } else if (toolName === "goto") {
-            action = { type: "goto", url: String(args.url ?? "") };
+          } else if (toolName === 'move') {
+            const { x, y } = this.normalizeCoordinates(Number(args.x ?? 0), Number(args.y ?? 0));
+            action = { type: 'move', x, y };
+          } else if (toolName === 'goto') {
+            action = { type: 'goto', url: String(args.url ?? '') };
           }
 
           if (!action) {
             toolResults.push({
               tool_call_id: toolCall.id,
-              role: "tool",
+              role: 'tool',
               content: JSON.stringify({ error: `Unknown tool: ${toolName}` }),
             });
             logUsageAfterToolCall(toolName);
@@ -489,13 +473,13 @@ export class OpenRouterCUAClient extends AgentClient {
             await this.actionHandler(action);
             toolResults.push({
               tool_call_id: toolCall.id,
-              role: "tool",
+              role: 'tool',
               content: `Action ${toolName} executed successfully.`,
             });
           } catch (error) {
             toolResults.push({
               tool_call_id: toolCall.id,
-              role: "tool",
+              role: 'tool',
               content: JSON.stringify({
                 error: error instanceof Error ? error.message : String(error),
               }),
@@ -507,16 +491,15 @@ export class OpenRouterCUAClient extends AgentClient {
         if (toolResults.length > 0) {
           messages.push(...toolResults);
           if (!doneSignaled) {
-            const screenshot =
-              this.lastScreenshotBase64 || (await this.screenshotProvider());
+            const screenshot = this.lastScreenshotBase64 || (await this.screenshotProvider());
             messages.push({
-              role: "user",
+              role: 'user',
               content: [
                 {
-                  type: "image_url",
+                  type: 'image_url',
                   image_url: {
                     url: `data:image/png;base64,${screenshot}`,
-                    detail: "high",
+                    detail: 'high',
                   },
                 },
               ],
@@ -534,7 +517,7 @@ export class OpenRouterCUAClient extends AgentClient {
       return {
         success: completed,
         actions,
-        message: finalMessage || (completed ? "Done" : "Max steps reached"),
+        message: finalMessage || (completed ? 'Done' : 'Max steps reached'),
         completed,
         usage: {
           input_tokens: totalInputTokens,

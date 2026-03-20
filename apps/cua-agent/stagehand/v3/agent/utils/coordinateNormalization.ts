@@ -81,6 +81,14 @@ async function getViewportForCoordinateNormalization(
   v3?: V3,
   page?: Page,
 ): Promise<{ width: number; height: number } | undefined> {
+  if (v3?.isScreenModeEnabled) {
+    try {
+      return await v3.getScreenSize();
+    } catch {
+      // Fall back below if the screen controller is temporarily unavailable.
+    }
+  }
+
   if (v3?.isAdvancedStealth) {
     return STEALTH_VIEWPORT;
   }

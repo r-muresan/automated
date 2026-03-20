@@ -5,6 +5,7 @@ import type { Stagehand } from '../../../stagehand/v3';
 import {
   buildStructuralDiscoveryScript,
   buildDomOutlineScript,
+  buildSelectorCountScript,
   type CandidateSelector,
 } from '../dom-scripts';
 import { capturePageScreenshot } from '../common';
@@ -16,9 +17,7 @@ export interface SelectorDiscoveryResult {
 
 const selectorResponseSchema = z.object({
   selector: z.string().describe('A CSS selector that matches the repeating list/table items'),
-  itemDescription: z
-    .string()
-    .describe('Brief description of what each matched element represents'),
+  itemDescription: z.string().describe('Brief description of what each matched element represents'),
 });
 
 export async function discoverSelector(params: {
@@ -31,9 +30,17 @@ export async function discoverSelector(params: {
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
 
   // Phase 1: Structural auto-discovery (no LLM needed)
-  const structuralCandidates = await page.evaluate<CandidateSelector[]>(
+  // The script automatically searches main document + same-origin iframes
+  let structuralCandidates = await page.evaluate<CandidateSelector[]>(
     buildStructuralDiscoveryScript(),
   );
+
+  // Filter out bad candidates
+  structuralCandidates = structuralCandidates.filter(
+    (c) => !c.sampleTexts.every((s) => s.length === 0),
+  );
+
+  console.log(structuralCandidates);
 
   if (structuralCandidates.length > 0) {
     console.log(
@@ -53,7 +60,7 @@ ${structuralCandidates.map((c, i) => `${i + 1}. selector: "${c.selector}" (${c.c
 
 A screenshot of the current page is attached. Use it to understand the visual layout and determine which selector best matches the items the user wants to iterate over. Consider what section of the page the items are in and which sample texts correspond to visible items.
 
-Which selector best matches what the user is looking for? You may return one of the selectors above exactly, or propose a refined version. If none match, return an empty selector.`;
+Which selector best matches what the user is looking for? Return one of the selectors above exactly, or propose a refined version. If none match, return an empty selector.`;
 
     // Capture a screenshot to give the LLM visual context
     let screenshotDataUrl: string | null = null;
@@ -81,12 +88,9 @@ Which selector best matches what the user is looking for? You may return one of 
 
       const parsed = response.choices[0]?.message?.parsed;
       if (parsed?.selector) {
-        const count = await page.evaluate<number>(
-          `document.querySelectorAll(${JSON.stringify(parsed.selector)}).length`,
-        );
-        console.log(
-          `[SELECTOR-DISCOVERY] LLM picked: "${parsed.selector}" count=${count}`,
-        );
+        // Use iframe-aware count check
+        const count = await page.evaluate<number>(buildSelectorCountScript(parsed.selector));
+        console.log(`[SELECTOR-DISCOVERY] LLM picked: "${parsed.selector}" count=${count}`);
         if (count >= 2) {
           return parsed;
         }
@@ -101,10 +105,7 @@ Which selector best matches what the user is looking for? You may return one of 
         }
       }
     } catch (error) {
-      console.warn(
-        '[SELECTOR-DISCOVERY] LLM pick failed:',
-        (error as Error).message,
-      );
+      console.warn('[SELECTOR-DISCOVERY] LLM pick failed:', (error as Error).message);
 
       // Fall back to best structural candidate
       const best = structuralCandidates[0];
@@ -173,9 +174,8 @@ Return the selector and a brief description of what each matched element represe
         continue;
       }
 
-      const count = await page.evaluate<number>(
-        `document.querySelectorAll(${JSON.stringify(parsed.selector)}).length`,
-      );
+      // Use iframe-aware count check
+      const count = await page.evaluate<number>(buildSelectorCountScript(parsed.selector));
 
       console.log(
         `[SELECTOR-DISCOVERY] attempt=${attempt + 1} selector="${parsed.selector}" count=${count}`,
@@ -189,10 +189,7 @@ Return the selector and a brief description of what each matched element represe
         `[SELECTOR-DISCOVERY] Selector "${parsed.selector}" matched only ${count} element(s)`,
       );
     } catch (error) {
-      console.warn(
-        `[SELECTOR-DISCOVERY] attempt=${attempt + 1} failed:`,
-        (error as Error).message,
-      );
+      console.warn(`[SELECTOR-DISCOVERY] attempt=${attempt + 1} failed:`, (error as Error).message);
     }
   }
 

@@ -95,9 +95,8 @@ export class V3AgentHandler {
   }
 
   private async buildInitialContextMessage(initialPageUrl: string): Promise<ModelMessage | null> {
-    const page = await this.v3.context.awaitActivePage();
-    const screenshotResult = await page
-      .screenshot({ fullPage: false, type: 'jpeg', quality: 70 })
+    const screenshotResult = await this.v3
+      .captureModelScreenshot({ type: 'jpeg', quality: 70 })
       .then((value) => ({ status: 'fulfilled' as const, value }))
       .catch((reason) => ({ status: 'rejected' as const, reason }));
 
@@ -144,6 +143,10 @@ export class V3AgentHandler {
           : instructionOrOptions;
 
       const maxSteps = options.maxSteps || 20;
+
+      if (this.mode === 'hybrid') {
+        this.v3.assertScreenMode('Hybrid agent execution');
+      }
 
       // Get the initial page URL first (needed for the system prompt)
       const initialPageUrl = (await this.v3.context.awaitActivePage()).url();
@@ -273,14 +276,23 @@ export class V3AgentHandler {
     }
   }
   private createPrepareStep(
+    allTools: ToolSet,
     userCallback?: PrepareStepFunction<ToolSet>,
   ): PrepareStepFunction<ToolSet> {
     return async (options) => {
       processMessages(options.messages);
-      if (userCallback) {
-        return userCallback(options);
-      }
-      return options;
+      const stepConfig = userCallback ? await userCallback(options) : undefined;
+      const activeTools = (stepConfig?.activeTools ?? Object.keys(allTools)).map((toolName) =>
+        String(toolName),
+      );
+
+      this.logger({
+        category: 'agent',
+        message: `Step ${options.stepNumber} active tools: ${activeTools.join(', ')}`,
+        level: 1,
+      });
+
+      return stepConfig;
     };
   }
 
@@ -412,7 +424,7 @@ export class V3AgentHandler {
         stopWhen: (result) => this.handleStop(result, maxSteps),
         toolChoice: 'auto',
 
-        prepareStep: this.createPrepareStep(callbacks?.prepareStep),
+        prepareStep: this.createPrepareStep(allTools, callbacks?.prepareStep),
         onStepFinish: this.createStepHandler(state, callbacks?.onStepFinish),
         abortSignal: preparedOptions.signal,
         providerOptions: wrappedModel.modelId.includes('gemini-3')
@@ -530,7 +542,7 @@ export class V3AgentHandler {
       tools: allTools,
       stopWhen: (result) => this.handleStop(result, maxSteps),
       toolChoice: 'auto',
-      prepareStep: this.createPrepareStep(callbacks?.prepareStep),
+      prepareStep: this.createPrepareStep(allTools, callbacks?.prepareStep),
       onStepFinish: this.createStepHandler(state, callbacks?.onStepFinish),
       onError: (event) => {
         if (callbacks?.onError) {
@@ -733,8 +745,7 @@ export class V3AgentHandler {
    */
   private async captureAndEmitScreenshot(): Promise<void> {
     try {
-      const page = await this.v3.context.awaitActivePage();
-      const screenshot = await page.screenshot({ fullPage: false });
+      const screenshot = await this.v3.captureModelScreenshot({ type: 'png' });
       this.v3.bus.emit('agent_screenshot_taken_event', screenshot);
     } catch (error) {
       this.logger({

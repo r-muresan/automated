@@ -80,6 +80,7 @@ export async function executeConditionalStep(
         ctx.globalState,
         ctx.sessionFiles.getDownloadedFiles(),
         context,
+        ctx.getActivePageUrl(),
       ),
       tools: createBrowserTabTools(ctx.stagehand, {
         onRequestCredentials: (request) =>
@@ -99,7 +100,7 @@ export async function executeConditionalStep(
           instruction: conditionInstruction,
           maxSteps: 10,
           callbacks: {
-            prepareStep: ctx.buildPrepareStepForActiveTools(`executeConditionalStep:${index}`),
+            prepareStep: ctx.buildPrepareStepForActiveTools(`executeConditionalStep:${index}`, context),
           },
           output: z.object({
             conditionMet: z.boolean().describe('Whether the condition is met'),

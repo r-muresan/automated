@@ -46,5 +46,6 @@ export interface OrchestratorContext {
   ) => Promise<CredentialRequestResult>;
   buildPrepareStepForActiveTools: (
     scope: string,
-  ) => (opts?: { stepNumber?: number }) => Promise<{ activeTools: any }>;
+    context?: LoopContext,
+  ) => (opts?: { stepNumber?: number; messages?: any[] }) => Promise<{ activeTools: any }>;
 }

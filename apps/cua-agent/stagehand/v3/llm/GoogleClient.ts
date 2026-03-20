@@ -9,6 +9,7 @@ import {
   Schema,
   Type,
 } from "@google/genai";
+import { v7 as uuidv7 } from "uuid";
 
 import { LogLine } from "../types/public/logs.js";
 import { AvailableModel, ClientOptions } from "../types/public/model.js";
@@ -29,6 +30,7 @@ import {
   CreateChatCompletionResponseError,
   StagehandError,
 } from "../types/public/sdkErrors.js";
+import { SessionFileLogger } from "../flowLogger.js";
 
 // Mapping from generic roles to Gemini roles
 const roleMap: { [key in ChatMessage["role"]]: string } = {
@@ -296,8 +298,24 @@ export class GoogleClient extends LLMClient {
       });
     }
 
+    const llmRequestId = uuidv7();
+    SessionFileLogger.logLlmRequest({
+      requestId: llmRequestId,
+      model: this.modelName,
+      operation: "GoogleClient.generateContent",
+    });
+
     try {
       const result = await this.client.models.generateContent(requestPayload); // Pass the constructed payload
+
+      SessionFileLogger.logLlmResponse({
+        requestId: llmRequestId,
+        model: this.modelName,
+        operation: "GoogleClient.generateContent",
+        inputTokens: result.usageMetadata?.promptTokenCount,
+        outputTokens: result.usageMetadata?.candidatesTokenCount,
+        cachedInputTokens: (result.usageMetadata as any)?.cachedContentTokenCount ?? 0,
+      });
 
       logger({
         category: "google",

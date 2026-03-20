@@ -14,7 +14,7 @@ export const screenshotTool = (v3: V3) =>
         level: 1,
       });
       const page = await v3.context.awaitActivePage();
-      const buffer = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 70 });
+      const buffer = await v3.captureModelScreenshot({ type: 'jpeg', quality: 70 });
       const pageUrl = page.url();
       return {
         base64: buffer.toString('base64'),

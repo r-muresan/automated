@@ -84,8 +84,7 @@ export class V3Evaluator {
     await new Promise((r) => setTimeout(r, screenshotDelayMs));
     let imageBuffer: Buffer | undefined;
     if (screenshot) {
-      const page = await this.v3.context.awaitActivePage();
-      imageBuffer = await page.screenshot({ fullPage: false });
+      imageBuffer = await this.v3.captureModelScreenshot({ type: "jpeg", quality: 70 });
     }
 
     const llmClient = this.getClient();
@@ -156,8 +155,7 @@ export class V3Evaluator {
     await new Promise((r) => setTimeout(r, screenshotDelayMs));
     let imageBuffer: Buffer | undefined;
     if (screenshot) {
-      const page = await this.v3.context.awaitActivePage();
-      imageBuffer = await page.screenshot({ fullPage: false });
+      imageBuffer = await this.v3.captureModelScreenshot({ type: "jpeg", quality: 70 });
     }
 
     const llmClient = this.getClient();

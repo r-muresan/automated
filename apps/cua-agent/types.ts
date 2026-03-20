@@ -230,6 +230,11 @@ export interface OrchestratorOptions {
   hyperbrowserProfileId?: string;
   /** CDP WebSocket URL to connect to an existing local browser session instead of Browserbase */
   localCdpUrl?: string;
+  /** Optional external ScreenController to use instead of the default Hyperbrowser Computer Actions.
+   *  Allows plugging in VNC-based, local, or other screen control backends. */
+  screenController?: import('./stagehand/v3/types/public/screen.js').ScreenController;
+  /** Screen resolution for the remote browser session (default: 1280×720). */
+  screenSize?: { width: number; height: number };
   /** The local browser session ID (used for session:ready event so frontend can connect) */
   localSessionId?: string;
   verbose?: number;

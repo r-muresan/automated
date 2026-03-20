@@ -21,6 +21,7 @@ Use method="press" for navigation keys (Enter, Tab, Escape, Backspace, arrows) a
     execute: async ({ method, value, repeat }) => {
       try {
         const page = await v3.context.awaitActivePage();
+        const screenController = v3.getScreenController();
         v3.logger({
           category: "agent",
           message: `Agent calling tool: keys`,
@@ -37,25 +38,41 @@ Use method="press" for navigation keys (Enter, Tab, Escape, Backspace, arrows) a
 
         if (method === "type") {
           for (let i = 0; i < times; i++) {
-            await page.type(value, { delay: 100 });
+            if (screenController) {
+              await screenController.typeText(value);
+            } else {
+              await page.type(value, { delay: 100 });
+            }
           }
-          v3.recordAgentReplayStep({
-            type: "keys",
-            instruction: `type "${value}"`,
-            playwrightArguments: { method, text: value, times },
-          });
+          if (screenController) {
+            await v3.syncActivePageFromFocus();
+          } else {
+            v3.recordAgentReplayStep({
+              type: "keys",
+              instruction: `type "${value}"`,
+              playwrightArguments: { method, text: value, times },
+            });
+          }
           return { success: true, method, value, times };
         }
 
         if (method === "press") {
           for (let i = 0; i < times; i++) {
-            await page.keyPress(value, { delay: 100 });
+            if (screenController) {
+              await screenController.sendKeys(value);
+            } else {
+              await page.keyPress(value, { delay: 100 });
+            }
           }
-          v3.recordAgentReplayStep({
-            type: "keys",
-            instruction: `press ${value}`,
-            playwrightArguments: { method, keys: value, times },
-          });
+          if (screenController) {
+            await v3.syncActivePageFromFocus();
+          } else {
+            v3.recordAgentReplayStep({
+              type: "keys",
+              instruction: `press ${value}`,
+              playwrightArguments: { method, keys: value, times },
+            });
+          }
           return { success: true, method, value, times };
         }
 

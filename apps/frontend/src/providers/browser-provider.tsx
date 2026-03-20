@@ -105,6 +105,10 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   const stopSessionMutation = useStopSession();
   const deleteSessionMutation = useDeleteSession();
   const pingSessionMutation = usePingSession();
+  const pingSessionRef = useRef(pingSessionMutation);
+  useEffect(() => {
+    pingSessionRef.current = pingSessionMutation;
+  }, [pingSessionMutation]);
 
   const firstPageId = pages.find((page) => !page.isSkeleton)?.id;
 
@@ -317,19 +321,19 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
 
     const interval = window.setInterval(async () => {
       try {
-        await pingSessionMutation.mutateAsync(sessionId);
+        await pingSessionRef.current.mutateAsync(sessionId);
       } catch (error) {
         if (
           axios.isAxiosError(error) &&
           (error.response?.status === 404 || error.response?.status === 401)
         ) {
-          await recreateSession();
+          await recreateSessionRef.current?.();
         }
       }
     }, SESSION_PING_INTERVAL_MS);
 
     return () => window.clearInterval(interval);
-  }, [pingSessionMutation, recreateSession, sessionId]);
+  }, [sessionId]);
 
   // When the user returns to the tab after the session was cleaned up while
   // hidden, automatically create a new session.

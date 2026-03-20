@@ -60,17 +60,30 @@ export const clickAndHoldTool = (v3: V3, provider?: string, modelId?: string) =>
           },
         });
 
-        // Only request XPath when caching is enabled to avoid unnecessary computation
-        const shouldCollectXpath = v3.isAgentReplayActive();
+        const screenController = v3.getScreenController();
+        const shouldCollectXpath =
+          !screenController && v3.isAgentReplayActive();
 
-        // Use dragAndDrop from same point to same point with delay to simulate click and hold
-        const [xpath] = await page.dragAndDrop(
-          processed.x,
-          processed.y,
-          processed.x,
-          processed.y,
-          { delay: duration, returnXpath: shouldCollectXpath },
-        );
+        const [xpath] = screenController
+          ? [undefined]
+          : await page.dragAndDrop(
+              processed.x,
+              processed.y,
+              processed.x,
+              processed.y,
+              { delay: duration, returnXpath: shouldCollectXpath },
+            );
+
+        if (screenController) {
+          await screenController.drag(
+            processed.x,
+            processed.y,
+            processed.x,
+            processed.y,
+            { holdDelayMs: duration, delayMs: 0, steps: 1 },
+          );
+          await v3.syncActivePageFromFocus();
+        }
 
         // Record as "act" step with proper Action for deterministic replay (only when caching)
         if (shouldCollectXpath) {

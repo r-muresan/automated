@@ -115,20 +115,31 @@ MANDATORY USE CASES (always use fillFormVision for these):
           },
         });
 
-        // Only request XPath when caching is enabled to avoid unnecessary computation
-        const shouldCollectXpath = v3.isAgentReplayActive();
+        const screenController = v3.getScreenController();
+        const shouldCollectXpath =
+          !screenController && v3.isAgentReplayActive();
         const actions: Action[] = [];
 
         for (const field of processedFields) {
-          // Click the field, only requesting XPath when caching is enabled
-          const xpath = await page.click(
-            field.coordinates.x,
-            field.coordinates.y,
-            {
-              returnXpath: shouldCollectXpath,
-            },
-          );
-          await page.type(field.value);
+          const xpath = screenController
+            ? undefined
+            : await page.click(
+                field.coordinates.x,
+                field.coordinates.y,
+                {
+                  returnXpath: shouldCollectXpath,
+                },
+              );
+          if (screenController) {
+            await screenController.click(field.coordinates.x, field.coordinates.y, {
+              button: "left",
+              clickCount: 1,
+            });
+            await screenController.typeText(field.value);
+            await v3.syncActivePageFromFocus();
+          } else {
+            await page.type(field.value);
+          }
 
           // Build Action with XPath for deterministic replay (only when caching)
           // Use originalValue (with %tokens%) so cache stores references, not sensitive values
@@ -149,7 +160,7 @@ MANDATORY USE CASES (always use fillFormVision for these):
         }
 
         const syncResult = await settleInteractionScope(scope);
-        const screenshotBase64 = await waitAndCaptureScreenshot(page, 100);
+        const screenshotBase64 = await waitAndCaptureScreenshot(v3, page, 100);
 
         // Record as "act" step with proper Actions for deterministic replay (only when caching)
         if (shouldCollectXpath && actions.length > 0) {

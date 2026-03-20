@@ -8,6 +8,7 @@ import {
   ChatCompletionSystemMessageParam,
   ChatCompletionUserMessageParam,
 } from "openai/resources/chat";
+import { v7 as uuidv7 } from "uuid";
 import { LogLine } from "../types/public/logs.js";
 import { AvailableModel, ClientOptions } from "../types/public/model.js";
 import { validateZodSchema } from "../../utils.js";
@@ -24,6 +25,7 @@ import {
   ZodSchemaValidationError,
 } from "../types/public/sdkErrors.js";
 import { toJsonSchema } from "../zodCompat.js";
+import { SessionFileLogger } from "../flowLogger.js";
 
 export class OpenAIClient extends LLMClient {
   public type = "openai" as const;
@@ -300,7 +302,23 @@ export class OpenAIClient extends LLMClient {
       })),
     };
 
+    const llmRequestId = uuidv7();
+    SessionFileLogger.logLlmRequest({
+      requestId: llmRequestId,
+      model: this.modelName,
+      operation: "OpenAIClient.create",
+    });
+
     const response = await this.client.chat.completions.create(body);
+
+    SessionFileLogger.logLlmResponse({
+      requestId: llmRequestId,
+      model: this.modelName,
+      operation: "OpenAIClient.create",
+      inputTokens: response.usage?.prompt_tokens,
+      outputTokens: response.usage?.completion_tokens,
+      cachedInputTokens: (response.usage as any)?.prompt_tokens_details?.cached_tokens ?? 0,
+    });
 
     // For O1 models, we need to parse the tool call response manually and add it to the response.
     if (isToolsOverridedForO1) {

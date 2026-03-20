@@ -486,6 +486,7 @@ export class OpenAICUAClient extends AgentClient {
       const elapsedMs = endTime - startTime;
       const inputTokens = response.usage?.input_tokens ?? 0;
       const outputTokens = response.usage?.output_tokens ?? 0;
+      const cachedInputTokens = (response.usage as any)?.input_tokens_details?.cached_tokens ?? 0;
 
       // Extract only the input_tokens and output_tokens
       const usage = {
@@ -502,6 +503,7 @@ export class OpenAICUAClient extends AgentClient {
         output: formatCuaResponsePreview(response.output),
         inputTokens,
         outputTokens,
+        cachedInputTokens,
       });
 
       // Store the response ID for future use
