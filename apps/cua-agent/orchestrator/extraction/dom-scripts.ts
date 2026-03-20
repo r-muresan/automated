@@ -281,7 +281,7 @@ export function buildStructuralDiscoveryScript(): string {
 
       // Sort by score descending, return top 5
       deduped.sort((a, b) => b.score - a.score);
-      return deduped.slice(0, 5).map(c => ({
+      return deduped.slice(0, 50).map(c => ({
         selector: c.selector,
         count: c.count,
         sampleTexts: c.sampleTexts,

@@ -64,6 +64,7 @@ export async function executeSingleStep(
       ctx.globalState,
       ctx.sessionFiles.getDownloadedFiles(),
       context,
+      ctx.getActivePageUrl(),
     ),
     tools,
     model: {
@@ -79,7 +80,7 @@ export async function executeSingleStep(
     cachedInputTokens: 0,
     outputTokens: 0,
   };
-  const prepareStep = ctx.buildPrepareStepForActiveTools(`executeSingleStep:${index}`);
+  const prepareStep = ctx.buildPrepareStepForActiveTools(`executeSingleStep:${index}`, context);
   let chunksSinceLastStepFinish = 0;
   const streamChunkText = new Map<string, string>();
 

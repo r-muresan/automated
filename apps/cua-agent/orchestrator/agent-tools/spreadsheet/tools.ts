@@ -280,6 +280,7 @@ async function activateRange(
   | { ok: true; activeSheetName?: string; activeSelectionA1?: string }
   | { ok: false; error: SpreadsheetToolError }
 > {
+  console.time(`activateRange(${rangeA1})`);
   const activation = await bridgeResult(page, 'activateRange', [rangeA1]);
   if ('error' in activation) return { ok: false, error: activation.error };
   if (activation.value.success !== true) {
@@ -329,6 +330,7 @@ async function activateRange(
     }
   }
 
+  console.timeEnd(`activateRange(${rangeA1})`);
   return {
     ok: true,
     activeSheetName,
@@ -343,10 +345,16 @@ async function readRangeViaClipboard(
   | { ok: true; values: string[][]; rawTsv: string; metadata: Record<string, unknown> }
   | { ok: false; error: SpreadsheetToolError }
 > {
+  const label = `readRangeViaClipboard(${rangeA1})`;
+  console.time(label);
+
+  console.time(`${label}:activateRange`);
   const activated = await activateRange(page, rangeA1);
+  console.timeEnd(`${label}:activateRange`);
   if ('error' in activated) return { ok: false, error: activated.error };
 
   const keyCombo = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
+  console.time(`${label}:keyPress(copy)`);
   try {
     await page.keyPress(keyCombo);
   } catch (error: any) {
@@ -359,10 +367,13 @@ async function readRangeViaClipboard(
       ),
     };
   }
+  console.timeEnd(`${label}:keyPress(copy)`);
 
   await sleep(100);
 
+  console.time(`${label}:readClipboardText`);
   const clipboardResult = await bridgeResult(page, 'readClipboardText');
+  console.timeEnd(`${label}:readClipboardText`);
   if ('error' in clipboardResult) return { ok: false, error: clipboardResult.error };
   if (isClipboardFailure(clipboardResult.value)) {
     return {
@@ -381,9 +392,12 @@ async function readRangeViaClipboard(
   const rawTsv =
     typeof parsedResult.value.rawTsv === 'string' ? parsedResult.value.rawTsv : rawText;
 
+  console.time(`${label}:getSelectionMetadata`);
   const metadataResult = await bridgeResult(page, 'getSelectionMetadata');
+  console.timeEnd(`${label}:getSelectionMetadata`);
   if ('error' in metadataResult) return { ok: false, error: metadataResult.error };
 
+  console.timeEnd(label);
   return { ok: true, values, rawTsv, metadata: metadataResult.value };
 }
 
@@ -442,11 +456,18 @@ async function writeRangeViaClipboard(
   rangeA1: string,
   matrix: unknown[][],
 ): Promise<{ ok: true } | { ok: false; error: SpreadsheetToolError }> {
+  const label = `writeRangeViaClipboard(${rangeA1})`;
+  console.time(label);
+
+  console.time(`${label}:activateRange`);
   const activated = await activateRange(page, rangeA1);
+  console.timeEnd(`${label}:activateRange`);
   if ('error' in activated) return { ok: false, error: activated.error };
 
   const tsv = matrixToTsv(matrix);
+  console.time(`${label}:writeClipboardText`);
   const writeResult = await bridgeResult(page, 'writeClipboardText', [tsv]);
+  console.timeEnd(`${label}:writeClipboardText`);
   if ('error' in writeResult) return { ok: false, error: writeResult.error };
   if (isClipboardFailure(writeResult.value)) {
     return {
@@ -459,6 +480,7 @@ async function writeRangeViaClipboard(
   }
 
   const keyCombo = process.platform === 'darwin' ? 'Meta+V' : 'Control+V';
+  console.time(`${label}:keyPress(paste)`);
   try {
     await page.keyPress(keyCombo);
   } catch (error: any) {
@@ -471,8 +493,10 @@ async function writeRangeViaClipboard(
       ),
     };
   }
+  console.timeEnd(`${label}:keyPress(paste)`);
 
   await sleep(120);
+  console.timeEnd(label);
   return { ok: true };
 }
 
@@ -490,10 +514,15 @@ const cellInputSchema = z.object({
   cell_a1: z.string().min(1).describe('Single A1 cell reference (for example A1 or Sheet1!B2).'),
 });
 
-const setCellInputSchema = z.object({
-  cell_a1: z.string().min(1).describe('Single A1 cell reference (for example A1 or Sheet1!B2).'),
-  value: z.any().describe('Cell value to write. Formulas should start with "=".'),
-});
+const writeCellsInputSchema = z
+  .array(
+    z.object({
+      cell: z.string().min(1).describe('Single A1 cell reference (for example A1 or Sheet1!B2).'),
+      value: z.any().describe('Cell value to write. Formulas should start with "=".'),
+    }),
+  )
+  .min(1)
+  .describe('List of cell writes, for example [{ cell: "A1", value: "hello" }].');
 
 const readSheetInputSchema = z.object({
   sheet_name: z.string().min(1).optional(),
@@ -615,35 +644,139 @@ function createPrefixedSpreadsheetTools(stagehand: Stagehand, prefix: Spreadshee
       },
     }),
 
-    [toPrefixedToolName(prefix, 'set_cell')]: tool({
-      description: 'Set a single cell value.',
-      inputSchema: setCellInputSchema,
-      execute: async ({ cell_a1, value }) => {
+    [toPrefixedToolName(prefix, 'write_cells')]: tool({
+      description:
+        'Write one or more single-cell values in a single call. Input must be an array like [{ cell: "A1", value: "hello" }].',
+      inputSchema: writeCellsInputSchema,
+      execute: async (writes) => {
+        console.time('write_cells');
+        console.time('write_cells:getReadyState');
         const state = await getReadySpreadsheetStateForPrefix(stagehand, prefix);
+        console.timeEnd('write_cells:getReadyState');
         if ('error' in state) return state.error;
 
-        const parsed = assertSingleCellRange(cell_a1);
-        if (!parsed) {
-          return spreadsheetToolError(
-            'UNSUPPORTED_PROVIDER_STATE',
-            'cell_a1 must be a single cell reference (for example A1 or Sheet1!B2).',
-            { cell_a1 },
-          );
+        console.log({ writes });
+
+        // Parse and validate all cells up front
+        const parsedWrites: Array<{
+          cell: string;
+          value: unknown;
+          sheetName: string;
+          row: number;
+          col: number;
+          index: number;
+        }> = [];
+
+        for (let index = 0; index < writes.length; index += 1) {
+          const write = writes[index];
+          const cell = write.cell.trim();
+          const parsed = assertSingleCellRange(cell);
+          if (!parsed) {
+            console.timeEnd('write_cells');
+            return spreadsheetToolError(
+              'UNSUPPORTED_PROVIDER_STATE',
+              'Each write.cell must be a single cell reference (for example A1 or Sheet1!B2).',
+              { index, cell },
+            );
+          }
+          parsedWrites.push({
+            cell,
+            value: write.value,
+            sheetName: parsed.sheetName,
+            row: parsed.startRow,
+            col: parsed.startCol,
+            index,
+          });
         }
 
-        const writeResult = await writeRangeViaClipboard(state.page, cell_a1.trim(), [[value]]);
-        if ('error' in writeResult) return writeResult.error;
+        // Group writes by sheet name for batched clipboard operations
+        const bySheet = new Map<string, typeof parsedWrites>();
+        for (const pw of parsedWrites) {
+          const key = pw.sheetName;
+          if (!bySheet.has(key)) bySheet.set(key, []);
+          bySheet.get(key)!.push(pw);
+        }
 
-        // Always use clipboard for readback after write — API caches may be stale
-        const readBack = await readRangeViaClipboard(state.page, cell_a1.trim());
-        if ('error' in readBack) return readBack.error;
+        const results: Array<{ cell: string; sheet_name: string; value: string }> = [];
+
+        for (const [sheetName, sheetWrites] of bySheet) {
+          // If only one cell in this sheet, write directly without read-back
+          if (sheetWrites.length === 1) {
+            const pw = sheetWrites[0];
+            const writeResult = await writeRangeViaClipboard(state.page, pw.cell, [[pw.value]]);
+            if ('error' in writeResult) {
+              console.timeEnd('write_cells');
+              return spreadsheetToolError(
+                writeResult.error.error.code,
+                writeResult.error.error.message,
+                { ...writeResult.error.error.details, index: pw.index, cell: pw.cell },
+              );
+            }
+            results.push({
+              cell: pw.cell,
+              sheet_name: sheetName || '',
+              value: stringifyCellValue(pw.value),
+            });
+            continue;
+          }
+
+          // Multiple cells in same sheet: batch into one bounding-range write
+          const minRow = Math.min(...sheetWrites.map((w) => w.row));
+          const maxRow = Math.max(...sheetWrites.map((w) => w.row));
+          const minCol = Math.min(...sheetWrites.map((w) => w.col));
+          const maxCol = Math.max(...sheetWrites.map((w) => w.col));
+
+          const sheetPrefix = sheetName ? `${quoteSheetName(sheetName)}!` : '';
+          const boundingRange = `${sheetPrefix}${columnNumberToLetters(minCol)}${minRow}:${columnNumberToLetters(maxCol)}${maxRow}`;
+
+          const rows = maxRow - minRow + 1;
+          const cols = maxCol - minCol + 1;
+
+          // Read existing data in bounding range so we don't clobber untouched cells
+          console.time(`write_cells:readExisting(${boundingRange})`);
+          const existingData = await readRangeViaClipboard(state.page, boundingRange);
+          const matrix: unknown[][] = Array.from({ length: rows }, (_, r) =>
+            Array.from({ length: cols }, (__, c) =>
+              existingData.ok ? (existingData.values[r]?.[c] ?? '') : '',
+            ),
+          );
+
+          console.timeEnd(`write_cells:readExisting(${boundingRange})`);
+
+          // Overlay new values
+          for (const pw of sheetWrites) {
+            matrix[pw.row - minRow][pw.col - minCol] = pw.value;
+          }
+
+          // Write the entire range in one clipboard paste
+          console.time(`write_cells:writeBatch(${boundingRange})`);
+          const writeResult = await writeRangeViaClipboard(state.page, boundingRange, matrix);
+          console.timeEnd(`write_cells:writeBatch(${boundingRange})`);
+          if ('error' in writeResult) {
+            console.timeEnd('write_cells');
+            return spreadsheetToolError(
+              writeResult.error.error.code,
+              writeResult.error.error.message,
+              { ...writeResult.error.error.details, boundingRange },
+            );
+          }
+
+          for (const pw of sheetWrites) {
+            results.push({
+              cell: pw.cell,
+              sheet_name: sheetName || '',
+              value: stringifyCellValue(pw.value),
+            });
+          }
+        }
+
+        console.timeEnd('write_cells');
 
         return {
           success: true,
           provider: state.provider,
-          cell_a1: cell_a1.trim(),
-          sheet_name: resolveActiveSheetName(readBack.metadata, parsed),
-          value: readBack.values[0]?.[0] ?? '',
+          count: results.length,
+          writes: results,
         };
       },
     }),
@@ -732,6 +865,8 @@ function createPrefixedSpreadsheetTools(stagehand: Stagehand, prefix: Spreadshee
         const rangeA1 = `${sheetPrefix}A${start_row}:${lastColumnLetter}${endRow}`;
         const dataResult = await readRange(state.page, rangeA1, state.provider);
         if ('error' in dataResult) return dataResult.error;
+
+        console.log({ sheet_name, start_row, endRow, rangeA1, dataResult });
 
         const trimmedValues = trimEmptyGrid(dataResult.values);
 

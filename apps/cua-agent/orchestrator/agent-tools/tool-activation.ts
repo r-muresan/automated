@@ -39,9 +39,16 @@ export function buildHybridActiveToolsForUrl(url: string): string[] {
     activeTools.add('search');
   }
 
-  const provider = getSpreadsheetProvider(url);
-  if (provider) {
-    for (const toolName of getSpreadsheetToolNamesForProvider(provider)) {
+  const spreadsheetProvider = getSpreadsheetProvider(url);
+
+  if (spreadsheetProvider) {
+    activeTools.delete('fillFormVision');
+    activeTools.delete('extract');
+    activeTools.delete('clickAndHold');
+    activeTools.delete('dragAndDrop');
+    activeTools.delete('ariaTree');
+
+    for (const toolName of getSpreadsheetToolNamesForProvider(spreadsheetProvider)) {
       activeTools.add(toolName);
     }
   }

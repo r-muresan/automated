@@ -29,9 +29,16 @@ export async function discoverSelector(params: {
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
 
   // Phase 1: Structural auto-discovery (no LLM needed)
-  const structuralCandidates = await page.evaluate<CandidateSelector[]>(
+  let structuralCandidates = await page.evaluate<CandidateSelector[]>(
     buildStructuralDiscoveryScript(),
   );
+
+  // Filter out bad candidates
+  structuralCandidates = structuralCandidates.filter(
+    (c) => !c.sampleTexts.every((s) => s.length === 0),
+  );
+
+  console.log(structuralCandidates);
 
   if (structuralCandidates.length > 0) {
     console.log(

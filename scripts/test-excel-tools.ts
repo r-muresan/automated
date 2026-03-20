@@ -30,18 +30,18 @@ type CliArgs = {
 };
 
 type ToolLike = {
-  execute?: (args: Record<string, unknown>, context?: unknown) => Promise<unknown> | unknown;
+  execute?: (args: unknown, context?: unknown) => Promise<unknown> | unknown;
 };
 
 type ToolTest = {
   toolName: string;
-  args: Record<string, unknown>;
+  args: unknown;
   expect?: (result: unknown) => string | null;
 };
 
 type ToolRunResult = {
   toolName: string;
-  args: Record<string, unknown>;
+  args: unknown;
   ok: boolean;
   output?: unknown;
   error?: string;
@@ -364,7 +364,8 @@ async function hasWorkbookNameBox(page: PlaywrightPage): Promise<boolean> {
       frameUrl.includes('excel.cloud.microsoft/open/');
     if (!isWorkbookLikeFrame) continue;
     try {
-      if (await withTimeout(hasNameBoxInFrame(frame as unknown as FrameLike), 1_500, false)) return true;
+      if (await withTimeout(hasNameBoxInFrame(frame as unknown as FrameLike), 1_500, false))
+        return true;
     } catch {
       // Ignore inaccessible/transitioning frames.
     }
@@ -393,7 +394,7 @@ function ensureSuccessResult(result: unknown): string | null {
 async function invokeTool(
   tools: Record<string, ToolLike>,
   toolName: string,
-  args: Record<string, unknown>,
+  args: unknown,
 ): Promise<unknown> {
   const tool = tools[toolName];
   if (!tool || typeof tool.execute !== 'function') {
@@ -451,7 +452,7 @@ function extractWorkbookSheetCount(result: unknown): number {
   return 0;
 }
 
-function toolName(prefix: 'excel' | 'sheets', suffix: string): string {
+function toolName(prefix: 'excel' | 'spreadsheet', suffix: string): string {
   return `${prefix}_${suffix}`;
 }
 
@@ -589,7 +590,7 @@ async function main() {
     if (!provider) {
       throw new Error(`Could not detect spreadsheet provider for URL: ${page.url()}`);
     }
-    const toolPrefix: 'excel' | 'sheets' = provider === 'excel_web' ? 'excel' : 'sheets';
+    const toolPrefix: 'excel' | 'spreadsheet' = provider === 'excel_web' ? 'excel' : 'spreadsheet';
     console.log(`[INFO] Spreadsheet page detected: provider=${provider} url=${page.url()}`);
 
     stagehandContext = new StagehandContextAdapter(browserContext);
@@ -607,7 +608,9 @@ async function main() {
     const providerToolNames = getSpreadsheetToolNamesForProvider(provider);
     const missingTools = providerToolNames.filter((name) => !(name in tools));
     if (missingTools.length > 0) {
-      throw new Error(`Missing ${provider} tools in createBrowserTabTools: ${missingTools.join(', ')}`);
+      throw new Error(
+        `Missing ${provider} tools in createBrowserTabTools: ${missingTools.join(', ')}`,
+      );
     }
 
     let workbookInfo: unknown = null;
@@ -662,7 +665,10 @@ async function main() {
       { toolName: toolName(toolPrefix, 'get_workbook_info'), args: {} },
       { toolName: toolName(toolPrefix, 'select_cell'), args: { cell_a1: 'A1' } },
       { toolName: toolName(toolPrefix, 'read_cell'), args: { cell_a1: 'A1' } },
-      { toolName: toolName(toolPrefix, 'set_cell'), args: { cell_a1: DEFAULT_TEST_CELL_A1, value: writeValue } },
+      {
+        toolName: toolName(toolPrefix, 'write_cells'),
+        args: [{ cell: DEFAULT_TEST_CELL_A1, value: writeValue }],
+      },
       {
         toolName: toolName(toolPrefix, 'read_cell'),
         args: { cell_a1: DEFAULT_TEST_CELL_A1 },
@@ -674,7 +680,10 @@ async function main() {
             : `Expected ${DEFAULT_TEST_CELL_A1}="${writeValue}", got "${String(value ?? '')}".`;
         },
       },
-      { toolName: toolName(toolPrefix, 'set_cell'), args: { cell_a1: DEFAULT_TEST_CELL_A1, value: baselineValue } },
+      {
+        toolName: toolName(toolPrefix, 'write_cells'),
+        args: [{ cell: DEFAULT_TEST_CELL_A1, value: baselineValue }],
+      },
       { toolName: toolName(toolPrefix, 'read_sheet'), args: { start_row: 1, width: 220 } },
       { toolName: toolName(toolPrefix, 'insert_rows'), args: { position: 1000, count: 1 } },
       { toolName: toolName(toolPrefix, 'delete_row'), args: { position: 1000 } },

@@ -133,8 +133,9 @@ export class TokenCostTracker {
       }
       totalCost += modelCost;
 
+      const nonCachedInputDisplay = Math.max(0, usage.inputTokens - usage.cachedInputTokens);
       lines.push(`Model: ${model}`);
-      lines.push(`Input: ${usage.inputTokens.toLocaleString()}`);
+      lines.push(`Input: ${nonCachedInputDisplay.toLocaleString()}`);
       lines.push(`Cached Input: ${usage.cachedInputTokens.toLocaleString()}`);
       lines.push(`Output: ${usage.outputTokens.toLocaleString()}`);
       lines.push(`Total Cost: $${modelCost.toFixed(4)}${!pricing ? ' (pricing unknown)' : ''}`);
@@ -1113,64 +1114,66 @@ export class SessionFileLogger {
    */
   static createLlmLoggingMiddleware(
     modelId: string,
-  ): Pick<LanguageModelMiddleware, 'wrapGenerate'> {
+  ): Pick<LanguageModelMiddleware, 'wrapGenerate' | 'wrapStream'> {
     // No-op middleware when logging is disabled
     if (!CONFIG_DIR) {
       return {
         wrapGenerate: async ({ doGenerate }) => doGenerate(),
+        wrapStream: async ({ doStream }) => doStream(),
       };
     }
+
+    // Shared helper to extract prompt preview from params
+    const extractPromptPreview = (params: { prompt?: unknown; tools?: unknown }) => {
+      const toolCount = Array.isArray(params.tools) ? params.tools.length : 0;
+      const messages = (params.prompt ?? []) as Array<{
+        role?: string;
+        content?: unknown;
+      }>;
+      const lastMsg = messages.filter((m) => m.role !== 'system').pop();
+      const extracted = {
+        text: undefined as string | undefined,
+        extras: [] as string[],
+      };
+
+      let rolePrefix = lastMsg?.role ?? '?';
+      if (lastMsg) {
+        if (typeof lastMsg.content === 'string') {
+          extracted.text = lastMsg.content;
+        } else if (Array.isArray(lastMsg.content)) {
+          const toolResult = (
+            lastMsg.content as Array<{
+              type?: string;
+              toolName?: string;
+              output?: { type?: string; value?: unknown };
+            }>
+          ).find((p) => p.type === 'tool-result');
+          if (toolResult) {
+            rolePrefix = `tool result: ${toolResult.toolName}()`;
+            const out = toolResult.output;
+            if (out?.type === 'json' && out.value) {
+              extracted.text = JSON.stringify(out.value).slice(0, 150);
+            } else if (Array.isArray(out?.value)) {
+              extractFromContent(out.value as unknown[], extracted);
+            }
+          } else {
+            extractFromContent(lastMsg.content as unknown[], extracted);
+          }
+        }
+      }
+
+      const promptText = extracted.text || '(no text)';
+      return `${rolePrefix}: ${promptText} +{${toolCount} tools}`;
+    };
 
     return {
       wrapGenerate: async ({ doGenerate, params }) => {
         const ctx = SessionFileLogger.getContext();
-        // Skip logging overhead if no context (shouldn't happen but be safe)
         if (!ctx) {
           return doGenerate();
         }
         const llmRequestId = uuidv7();
-        const toolCount = Array.isArray(params.tools) ? params.tools.length : 0;
-
-        // Extract prompt preview from last non-system message
-        const messages = (params.prompt ?? []) as Array<{
-          role?: string;
-          content?: unknown;
-        }>;
-        const lastMsg = messages.filter((m) => m.role !== 'system').pop();
-        const extracted = {
-          text: undefined as string | undefined,
-          extras: [] as string[],
-        };
-
-        let rolePrefix = lastMsg?.role ?? '?';
-        if (lastMsg) {
-          if (typeof lastMsg.content === 'string') {
-            extracted.text = lastMsg.content;
-          } else if (Array.isArray(lastMsg.content)) {
-            // Check for tool-result first
-            const toolResult = (
-              lastMsg.content as Array<{
-                type?: string;
-                toolName?: string;
-                output?: { type?: string; value?: unknown };
-              }>
-            ).find((p) => p.type === 'tool-result');
-            if (toolResult) {
-              rolePrefix = `tool result: ${toolResult.toolName}()`;
-              const out = toolResult.output;
-              if (out?.type === 'json' && out.value) {
-                extracted.text = JSON.stringify(out.value).slice(0, 150);
-              } else if (Array.isArray(out?.value)) {
-                extractFromContent(out.value as unknown[], extracted);
-              }
-            } else {
-              extractFromContent(lastMsg.content as unknown[], extracted);
-            }
-          }
-        }
-
-        const promptText = extracted.text || '(no text)';
-        const promptPreview = `${rolePrefix}: ${promptText} +{${toolCount} tools}`;
+        const promptPreview = extractPromptPreview(params);
 
         SessionFileLogger.logLlmRequest(
           {
@@ -1227,6 +1230,54 @@ export class SessionFileLogger {
         );
 
         return result;
+      },
+
+      wrapStream: async ({ doStream, params }) => {
+        const ctx = SessionFileLogger.getContext();
+        if (!ctx) {
+          return doStream();
+        }
+        const llmRequestId = uuidv7();
+        const promptPreview = extractPromptPreview(params);
+
+        SessionFileLogger.logLlmRequest(
+          {
+            requestId: llmRequestId,
+            model: modelId,
+            operation: 'streamText',
+            prompt: promptPreview,
+          },
+          ctx,
+        );
+
+        const result = await doStream();
+
+        // Wrap the stream to intercept the finish event and log usage
+        const originalStream = result.stream;
+        const transformStream = new TransformStream<any, any>({
+          transform(chunk, controller) {
+            if (chunk.type === 'finish') {
+              SessionFileLogger.logLlmResponse(
+                {
+                  requestId: llmRequestId,
+                  model: modelId,
+                  operation: 'streamText',
+                  output: '[streamed]',
+                  inputTokens: chunk.usage?.inputTokens,
+                  outputTokens: chunk.usage?.outputTokens,
+                  cachedInputTokens: chunk.usage?.cachedInputTokens,
+                },
+                ctx,
+              );
+            }
+            controller.enqueue(chunk);
+          },
+        });
+
+        return {
+          ...result,
+          stream: originalStream.pipeThrough(transformStream),
+        };
       },
     };
   }

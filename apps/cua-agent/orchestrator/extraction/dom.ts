@@ -66,13 +66,17 @@ async function withDomExtractionRetry<T>(
 }
 
 const extractionStrategySchema = z.object({
-  strategy: z.enum(['selector', 'direct']).describe(
-    '"selector" to use a CSS selector to find elements (preferred), "direct" to return data immediately',
-  ),
+  strategy: z
+    .enum(['selector', 'direct'])
+    .describe(
+      '"selector" to use a CSS selector to find elements (preferred), "direct" to return data immediately',
+    ),
   selector: z
     .string()
     .nullable()
-    .describe('CSS selector matching elements that contain the target data (required when strategy is "selector")'),
+    .describe(
+      'CSS selector matching elements that contain the target data (required when strategy is "selector")',
+    ),
   data: z
     .union([z.record(z.string(), z.unknown()), z.string()])
     .nullable()
@@ -160,6 +164,8 @@ When using "direct", set the "data" field and leave "selector" as null.`;
     if (parsed.strategy === 'direct') {
       console.log('[EXTRACTION] DOM selector strategy: model chose direct extraction');
       // Normalize: if the LLM returned a string instead of an object, wrap it
+      console.log(parsed.data);
+
       if (typeof parsed.data === 'string') {
         return { extraction: parsed.data };
       }

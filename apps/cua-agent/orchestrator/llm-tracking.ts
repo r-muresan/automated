@@ -32,11 +32,22 @@ function logUsage(requestId: string, model: string, operation: string, response:
 export function wrapOpenAIWithTracking(client: OpenAI): OpenAI {
   const completions = client.chat.completions;
 
+  // Re-entrancy guard: when `parse()` internally calls `create()`, the nested
+  // call must NOT be intercepted.  Attaching a `.then()` side-effect on the
+  // inner `create` APIPromise consumes the Response body before `parse`'s
+  // `_thenUnwrap` can read it, causing "Body has already been read".
+  let inTrackedCall = false;
+
   client.chat.completions = new Proxy(completions, {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
       if ((prop === 'create' || prop === 'parse') && typeof original === 'function') {
         return function (this: any, ...args: any[]) {
+          // Skip tracking for nested calls (e.g. create() called inside parse())
+          if (inTrackedCall) {
+            return original.apply(this, args);
+          }
+
           const body = args[0] as Record<string, unknown> | undefined;
           const model = (body?.model as string) || 'unknown';
           const requestId = uuidv7();
@@ -44,8 +55,15 @@ export function wrapOpenAIWithTracking(client: OpenAI): OpenAI {
 
           SessionFileLogger.logLlmRequest({ requestId, model, operation });
 
-          // Call the original — returns an APIPromise (thenable with extra methods)
-          const result = original.apply(this, args);
+          // Set re-entrancy guard before calling original — parse() synchronously
+          // calls create() during setup, so the flag prevents double-tracking.
+          inTrackedCall = true;
+          let result: any;
+          try {
+            result = original.apply(this, args);
+          } finally {
+            inTrackedCall = false;
+          }
 
           // Attach a .then side-effect to log the response without altering the return type
           if (result && typeof result.then === 'function') {

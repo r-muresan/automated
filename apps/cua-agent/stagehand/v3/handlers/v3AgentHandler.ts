@@ -276,14 +276,23 @@ export class V3AgentHandler {
     }
   }
   private createPrepareStep(
+    allTools: ToolSet,
     userCallback?: PrepareStepFunction<ToolSet>,
   ): PrepareStepFunction<ToolSet> {
     return async (options) => {
       processMessages(options.messages);
-      if (userCallback) {
-        return userCallback(options);
-      }
-      return options;
+      const stepConfig = userCallback ? await userCallback(options) : undefined;
+      const activeTools = (stepConfig?.activeTools ?? Object.keys(allTools)).map((toolName) =>
+        String(toolName),
+      );
+
+      this.logger({
+        category: 'agent',
+        message: `Step ${options.stepNumber} active tools: ${activeTools.join(', ')}`,
+        level: 1,
+      });
+
+      return stepConfig;
     };
   }
 
@@ -415,7 +424,7 @@ export class V3AgentHandler {
         stopWhen: (result) => this.handleStop(result, maxSteps),
         toolChoice: 'auto',
 
-        prepareStep: this.createPrepareStep(callbacks?.prepareStep),
+        prepareStep: this.createPrepareStep(allTools, callbacks?.prepareStep),
         onStepFinish: this.createStepHandler(state, callbacks?.onStepFinish),
         abortSignal: preparedOptions.signal,
         providerOptions: wrappedModel.modelId.includes('gemini-3')
@@ -533,7 +542,7 @@ export class V3AgentHandler {
       tools: allTools,
       stopWhen: (result) => this.handleStop(result, maxSteps),
       toolChoice: 'auto',
-      prepareStep: this.createPrepareStep(callbacks?.prepareStep),
+      prepareStep: this.createPrepareStep(allTools, callbacks?.prepareStep),
       onStepFinish: this.createStepHandler(state, callbacks?.onStepFinish),
       onError: (event) => {
         if (callbacks?.onError) {
