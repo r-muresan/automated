@@ -1,7 +1,9 @@
 import OpenAI from "openai";
 import { ToolSet } from "ai";
+import { v7 as uuidv7 } from "uuid";
 import { toJsonSchema } from "../zodCompat.js";
 import { AgentClient } from "./AgentClient.js";
+import { SessionFileLogger } from "../flowLogger.js";
 import type {
   AgentAction,
   AgentExecutionOptions,
@@ -345,6 +347,13 @@ export class OpenRouterCUAClient extends AgentClient {
           requestBody.reasoning = this.reasoningOptions;
         }
 
+        const llmRequestId = uuidv7();
+        SessionFileLogger.logLlmRequest({
+          requestId: llmRequestId,
+          model: this.modelName,
+          operation: "OpenRouter.chatCompletion",
+        });
+
         const response = await this.client.chat.completions.create(
           requestBody as never,
         );
@@ -354,6 +363,15 @@ export class OpenRouterCUAClient extends AgentClient {
         totalInputTokens += stepIn;
         totalOutputTokens += stepOut;
         totalCachedTokens += stepCached;
+
+        SessionFileLogger.logLlmResponse({
+          requestId: llmRequestId,
+          model: this.modelName,
+          operation: "OpenRouter.chatCompletion",
+          inputTokens: stepIn,
+          outputTokens: stepOut,
+          cachedInputTokens: stepCached,
+        });
 
         const choice = response.choices[0];
         const assistantMessage = choice?.message;

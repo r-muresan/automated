@@ -8,6 +8,7 @@ import {
   releaseBrowserSession,
 } from '../browser-session-limiter';
 import { OPENROUTER_BASE_URL, type OrchestratorContext } from './orchestrator-context';
+import { wrapOpenAIWithTracking } from './llm-tracking';
 import type { ScreenController } from '../stagehand/v3/types/public/screen.js';
 
 // ---------------------------------------------------------------------------
@@ -28,7 +29,7 @@ export async function initSession(
   ctx.assertNotAborted();
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('Missing OPENROUTER_API_KEY for OpenRouter');
-  ctx.openai = new OpenAI({ baseURL: OPENROUTER_BASE_URL, apiKey });
+  ctx.openai = wrapOpenAIWithTracking(new OpenAI({ baseURL: OPENROUTER_BASE_URL, apiKey }));
 
   if (ctx.options.localCdpUrl) {
     await initLocalSession(ctx, session, startingUrl);

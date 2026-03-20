@@ -32,7 +32,6 @@ function buildExtractionScript(selector: string): string {
         id: el.id || '',
         className: (typeof el.className === 'string' ? el.className : ''),
         href: el.href || el.querySelector('a')?.href || '',
-        dataset: Object.assign({}, el.dataset),
         outerHTMLTruncated: el.outerHTML.slice(0, MAX_HTML),
       }));
     })()
@@ -75,10 +74,10 @@ export function createDomSelectorCollector(params: {
         text: el.innerText || el.textContent,
         tagName: el.tagName,
       };
-      if (el.id) data.id = el.id;
-      if (el.className) data.className = el.className;
+      // if (el.id) data.id = el.id;
+      // if (el.className) data.className = el.className;
       if (el.href) data.href = el.href;
-      if (Object.keys(el.dataset).length > 0) data.dataset = el.dataset;
+      // if (Object.keys(el.dataset).length > 0) data.dataset = el.dataset;
 
       items.push({ fingerprint: fp, data });
     }
@@ -96,9 +95,7 @@ export function createDomSelectorCollector(params: {
         const result = await discoverSelector({ stagehand, llmClient, model, description });
         if (!result) return [];
         selector = result.selector;
-        console.log(
-          `[LOOP-COLLECT] DOM: using selector "${selector}" (${result.itemDescription})`,
-        );
+        console.log(`[LOOP-COLLECT] DOM: using selector "${selector}" (${result.itemDescription})`);
       }
 
       // First page: just query what's visible

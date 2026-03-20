@@ -1,4 +1,5 @@
 import OpenAI, { type ClientOptions as OpenAIOptions } from "openai";
+import { v7 as uuidv7 } from "uuid";
 import { LogLine } from "../types/public/logs.js";
 import { AvailableModel, ClientOptions } from "../types/public/model.js";
 import {
@@ -9,6 +10,7 @@ import {
 } from "./LLMClient.js";
 import { CreateChatCompletionResponseError } from "../types/public/sdkErrors.js";
 import { toJsonSchema } from "../zodCompat.js";
+import { SessionFileLogger } from "../flowLogger.js";
 
 export class CerebrasClient extends LLMClient {
   public type = "cerebras" as const;
@@ -123,6 +125,13 @@ export class CerebrasClient extends LLMClient {
       tools = tools ? [...tools, responseTool] : [responseTool];
     }
 
+    const llmRequestId = uuidv7();
+    SessionFileLogger.logLlmRequest({
+      requestId: llmRequestId,
+      model: this.modelName,
+      operation: "CerebrasClient.create",
+    });
+
     try {
       // Use OpenAI client with Cerebras API
       const apiResponse = await this.client.chat.completions.create({
@@ -194,6 +203,14 @@ export class CerebrasClient extends LLMClient {
           total_tokens: apiResponse.usage?.total_tokens || 0,
         },
       };
+
+      SessionFileLogger.logLlmResponse({
+        requestId: llmRequestId,
+        model: this.modelName,
+        operation: "CerebrasClient.create",
+        inputTokens: apiResponse.usage?.prompt_tokens,
+        outputTokens: apiResponse.usage?.completion_tokens,
+      });
 
       logger({
         category: "cerebras",

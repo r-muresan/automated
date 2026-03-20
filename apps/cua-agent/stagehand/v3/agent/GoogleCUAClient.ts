@@ -451,6 +451,7 @@ export class GoogleCUAClient extends AgentClient {
         output: formatCuaResponsePreview(response),
         inputTokens: usageMetadata?.promptTokenCount,
         outputTokens: usageMetadata?.candidatesTokenCount,
+        cachedInputTokens: (usageMetadata as any)?.cachedContentTokenCount ?? 0,
       });
 
       // Process the response

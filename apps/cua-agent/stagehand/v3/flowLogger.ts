@@ -1,11 +1,11 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-import fs from "node:fs";
-import { Writable } from "node:stream";
-import { v7 as uuidv7 } from "uuid";
-import path from "node:path";
-import pino from "pino";
-import type { LanguageModelMiddleware } from "ai";
-import type { V3Options } from "./types/public/index.js";
+import { AsyncLocalStorage } from 'node:async_hooks';
+import fs from 'node:fs';
+import { Writable } from 'node:stream';
+import { v7 as uuidv7 } from 'uuid';
+import path from 'node:path';
+import pino from 'pino';
+import type { LanguageModelMiddleware } from 'ai';
+import type { V3Options } from './types/public/index.js';
 
 // =============================================================================
 // Constants
@@ -13,33 +13,169 @@ import type { V3Options } from "./types/public/index.js";
 
 const MAX_LINE_LENGTH = 160;
 
-// Flow logging config dir - empty string disables logging entirely
-const CONFIG_DIR = process.env.BROWSERBASE_CONFIG_DIR || "";
+// Flow logging config dir — always enabled, defaults to .cua-agent under cwd
+const CONFIG_DIR = path.resolve(".cua-agent");
+
+// =============================================================================
+// Model Pricing (per 1M tokens, in USD) via OpenRouter
+// =============================================================================
+
+interface ModelPricing {
+  input: number; // cost per 1M input tokens
+  cachedInput: number; // cost per 1M cached input tokens
+  output: number; // cost per 1M output tokens
+}
+
+// Prices sourced from OpenRouter pricing pages (USD per 1M tokens)
+const MODEL_PRICING: Record<string, ModelPricing> = {
+  // OpenAI
+  'gpt-5.4-mini': { input: 0.75, cachedInput: 0.075, output: 4.5 },
+
+  // Anthropic
+  'claude-sonnet-4.6': { input: 3, cachedInput: 0.3, output: 15 },
+
+  // Google
+  'gemini-2.5-flash': { input: 0.3, cachedInput: 0.03, output: 2.5 },
+  'gemini-3-flash-preview': { input: 0.5, cachedInput: 0.05, output: 3 },
+
+  // Moonshot
+  'kimi-k2.5': { input: 0.6, cachedInput: 0.1, output: 3 },
+};
+
+/**
+ * Resolve pricing for a model string, trying exact match then substring.
+ * Strips provider prefix (e.g. "openai/gpt-4o" -> "gpt-4o").
+ */
+function resolveModelPricing(modelId: string): ModelPricing | null {
+  // Strip provider prefix
+  const parts = modelId.split('/');
+  const name = parts.length > 1 ? parts.slice(1).join('/') : modelId;
+
+  // Exact match
+  if (MODEL_PRICING[name]) return MODEL_PRICING[name];
+
+  for (const [key, pricing] of Object.entries(MODEL_PRICING)) {
+    if (name.includes(key) || key.includes(name)) return pricing;
+  }
+  return null;
+}
+
+// =============================================================================
+// Token Cost Tracker
+// =============================================================================
+
+interface ModelUsage {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * Tracks per-model token usage and writes a continuously-updated cost summary file.
+ */
+export class TokenCostTracker {
+  private usageByModel = new Map<string, ModelUsage>();
+  private outputPath: string;
+  private writeScheduled = false;
+
+  constructor(outputPath: string) {
+    this.outputPath = outputPath;
+  }
+
+  /**
+   * Record token usage for a model.
+   */
+  record(
+    model: string,
+    inputTokens: number,
+    cachedInputTokens: number,
+    outputTokens: number,
+  ): void {
+    const existing = this.usageByModel.get(model) ?? {
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      outputTokens: 0,
+    };
+    existing.inputTokens += inputTokens;
+    existing.cachedInputTokens += cachedInputTokens;
+    existing.outputTokens += outputTokens;
+    this.usageByModel.set(model, existing);
+    this.scheduleWrite();
+  }
+
+  private scheduleWrite(): void {
+    if (this.writeScheduled) return;
+    this.writeScheduled = true;
+    // Batch writes to avoid excessive I/O
+    setTimeout(() => {
+      this.writeScheduled = false;
+      this.writeFile();
+    }, 500);
+  }
+
+  private writeFile(): void {
+    let totalCost = 0;
+    const lines: string[] = [];
+
+    // Sort models alphabetically for consistent output
+    const sorted = [...this.usageByModel.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+    for (const [model, usage] of sorted) {
+      const pricing = resolveModelPricing(model);
+      let modelCost = 0;
+      if (pricing) {
+        // Non-cached input tokens = total input - cached
+        const nonCachedInput = Math.max(0, usage.inputTokens - usage.cachedInputTokens);
+        modelCost =
+          (nonCachedInput / 1_000_000) * pricing.input +
+          (usage.cachedInputTokens / 1_000_000) * pricing.cachedInput +
+          (usage.outputTokens / 1_000_000) * pricing.output;
+      }
+      totalCost += modelCost;
+
+      lines.push(`Model: ${model}`);
+      lines.push(`Input: ${usage.inputTokens.toLocaleString()}`);
+      lines.push(`Cached Input: ${usage.cachedInputTokens.toLocaleString()}`);
+      lines.push(`Output: ${usage.outputTokens.toLocaleString()}`);
+      lines.push(`Total Cost: $${modelCost.toFixed(4)}${!pricing ? ' (pricing unknown)' : ''}`);
+      lines.push('');
+    }
+
+    lines.push('---');
+    lines.push(`Grand Total: $${totalCost.toFixed(4)}`);
+
+    try {
+      fs.writeFileSync(this.outputPath, lines.join('\n') + '\n', 'utf-8');
+    } catch {
+      // Fail silently — logging should never break the app
+    }
+  }
+
+  /** Force an immediate write (e.g. on session close). */
+  flush(): void {
+    this.writeFile();
+  }
+}
 
 const NOISY_CDP_EVENTS = new Set([
-  "Target.targetInfoChanged",
-  "Runtime.executionContextCreated",
-  "Runtime.executionContextDestroyed",
-  "Runtime.executionContextsCleared",
-  "Page.lifecycleEvent",
-  "Network.dataReceived",
-  "Network.loadingFinished",
-  "Network.requestWillBeSentExtraInfo",
-  "Network.responseReceivedExtraInfo",
-  "Network.requestWillBeSent",
-  "Network.responseReceived",
+  'Target.targetInfoChanged',
+  'Runtime.executionContextCreated',
+  'Runtime.executionContextDestroyed',
+  'Runtime.executionContextsCleared',
+  'Page.lifecycleEvent',
+  'Network.dataReceived',
+  'Network.loadingFinished',
+  'Network.requestWillBeSentExtraInfo',
+  'Network.responseReceivedExtraInfo',
+  'Network.requestWillBeSent',
+  'Network.responseReceived',
 ]);
 
 // =============================================================================
 // Types
 // =============================================================================
 
-type EventCategory =
-  | "AgentTask"
-  | "StagehandStep"
-  | "UnderstudyAction"
-  | "CDP"
-  | "LLM";
+type EventCategory = 'AgentTask' | 'StagehandStep' | 'UnderstudyAction' | 'CDP' | 'LLM';
 
 interface FlowEvent {
   // Core identifiers (set via mixin from child logger bindings)
@@ -53,7 +189,7 @@ interface FlowEvent {
 
   // Event classification
   category: EventCategory;
-  event: "started" | "completed" | "call" | "message" | "request" | "response";
+  event: 'started' | 'completed' | 'call' | 'message' | 'request' | 'response';
   method?: string;
   msg?: string;
 
@@ -112,6 +248,8 @@ export interface FlowLoggerContext {
     llm: fs.WriteStream | null;
     jsonl: fs.WriteStream | null;
   };
+  // Token cost tracker
+  tokenCostTracker: TokenCostTracker | null;
 }
 
 const loggerContext = new AsyncLocalStorage<FlowLoggerContext>();
@@ -121,8 +259,7 @@ const loggerContext = new AsyncLocalStorage<FlowLoggerContext>();
 // =============================================================================
 
 /** Calculate base64 data size in KB */
-const dataToKb = (data: string): string =>
-  ((data.length * 0.75) / 1024).toFixed(1);
+const dataToKb = (data: string): string => ((data.length * 0.75) / 1024).toFixed(1);
 
 /** Truncate CDP IDs: frameId:363F03EB...EF8 → frameId:363F…5EF8 */
 function truncateCdpIds(value: string): string {
@@ -134,7 +271,7 @@ function truncateCdpIds(value: string): string {
 
 /** Truncate line showing start...end */
 function truncateLine(value: string, maxLen: number): string {
-  const collapsed = value.replace(/\s+/g, " ");
+  const collapsed = value.replace(/\s+/g, ' ');
   if (collapsed.length <= maxLen) return collapsed;
   const endLen = Math.floor(maxLen * 0.3);
   const startLen = maxLen - endLen - 1;
@@ -142,52 +279,50 @@ function truncateLine(value: string, maxLen: number): string {
 }
 
 function formatValue(value: unknown): string {
-  if (typeof value === "string") return `'${value}'`;
-  if (value == null || typeof value !== "object") return String(value);
+  if (typeof value === 'string') return `'${value}'`;
+  if (value == null || typeof value !== 'object') return String(value);
   try {
     return JSON.stringify(value);
   } catch {
-    return "[unserializable]";
+    return '[unserializable]';
   }
 }
 
 function formatArgs(args?: unknown | unknown[]): string {
-  if (args === undefined) return "";
+  if (args === undefined) return '';
   return (Array.isArray(args) ? args : [args])
     .filter((e) => e !== undefined)
     .map(formatValue)
     .filter((e) => e.length > 0)
-    .join(", ");
+    .join(', ');
 }
 
-const shortId = (id: string | null | undefined): string =>
-  id ? id.slice(-4) : "-";
+const shortId = (id: string | null | undefined): string => (id ? id.slice(-4) : '-');
 
 function formatTag(
   label: string | null | undefined,
   id: string | null | undefined,
   icon: string,
 ): string {
-  return id ? `[${icon} #${shortId(id)}${label ? " " + label : ""}]` : "⤑";
+  return id ? `[${icon} #${shortId(id)}${label ? ' ' + label : ''}]` : '⤑';
 }
 
 let nonce = 0;
 function formatTimestamp(): string {
   const d = new Date();
-  const pad = (n: number, w = 2) => String(n).padStart(w, "0");
+  const pad = (n: number, w = 2) => String(n).padStart(w, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}${pad(nonce++ % 100)}`;
 }
 
-const SENSITIVE_KEYS =
-  /apikey|api_key|key|secret|token|password|passwd|pwd|credential|auth/i;
+const SENSITIVE_KEYS = /apikey|api_key|key|secret|token|password|passwd|pwd|credential|auth/i;
 
 function sanitizeOptions(options: V3Options): Record<string, unknown> {
   const sanitize = (obj: unknown): unknown => {
-    if (typeof obj !== "object" || obj === null) return obj;
+    if (typeof obj !== 'object' || obj === null) return obj;
     if (Array.isArray(obj)) return obj.map(sanitize);
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj)) {
-      result[key] = SENSITIVE_KEYS.test(key) ? "******" : sanitize(value);
+      result[key] = SENSITIVE_KEYS.test(key) ? '******' : sanitize(value);
     }
     return result;
   };
@@ -197,8 +332,8 @@ function sanitizeOptions(options: V3Options): Record<string, unknown> {
 /** Remove unescaped quotes for cleaner log output */
 function removeQuotes(str: string): string {
   return str
-    .replace(/([^\\])["']/g, "$1")
-    .replace(/^["']|["']$/g, "")
+    .replace(/([^\\])["']/g, '$1')
+    .replace(/^["']|["']$/g, '')
     .trim();
 }
 
@@ -210,74 +345,69 @@ function prettifyEvent(event: FlowEvent): string | null {
   const parts: string[] = [];
 
   // Build context tags - always add parent span tags (formatTag returns ⤑ for null IDs)
-  if (event.category === "AgentTask") {
-    parts.push(formatTag("", event.taskId, "🅰"));
-  } else if (event.category === "StagehandStep") {
-    parts.push(formatTag("", event.taskId, "🅰"));
-    parts.push(formatTag(event.stepLabel, event.stepId, "🆂"));
-  } else if (event.category === "UnderstudyAction") {
-    parts.push(formatTag("", event.taskId, "🅰"));
-    parts.push(formatTag(event.stepLabel, event.stepId, "🆂"));
-    parts.push(formatTag(event.actionLabel, event.actionId, "🆄"));
-  } else if (event.category === "CDP") {
-    parts.push(formatTag("", event.taskId, "🅰"));
-    parts.push(formatTag(event.stepLabel, event.stepId, "🆂"));
-    parts.push(formatTag(event.actionLabel, event.actionId, "🆄"));
-    parts.push(formatTag("CDP", event.targetId, "🅲"));
-  } else if (event.category === "LLM") {
-    parts.push(formatTag("", event.taskId, "🅰"));
-    parts.push(formatTag(event.stepLabel, event.stepId, "🆂"));
-    parts.push(formatTag("LLM", event.requestId, "🧠"));
+  if (event.category === 'AgentTask') {
+    parts.push(formatTag('', event.taskId, '🅰'));
+  } else if (event.category === 'StagehandStep') {
+    parts.push(formatTag('', event.taskId, '🅰'));
+    parts.push(formatTag(event.stepLabel, event.stepId, '🆂'));
+  } else if (event.category === 'UnderstudyAction') {
+    parts.push(formatTag('', event.taskId, '🅰'));
+    parts.push(formatTag(event.stepLabel, event.stepId, '🆂'));
+    parts.push(formatTag(event.actionLabel, event.actionId, '🆄'));
+  } else if (event.category === 'CDP') {
+    parts.push(formatTag('', event.taskId, '🅰'));
+    parts.push(formatTag(event.stepLabel, event.stepId, '🆂'));
+    parts.push(formatTag(event.actionLabel, event.actionId, '🆄'));
+    parts.push(formatTag('CDP', event.targetId, '🅲'));
+  } else if (event.category === 'LLM') {
+    parts.push(formatTag('', event.taskId, '🅰'));
+    parts.push(formatTag(event.stepLabel, event.stepId, '🆂'));
+    parts.push(formatTag('LLM', event.requestId, '🧠'));
   }
 
   // Build details based on event type
-  let details = "";
-  const argsStr = event.params ? formatArgs(event.params) : "";
+  let details = '';
+  const argsStr = event.params ? formatArgs(event.params) : '';
 
-  if (event.category === "AgentTask") {
-    if (event.event === "started") {
+  if (event.category === 'AgentTask') {
+    if (event.event === 'started') {
       details = `▷ ${event.method}(${argsStr})`;
-    } else if (event.event === "completed") {
+    } else if (event.event === 'completed') {
       const m = event.metrics;
-      const durationSec = m?.durationMs
-        ? (m.durationMs / 1000).toFixed(1)
-        : "?";
+      const durationSec = m?.durationMs ? (m.durationMs / 1000).toFixed(1) : '?';
       const llmStats = `${m?.llmRequests ?? 0} LLM calls ꜛ${m?.inputTokens ?? 0} ꜜ${m?.outputTokens ?? 0} tokens`;
       const cdpStats = `${m?.cdpEvents ?? 0} CDP msgs`;
       details = `✓ Agent.execute() DONE in ${durationSec}s | ${llmStats} | ${cdpStats}`;
     }
-  } else if (event.category === "StagehandStep") {
-    if (event.event === "started") {
+  } else if (event.category === 'StagehandStep') {
+    if (event.event === 'started') {
       details = `▷ ${event.method}(${argsStr})`;
-    } else if (event.event === "completed") {
+    } else if (event.event === 'completed') {
       const durationSec = event.metrics?.durationMs
         ? (event.metrics.durationMs / 1000).toFixed(2)
-        : "?";
-      details = `✓ ${event.stepLabel || "STEP"} completed in ${durationSec}s`;
+        : '?';
+      details = `✓ ${event.stepLabel || 'STEP'} completed in ${durationSec}s`;
     }
-  } else if (event.category === "UnderstudyAction") {
-    if (event.event === "started") {
+  } else if (event.category === 'UnderstudyAction') {
+    if (event.event === 'started') {
       details = `▷ ${event.method}(${argsStr})`;
-    } else if (event.event === "completed") {
+    } else if (event.event === 'completed') {
       const durationSec = event.metrics?.durationMs
         ? (event.metrics.durationMs / 1000).toFixed(2)
-        : "?";
-      details = `✓ ${event.actionLabel || "ACTION"} completed in ${durationSec}s`;
+        : '?';
+      details = `✓ ${event.actionLabel || 'ACTION'} completed in ${durationSec}s`;
     }
-  } else if (event.category === "CDP") {
-    const icon = event.event === "call" ? "⏵" : "⏴";
+  } else if (event.category === 'CDP') {
+    const icon = event.event === 'call' ? '⏵' : '⏴';
     details = `${icon} ${event.method}(${argsStr})`;
-  } else if (event.category === "LLM") {
-    if (event.event === "request") {
-      const promptStr = event.prompt ? " " + String(event.prompt) : "";
+  } else if (event.category === 'LLM') {
+    if (event.event === 'request') {
+      const promptStr = event.prompt ? ' ' + String(event.prompt) : '';
       details = `${event.model} ⏴${promptStr}`;
-    } else if (event.event === "response") {
-      const hasTokens =
-        event.inputTokens !== undefined || event.outputTokens !== undefined;
-      const tokenStr = hasTokens
-        ? ` ꜛ${event.inputTokens ?? 0} ꜜ${event.outputTokens ?? 0} |`
-        : "";
-      const outputStr = event.output ? " " + String(event.output) : "";
+    } else if (event.event === 'response') {
+      const hasTokens = event.inputTokens !== undefined || event.outputTokens !== undefined;
+      const tokenStr = hasTokens ? ` ꜛ${event.inputTokens ?? 0} ꜜ${event.outputTokens ?? 0} |` : '';
+      const outputStr = event.output ? ' ' + String(event.output) : '';
       details = `${event.model} ↳${tokenStr}${outputStr}`;
     }
   }
@@ -285,19 +415,17 @@ function prettifyEvent(event: FlowEvent): string | null {
   if (!details) return null;
 
   // Assemble line and apply final truncation
-  const fullLine = `${formatTimestamp()} ${parts.join(" ")} ${details}`;
+  const fullLine = `${formatTimestamp()} ${parts.join(' ')} ${details}`;
   const cleaned = removeQuotes(fullLine);
-  const processed =
-    event.category === "CDP" ? truncateCdpIds(cleaned) : cleaned;
+  const processed = event.category === 'CDP' ? truncateCdpIds(cleaned) : cleaned;
   return truncateLine(processed, MAX_LINE_LENGTH);
 }
 
 /** Check if a CDP event should be filtered from pretty output */
 function shouldFilterCdpEvent(event: FlowEvent): boolean {
-  if (event.category !== "CDP") return false;
-  if (event.method?.endsWith(".enable") || event.method === "enable")
-    return true;
-  return event.event === "message" && NOISY_CDP_EVENTS.has(event.method!);
+  if (event.category !== 'CDP') return false;
+  if (event.method?.endsWith('.enable') || event.method === 'enable') return true;
+  return event.event === 'message' && NOISY_CDP_EVENTS.has(event.method!);
 }
 
 // =============================================================================
@@ -321,7 +449,7 @@ function createJsonlStream(ctx: FlowLoggerContext): Writable {
 function createPrettyStream(
   ctx: FlowLoggerContext,
   category: EventCategory,
-  streamKey: keyof FlowLoggerContext["fileStreams"],
+  streamKey: keyof FlowLoggerContext['fileStreams'],
 ): Writable {
   return new Writable({
     objectMode: true,
@@ -330,10 +458,9 @@ function createPrettyStream(
       if (!ctx.initialized || !isWritable(stream)) return cb();
       try {
         const event = JSON.parse(chunk) as FlowEvent;
-        if (event.category !== category || shouldFilterCdpEvent(event))
-          return cb();
+        if (event.category !== category || shouldFilterCdpEvent(event)) return cb();
         const line = prettifyEvent(event);
-        if (line) stream.write(line + "\n", cb);
+        if (line) stream.write(line + '\n', cb);
         else cb();
       } catch {
         cb();
@@ -350,7 +477,7 @@ function createPrettyStream(
  * Get the config directory. Returns empty string if logging is disabled.
  */
 export function getConfigDir(): string {
-  return CONFIG_DIR ? path.resolve(CONFIG_DIR) : "";
+  return CONFIG_DIR ? path.resolve(CONFIG_DIR) : '';
 }
 
 // =============================================================================
@@ -367,31 +494,26 @@ type ContentPart = {
 };
 
 /** Extract text and image info from a content array (handles nested tool_result) */
-function extractFromContent(
-  content: unknown[],
-  result: { text?: string; extras: string[] },
-): void {
+function extractFromContent(content: unknown[], result: { text?: string; extras: string[] }): void {
   for (const part of content) {
     const p = part as ContentPart;
     // Text
     if (!result.text && p.text) {
-      result.text = p.type === "text" || !p.type ? p.text : undefined;
+      result.text = p.type === 'text' || !p.type ? p.text : undefined;
     }
     // Images - various formats
-    if (p.type === "image" || p.type === "image_url") {
+    if (p.type === 'image' || p.type === 'image_url') {
       const url = p.image_url?.url;
-      if (url?.startsWith("data:"))
-        result.extras.push(`${dataToKb(url)}kb image`);
-      else if (p.source?.data)
-        result.extras.push(`${dataToKb(p.source.data)}kb image`);
-      else result.extras.push("image");
+      if (url?.startsWith('data:')) result.extras.push(`${dataToKb(url)}kb image`);
+      else if (p.source?.data) result.extras.push(`${dataToKb(p.source.data)}kb image`);
+      else result.extras.push('image');
     } else if (p.source?.data) {
       result.extras.push(`${dataToKb(p.source.data)}kb image`);
     } else if (p.inlineData?.data) {
       result.extras.push(`${dataToKb(p.inlineData.data)}kb image`);
     }
     // Recurse into tool_result content
-    if (p.type === "tool_result" && Array.isArray(p.content)) {
+    if (p.type === 'tool_result' && Array.isArray(p.content)) {
       extractFromContent(p.content, result);
     }
   }
@@ -404,11 +526,10 @@ function buildPreview(
   maxLen?: number,
 ): string | undefined {
   if (!text && extras.length === 0) return undefined;
-  let result = text || "";
-  if (maxLen && result.length > maxLen)
-    result = result.slice(0, maxLen) + "...";
+  let result = text || '';
+  if (maxLen && result.length > maxLen) result = result.slice(0, maxLen) + '...';
   if (extras.length > 0) {
-    const extrasStr = extras.map((e) => `+{${e}}`).join(" ");
+    const extrasStr = extras.map((e) => `+{${e}}`).join(' ');
     result = result ? `${result} ${extrasStr}` : extrasStr;
   }
   return result || undefined;
@@ -423,7 +544,7 @@ export function formatLlmPromptPreview(
   options?: { toolCount?: number; hasSchema?: boolean },
 ): string | undefined {
   try {
-    const lastUserMsg = messages.filter((m) => m.role === "user").pop();
+    const lastUserMsg = messages.filter((m) => m.role === 'user').pop();
     if (!lastUserMsg) return undefined;
 
     const result = {
@@ -431,7 +552,7 @@ export function formatLlmPromptPreview(
       extras: [] as string[],
     };
 
-    if (typeof lastUserMsg.content === "string") {
+    if (typeof lastUserMsg.content === 'string') {
       result.text = lastUserMsg.content;
     } else if (Array.isArray(lastUserMsg.content)) {
       extractFromContent(lastUserMsg.content, result);
@@ -441,10 +562,10 @@ export function formatLlmPromptPreview(
 
     // Clean instruction prefix
     if (result.text) {
-      result.text = result.text.replace(/^[Ii]nstruction: /, "");
+      result.text = result.text.replace(/^[Ii]nstruction: /, '');
     }
 
-    if (options?.hasSchema) result.extras.push("schema");
+    if (options?.hasSchema) result.extras.push('schema');
     if (options?.toolCount) result.extras.push(`${options.toolCount} tools`);
 
     return buildPreview(result.text, result.extras);
@@ -457,19 +578,14 @@ export function formatLlmPromptPreview(
  * Extract a text preview from CUA-style messages.
  * Accepts various message formats (Anthropic, OpenAI, Google).
  */
-export function formatCuaPromptPreview(
-  messages: unknown[],
-  maxLen = 100,
-): string | undefined {
+export function formatCuaPromptPreview(messages: unknown[], maxLen = 100): string | undefined {
   try {
     const lastMsg = messages
       .filter((m) => {
         const msg = m as { role?: string; type?: string };
-        return msg.role === "user" || msg.type === "tool_result";
+        return msg.role === 'user' || msg.type === 'tool_result';
       })
-      .pop() as
-      | { content?: unknown; parts?: unknown[]; text?: string }
-      | undefined;
+      .pop() as { content?: unknown; parts?: unknown[]; text?: string } | undefined;
 
     if (!lastMsg) return undefined;
 
@@ -478,9 +594,9 @@ export function formatCuaPromptPreview(
       extras: [] as string[],
     };
 
-    if (typeof lastMsg.content === "string") {
+    if (typeof lastMsg.content === 'string') {
       result.text = lastMsg.content;
-    } else if (typeof lastMsg.text === "string") {
+    } else if (typeof lastMsg.text === 'string') {
       result.text = lastMsg.text;
     } else if (Array.isArray(lastMsg.parts)) {
       extractFromContent(lastMsg.parts, result);
@@ -495,16 +611,12 @@ export function formatCuaPromptPreview(
 }
 
 /** Format CUA response output for logging */
-export function formatCuaResponsePreview(
-  output: unknown,
-  maxLen = 100,
-): string {
+export function formatCuaResponsePreview(output: unknown, maxLen = 100): string {
   try {
     // Handle Google format or array
     const items: unknown[] =
-      (output as { candidates?: [{ content?: { parts?: unknown[] } }] })
-        ?.candidates?.[0]?.content?.parts ??
-      (Array.isArray(output) ? output : []);
+      (output as { candidates?: [{ content?: { parts?: unknown[] } }] })?.candidates?.[0]?.content
+        ?.parts ?? (Array.isArray(output) ? output : []);
 
     const preview = items
       .map((item) => {
@@ -516,14 +628,14 @@ export function formatCuaResponsePreview(
         };
         if (i.text) return i.text.slice(0, 50);
         if (i.functionCall?.name) return `fn:${i.functionCall.name}`;
-        if (i.type === "tool_use" && i.name) return `tool_use:${i.name}`;
-        return i.type ? `[${i.type}]` : "[item]";
+        if (i.type === 'tool_use' && i.name) return `tool_use:${i.name}`;
+        return i.type ? `[${i.type}]` : '[item]';
       })
-      .join(" ");
+      .join(' ');
 
     return preview.slice(0, maxLen);
   } catch {
-    return "[error]";
+    return '[error]';
   }
 }
 
@@ -534,17 +646,16 @@ export function formatCuaResponsePreview(
 export class SessionFileLogger {
   /**
    * Initialize a new logging context. Call this at the start of a session.
-   * If BROWSERBASE_CONFIG_DIR is not set, logging is disabled.
    */
   static init(sessionId: string, v3Options?: V3Options): void {
     const configDir = getConfigDir();
     if (!configDir) return; // Logging disabled
 
-    const sessionDir = path.join(configDir, "sessions", sessionId);
+    const sessionDir = path.join(configDir, 'sessions', sessionId);
 
     // Create context with placeholder logger (will be replaced after streams init)
     const ctx: FlowLoggerContext = {
-      logger: pino({ level: "silent" }), // Placeholder, replaced below
+      logger: pino({ level: 'silent' }), // Placeholder, replaced below
       metrics: {
         llmRequests: 0,
         llmInputTokens: 0,
@@ -570,6 +681,7 @@ export class SessionFileLogger {
         llm: null,
         jsonl: null,
       },
+      tokenCostTracker: null,
     };
 
     // Store init promise for awaiting in log methods
@@ -578,79 +690,69 @@ export class SessionFileLogger {
     loggerContext.enterWith(ctx);
   }
 
-  private static async initAsync(
-    ctx: FlowLoggerContext,
-    v3Options?: V3Options,
-  ): Promise<void> {
+  private static async initAsync(ctx: FlowLoggerContext, v3Options?: V3Options): Promise<void> {
     try {
       await fs.promises.mkdir(ctx.sessionDir, { recursive: true });
 
       if (v3Options) {
         const sanitizedOptions = sanitizeOptions(v3Options);
-        const sessionJsonPath = path.join(ctx.sessionDir, "session.json");
+        const sessionJsonPath = path.join(ctx.sessionDir, 'session.json');
         await fs.promises.writeFile(
           sessionJsonPath,
           JSON.stringify(sanitizedOptions, null, 2),
-          "utf-8",
+          'utf-8',
         );
       }
 
       // Create symlink to latest session
-      const latestLink = path.join(ctx.configDir, "sessions", "latest");
+      const latestLink = path.join(ctx.configDir, 'sessions', 'latest');
       try {
         try {
           await fs.promises.unlink(latestLink);
         } catch {
           // Ignore if doesn't exist
         }
-        await fs.promises.symlink(ctx.sessionId, latestLink, "dir");
+        await fs.promises.symlink(ctx.sessionId, latestLink, 'dir');
       } catch {
         // Symlink creation can fail on Windows or due to permissions
       }
 
       // Create file streams
       const dir = ctx.sessionDir;
-      ctx.fileStreams.agent = fs.createWriteStream(
-        path.join(dir, "agent_events.log"),
-        { flags: "a" },
-      );
-      ctx.fileStreams.stagehand = fs.createWriteStream(
-        path.join(dir, "stagehand_events.log"),
-        { flags: "a" },
-      );
-      ctx.fileStreams.understudy = fs.createWriteStream(
-        path.join(dir, "understudy_events.log"),
-        { flags: "a" },
-      );
-      ctx.fileStreams.cdp = fs.createWriteStream(
-        path.join(dir, "cdp_events.log"),
-        { flags: "a" },
-      );
-      ctx.fileStreams.llm = fs.createWriteStream(
-        path.join(dir, "llm_events.log"),
-        { flags: "a" },
-      );
-      ctx.fileStreams.jsonl = fs.createWriteStream(
-        path.join(dir, "session_events.jsonl"),
-        { flags: "a" },
-      );
+      ctx.fileStreams.agent = fs.createWriteStream(path.join(dir, 'agent_events.log'), {
+        flags: 'a',
+      });
+      ctx.fileStreams.stagehand = fs.createWriteStream(path.join(dir, 'stagehand_events.log'), {
+        flags: 'a',
+      });
+      ctx.fileStreams.understudy = fs.createWriteStream(path.join(dir, 'understudy_events.log'), {
+        flags: 'a',
+      });
+      ctx.fileStreams.cdp = fs.createWriteStream(path.join(dir, 'cdp_events.log'), { flags: 'a' });
+      ctx.fileStreams.llm = fs.createWriteStream(path.join(dir, 'llm_events.log'), { flags: 'a' });
+      ctx.fileStreams.jsonl = fs.createWriteStream(path.join(dir, 'session_events.jsonl'), {
+        flags: 'a',
+      });
+
+      // Initialize token cost tracker
+      ctx.tokenCostTracker = new TokenCostTracker(path.join(dir, 'token_costs.txt'));
 
       ctx.initialized = true;
 
       // Create pino multistream: JSONL + pretty streams per category
       const streams: pino.StreamEntry[] = [
         { stream: createJsonlStream(ctx) },
-        { stream: createPrettyStream(ctx, "AgentTask", "agent") },
-        { stream: createPrettyStream(ctx, "StagehandStep", "stagehand") },
-        { stream: createPrettyStream(ctx, "UnderstudyAction", "understudy") },
-        { stream: createPrettyStream(ctx, "CDP", "cdp") },
-        { stream: createPrettyStream(ctx, "LLM", "llm") },
+        { stream: createPrettyStream(ctx, 'AgentTask', 'agent') },
+        { stream: createPrettyStream(ctx, 'StagehandStep', 'stagehand') },
+        { stream: createPrettyStream(ctx, 'UnderstudyAction', 'understudy') },
+        { stream: createPrettyStream(ctx, 'CDP', 'cdp') },
+        { stream: createPrettyStream(ctx, 'LLM', 'llm') },
       ];
 
       // Create logger with mixin that injects span context from AsyncLocalStorage
       ctx.logger = pino(
         {
-          level: "info",
+          level: 'info',
           // Mixin adds eventId and current span context to every log
           mixin() {
             const store = loggerContext.getStore();
@@ -677,6 +779,8 @@ export class SessionFileLogger {
     if (!ctx) return;
     await ctx.initPromise;
     SessionFileLogger.logAgentTaskCompleted();
+    // Flush token cost tracker before closing streams
+    ctx.tokenCostTracker?.flush();
     await Promise.all(
       Object.values(ctx.fileStreams)
         .filter(Boolean)
@@ -733,8 +837,8 @@ export class SessionFileLogger {
     };
 
     ctx.logger.info({
-      category: "AgentTask",
-      event: "started",
+      category: 'AgentTask',
+      event: 'started',
       method: invocation,
       params: args,
     } as FlowEvent);
@@ -750,9 +854,9 @@ export class SessionFileLogger {
     const durationMs = Date.now() - ctx.metrics.taskStartTime;
 
     const event: Partial<FlowEvent> = {
-      category: "AgentTask",
-      event: "completed",
-      method: "Agent.execute",
+      category: 'AgentTask',
+      event: 'completed',
+      method: 'Agent.execute',
       metrics: {
         durationMs,
         llmRequests: ctx.metrics.llmRequests,
@@ -763,7 +867,7 @@ export class SessionFileLogger {
     };
 
     if (options?.cacheHit) {
-      event.msg = "CACHE HIT, NO LLM NEEDED";
+      event.msg = 'CACHE HIT, NO LLM NEEDED';
     }
 
     ctx.logger.info(event);
@@ -801,8 +905,8 @@ export class SessionFileLogger {
     ctx.metrics.stepStartTime = Date.now();
 
     ctx.logger.info({
-      category: "StagehandStep",
-      event: "started",
+      category: 'StagehandStep',
+      event: 'started',
       method: invocation,
       params: args,
     } as FlowEvent);
@@ -814,13 +918,11 @@ export class SessionFileLogger {
     const ctx = loggerContext.getStore();
     if (!ctx || !ctx.stepId) return;
 
-    const durationMs = ctx.metrics.stepStartTime
-      ? Date.now() - ctx.metrics.stepStartTime
-      : 0;
+    const durationMs = ctx.metrics.stepStartTime ? Date.now() - ctx.metrics.stepStartTime : 0;
 
     ctx.logger.info({
-      category: "StagehandStep",
-      event: "completed",
+      category: 'StagehandStep',
+      event: 'completed',
       metrics: { durationMs },
     } as FlowEvent);
 
@@ -850,10 +952,7 @@ export class SessionFileLogger {
 
     // Set up action context
     ctx.actionId = uuidv7();
-    ctx.actionLabel = actionType
-      .toUpperCase()
-      .replace("UNDERSTUDY.", "")
-      .replace("PAGE.", "");
+    ctx.actionLabel = actionType.toUpperCase().replace('UNDERSTUDY.', '').replace('PAGE.', '');
     ctx.metrics.actionStartTime = Date.now();
 
     const params: Record<string, unknown> = {};
@@ -861,8 +960,8 @@ export class SessionFileLogger {
     if (args) params.args = args;
 
     ctx.logger.info({
-      category: "UnderstudyAction",
-      event: "started",
+      category: 'UnderstudyAction',
+      event: 'started',
       method: actionType,
       params: Object.keys(params).length > 0 ? params : undefined,
     } as FlowEvent);
@@ -874,13 +973,11 @@ export class SessionFileLogger {
     const ctx = loggerContext.getStore();
     if (!ctx || !ctx.actionId) return;
 
-    const durationMs = ctx.metrics.actionStartTime
-      ? Date.now() - ctx.metrics.actionStartTime
-      : 0;
+    const durationMs = ctx.metrics.actionStartTime ? Date.now() - ctx.metrics.actionStartTime : 0;
 
     ctx.logger.info({
-      category: "UnderstudyAction",
-      event: "completed",
+      category: 'UnderstudyAction',
+      event: 'completed',
       metrics: { durationMs },
     } as FlowEvent);
 
@@ -895,19 +992,15 @@ export class SessionFileLogger {
   // ===========================================================================
 
   private static logCdpEvent(
-    eventType: "call" | "message",
-    {
-      method,
-      params,
-      targetId,
-    }: { method: string; params?: unknown; targetId?: string | null },
+    eventType: 'call' | 'message',
+    { method, params, targetId }: { method: string; params?: unknown; targetId?: string | null },
     explicitCtx?: FlowLoggerContext | null,
   ): void {
     const ctx = explicitCtx ?? loggerContext.getStore();
     if (!ctx) return;
-    if (eventType === "call") ctx.metrics.cdpEvents++;
+    if (eventType === 'call') ctx.metrics.cdpEvents++;
     ctx.logger.info({
-      category: "CDP",
+      category: 'CDP',
       event: eventType,
       method,
       params,
@@ -919,14 +1012,14 @@ export class SessionFileLogger {
     data: { method: string; params?: object; targetId?: string | null },
     ctx?: FlowLoggerContext | null,
   ): void {
-    SessionFileLogger.logCdpEvent("call", data, ctx);
+    SessionFileLogger.logCdpEvent('call', data, ctx);
   }
 
   static logCdpMessageEvent(
     data: { method: string; params?: unknown; targetId?: string | null },
     ctx?: FlowLoggerContext | null,
   ): void {
-    SessionFileLogger.logCdpEvent("message", data, ctx);
+    SessionFileLogger.logCdpEvent('message', data, ctx);
   }
 
   // ===========================================================================
@@ -953,10 +1046,10 @@ export class SessionFileLogger {
     ctx.metrics.llmRequests++;
 
     ctx.logger.info({
-      category: "LLM",
-      event: "request",
+      category: 'LLM',
+      event: 'request',
       requestId,
-      method: "LLM.request",
+      method: 'LLM.request',
       model,
       prompt,
     });
@@ -969,6 +1062,7 @@ export class SessionFileLogger {
       output,
       inputTokens,
       outputTokens,
+      cachedInputTokens,
     }: {
       requestId: string;
       model: string;
@@ -976,6 +1070,7 @@ export class SessionFileLogger {
       output?: string;
       inputTokens?: number;
       outputTokens?: number;
+      cachedInputTokens?: number;
     },
     explicitCtx?: FlowLoggerContext | null,
   ): void {
@@ -986,11 +1081,21 @@ export class SessionFileLogger {
     ctx.metrics.llmInputTokens += inputTokens ?? 0;
     ctx.metrics.llmOutputTokens += outputTokens ?? 0;
 
+    // Track per-model token costs
+    if (ctx.tokenCostTracker && (inputTokens || outputTokens)) {
+      ctx.tokenCostTracker.record(
+        model,
+        inputTokens ?? 0,
+        cachedInputTokens ?? 0,
+        outputTokens ?? 0,
+      );
+    }
+
     ctx.logger.info({
-      category: "LLM",
-      event: "response",
+      category: 'LLM',
+      event: 'response',
       requestId,
-      method: "LLM.response",
+      method: 'LLM.response',
       model,
       output,
       inputTokens,
@@ -1008,7 +1113,7 @@ export class SessionFileLogger {
    */
   static createLlmLoggingMiddleware(
     modelId: string,
-  ): Pick<LanguageModelMiddleware, "wrapGenerate"> {
+  ): Pick<LanguageModelMiddleware, 'wrapGenerate'> {
     // No-op middleware when logging is disabled
     if (!CONFIG_DIR) {
       return {
@@ -1031,15 +1136,15 @@ export class SessionFileLogger {
           role?: string;
           content?: unknown;
         }>;
-        const lastMsg = messages.filter((m) => m.role !== "system").pop();
+        const lastMsg = messages.filter((m) => m.role !== 'system').pop();
         const extracted = {
           text: undefined as string | undefined,
           extras: [] as string[],
         };
 
-        let rolePrefix = lastMsg?.role ?? "?";
+        let rolePrefix = lastMsg?.role ?? '?';
         if (lastMsg) {
-          if (typeof lastMsg.content === "string") {
+          if (typeof lastMsg.content === 'string') {
             extracted.text = lastMsg.content;
           } else if (Array.isArray(lastMsg.content)) {
             // Check for tool-result first
@@ -1049,11 +1154,11 @@ export class SessionFileLogger {
                 toolName?: string;
                 output?: { type?: string; value?: unknown };
               }>
-            ).find((p) => p.type === "tool-result");
+            ).find((p) => p.type === 'tool-result');
             if (toolResult) {
               rolePrefix = `tool result: ${toolResult.toolName}()`;
               const out = toolResult.output;
-              if (out?.type === "json" && out.value) {
+              if (out?.type === 'json' && out.value) {
                 extracted.text = JSON.stringify(out.value).slice(0, 150);
               } else if (Array.isArray(out?.value)) {
                 extractFromContent(out.value as unknown[], extracted);
@@ -1064,14 +1169,14 @@ export class SessionFileLogger {
           }
         }
 
-        const promptText = extracted.text || "(no text)";
+        const promptText = extracted.text || '(no text)';
         const promptPreview = `${rolePrefix}: ${promptText} +{${toolCount} tools}`;
 
         SessionFileLogger.logLlmRequest(
           {
             requestId: llmRequestId,
             model: modelId,
-            operation: "generateText",
+            operation: 'generateText',
             prompt: promptPreview,
           },
           ctx,
@@ -1085,9 +1190,9 @@ export class SessionFileLogger {
           content?: unknown;
           toolCalls?: unknown[];
         };
-        let outputPreview = res.text || "";
+        let outputPreview = res.text || '';
         if (!outputPreview && res.content) {
-          if (typeof res.content === "string") {
+          if (typeof res.content === 'string') {
             outputPreview = res.content;
           } else if (Array.isArray(res.content)) {
             outputPreview = (
@@ -1099,12 +1204,9 @@ export class SessionFileLogger {
             )
               .map(
                 (c) =>
-                  c.text ||
-                  (c.type === "tool-call"
-                    ? `tool call: ${c.toolName}()`
-                    : `[${c.type}]`),
+                  c.text || (c.type === 'tool-call' ? `tool call: ${c.toolName}()` : `[${c.type}]`),
               )
-              .join(" ");
+              .join(' ');
           }
         }
         if (!outputPreview && res.toolCalls?.length) {
@@ -1115,10 +1217,11 @@ export class SessionFileLogger {
           {
             requestId: llmRequestId,
             model: modelId,
-            operation: "generateText",
-            output: outputPreview || "[empty]",
+            operation: 'generateText',
+            output: outputPreview || '[empty]',
             inputTokens: result.usage?.inputTokens,
             outputTokens: result.usage?.outputTokens,
+            cachedInputTokens: result.usage?.cachedInputTokens,
           },
           ctx,
         );
@@ -1146,10 +1249,7 @@ export function logAction(actionType: string) {
       return descriptor;
     }
 
-    descriptor.value = async function (
-      this: unknown,
-      ...args: unknown[]
-    ): Promise<unknown> {
+    descriptor.value = async function (this: unknown, ...args: unknown[]): Promise<unknown> {
       SessionFileLogger.logUnderstudyActionEvent({
         actionType,
         args: args.length > 0 ? args : undefined,
@@ -1184,10 +1284,7 @@ export function logStagehandStep(invocation: string, label: string) {
       return descriptor;
     }
 
-    descriptor.value = async function (
-      this: unknown,
-      ...args: unknown[]
-    ): Promise<unknown> {
+    descriptor.value = async function (this: unknown, ...args: unknown[]): Promise<unknown> {
       SessionFileLogger.logStagehandStepEvent({
         invocation,
         args: args.length > 0 ? args : undefined,

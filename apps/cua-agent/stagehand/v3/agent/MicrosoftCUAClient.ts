@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { v7 as uuidv7 } from "uuid";
 import { LogLine } from "../types/public/logs.js";
 import {
   AgentAction,
@@ -8,6 +9,7 @@ import {
 } from "../types/public/agent.js";
 import { ClientOptions } from "../types/public/model.js";
 import { AgentClient } from "./AgentClient.js";
+import { SessionFileLogger } from "../flowLogger.js";
 import { AgentScreenshotProviderError } from "../types/public/sdkErrors.js";
 import { mapKeyToPlaywright } from "./utils/cuaKeyMapping.js";
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
@@ -712,6 +714,13 @@ For each function call, return a json object with function name and arguments wi
     });
 
     const startTime = Date.now();
+    const llmRequestId = uuidv7();
+    SessionFileLogger.logLlmRequest({
+      requestId: llmRequestId,
+      model: this.modelName,
+      operation: "MicrosoftCUA.chatCompletion",
+    });
+
     let response;
     try {
       response = await this.client.chat.completions.create({
@@ -720,6 +729,12 @@ For each function call, return a json object with function name and arguments wi
         temperature: this.temperature,
       });
     } catch (apiError) {
+      SessionFileLogger.logLlmResponse({
+        requestId: llmRequestId,
+        model: this.modelName,
+        operation: "MicrosoftCUA.chatCompletion",
+        output: `[error: ${apiError instanceof Error ? apiError.message : "unknown"}]`,
+      });
       logger({
         category: "agent",
         message: `API call failed: ${apiError instanceof Error ? apiError.message : String(apiError)}`,
@@ -741,6 +756,15 @@ For each function call, return a json object with function name and arguments wi
       completion_tokens: 0,
       total_tokens: 0,
     };
+
+    SessionFileLogger.logLlmResponse({
+      requestId: llmRequestId,
+      model: this.modelName,
+      operation: "MicrosoftCUA.chatCompletion",
+      inputTokens: usage.prompt_tokens,
+      outputTokens: usage.completion_tokens,
+      cachedInputTokens: (usage as any).prompt_tokens_details?.cached_tokens ?? 0,
+    });
 
     // Add assistant response to both histories
     const assistantMsg: FaraMessage = {

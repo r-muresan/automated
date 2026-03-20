@@ -5,12 +5,14 @@ import {
   TextBlockParam,
   Tool,
 } from "@anthropic-ai/sdk/resources";
+import { v7 as uuidv7 } from "uuid";
 import { LogLine } from "../types/public/logs.js";
 import {
   AnthropicJsonSchemaObject,
   AvailableModel,
   ClientOptions as StagehandClientOptions,
 } from "../types/public/model.js";
+import { SessionFileLogger } from "../flowLogger.js";
 import {
   CreateChatCompletionOptions,
   LLMClient,
@@ -172,6 +174,13 @@ export class AnthropicClient extends LLMClient {
       anthropicTools.push(toolDefinition);
     }
 
+    const llmRequestId = uuidv7();
+    SessionFileLogger.logLlmRequest({
+      requestId: llmRequestId,
+      model: this.modelName,
+      operation: "AnthropicClient.create",
+    });
+
     const response = await this.client.messages.create({
       model: this.modelName,
       max_tokens: options.maxOutputTokens || 8192,
@@ -181,6 +190,15 @@ export class AnthropicClient extends LLMClient {
         ? (systemMessage.content as string | TextBlockParam[]) // we can cast because we already filtered out image content
         : undefined,
       temperature: options.temperature,
+    });
+
+    SessionFileLogger.logLlmResponse({
+      requestId: llmRequestId,
+      model: this.modelName,
+      operation: "AnthropicClient.create",
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      cachedInputTokens: (response.usage as any).cache_read_input_tokens ?? 0,
     });
 
     logger({

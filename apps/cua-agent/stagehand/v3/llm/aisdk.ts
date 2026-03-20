@@ -258,6 +258,7 @@ You must respond in JSON format. respond WITH JSON. Do not include any other tex
         output: JSON.stringify(objectResponse.object),
         inputTokens: objectResponse.usage.inputTokens,
         outputTokens: objectResponse.usage.outputTokens,
+        cachedInputTokens: objectResponse.usage.cachedInputTokens,
       });
 
       this.logger?.({
@@ -385,6 +386,7 @@ You must respond in JSON format. respond WITH JSON. Do not include any other tex
           : ""),
       inputTokens: textResponse.usage.inputTokens,
       outputTokens: textResponse.usage.outputTokens,
+      cachedInputTokens: textResponse.usage.cachedInputTokens,
     });
 
     this.logger?.({
