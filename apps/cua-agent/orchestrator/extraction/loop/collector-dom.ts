@@ -24,16 +24,44 @@ function buildExtractionScript(selector: string): string {
     (() => {
       const MAX_HTML = 500;
       const MAX_TEXT = 300;
-      const els = document.querySelectorAll(${selectorJson});
-      return Array.from(els).map(el => ({
-        textContent: (el.textContent || '').trim().slice(0, MAX_TEXT),
-        innerText: (el.innerText || '').trim().slice(0, MAX_TEXT),
-        tagName: el.tagName?.toLowerCase() || '',
-        id: el.id || '',
-        className: (typeof el.className === 'string' ? el.className : ''),
-        href: el.href || el.querySelector('a')?.href || '',
-        outerHTMLTruncated: el.outerHTML.slice(0, MAX_HTML),
-      }));
+
+      function extract(els) {
+        return Array.from(els).map(el => ({
+          textContent: (el.textContent || '').trim().slice(0, MAX_TEXT),
+          innerText: (el.innerText || '').trim().slice(0, MAX_TEXT),
+          tagName: el.tagName?.toLowerCase() || '',
+          id: el.id || '',
+          className: (typeof el.className === 'string' ? el.className : ''),
+          href: el.href || el.querySelector('a')?.href || '',
+          outerHTMLTruncated: el.outerHTML.slice(0, MAX_HTML),
+        }));
+      }
+
+      // Try main document first
+      let els = document.querySelectorAll(${selectorJson});
+      if (els.length > 0) return extract(els);
+
+      // Try same-origin iframes
+      try {
+        for (const iframe of document.querySelectorAll('iframe')) {
+          try {
+            if (iframe.contentDocument) {
+              els = iframe.contentDocument.querySelectorAll(${selectorJson});
+              if (els.length > 0) return extract(els);
+              for (const nested of iframe.contentDocument.querySelectorAll('iframe')) {
+                try {
+                  if (nested.contentDocument) {
+                    els = nested.contentDocument.querySelectorAll(${selectorJson});
+                    if (els.length > 0) return extract(els);
+                  }
+                } catch (e) {}
+              }
+            }
+          } catch (e) {}
+        }
+      } catch (e) {}
+
+      return [];
     })()
   `;
 }

@@ -5,6 +5,7 @@ import type { Stagehand } from '../../../stagehand/v3';
 import {
   buildStructuralDiscoveryScript,
   buildDomOutlineScript,
+  buildSelectorCountScript,
   type CandidateSelector,
 } from '../dom-scripts';
 import { capturePageScreenshot } from '../common';
@@ -29,6 +30,7 @@ export async function discoverSelector(params: {
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
 
   // Phase 1: Structural auto-discovery (no LLM needed)
+  // The script automatically searches main document + same-origin iframes
   let structuralCandidates = await page.evaluate<CandidateSelector[]>(
     buildStructuralDiscoveryScript(),
   );
@@ -86,22 +88,21 @@ Which selector best matches what the user is looking for? Return one of the sele
 
       const parsed = response.choices[0]?.message?.parsed;
       if (parsed?.selector) {
-        const count = await page.evaluate<number>(
-          `document.querySelectorAll(${JSON.stringify(parsed.selector)}).length`,
-        );
+        // Use iframe-aware count check
+        const count = await page.evaluate<number>(buildSelectorCountScript(parsed.selector));
         console.log(`[SELECTOR-DISCOVERY] LLM picked: "${parsed.selector}" count=${count}`);
         if (count >= 2) {
           return parsed;
         }
 
         // LLM's pick didn't work — fall back to best structural candidate
-        // const best = structuralCandidates[0];
-        // if (best && best.count >= 2) {
-        //   console.log(
-        //     `[SELECTOR-DISCOVERY] Falling back to top structural candidate: "${best.selector}" count=${best.count}`,
-        //   );
-        //   return { selector: best.selector, itemDescription: best.sampleTexts[0] ?? '' };
-        // }
+        const best = structuralCandidates[0];
+        if (best && best.count >= 2) {
+          console.log(
+            `[SELECTOR-DISCOVERY] Falling back to top structural candidate: "${best.selector}" count=${best.count}`,
+          );
+          return { selector: best.selector, itemDescription: best.sampleTexts[0] ?? '' };
+        }
       }
     } catch (error) {
       console.warn('[SELECTOR-DISCOVERY] LLM pick failed:', (error as Error).message);
@@ -173,9 +174,8 @@ Return the selector and a brief description of what each matched element represe
         continue;
       }
 
-      const count = await page.evaluate<number>(
-        `document.querySelectorAll(${JSON.stringify(parsed.selector)}).length`,
-      );
+      // Use iframe-aware count check
+      const count = await page.evaluate<number>(buildSelectorCountScript(parsed.selector));
 
       console.log(
         `[SELECTOR-DISCOVERY] attempt=${attempt + 1} selector="${parsed.selector}" count=${count}`,

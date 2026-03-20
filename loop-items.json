@@ -1,237 +1,110 @@
 [
   {
     "index": 1,
-    "text": "",
-    "tagName": "template"
+    "text": "On Campus\nNebula\n\nAI/ML\n\nYour Super Agent is ready to work.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/nebula/"
   },
   {
     "index": 2,
-    "text": "",
-    "tagName": "template"
+    "text": "At Garage\nMagical Toys\n\nAI/ML\n\nConsumer\n\nHardware\n\nAI plush toys for screen-free kids’ play.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/magical-toys/"
   },
   {
     "index": 3,
-    "text": "",
-    "tagName": "template"
+    "text": "Sync Labs\n\nAI/ML\n\nDevTools\n\nAPI for real-time lip sync.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/sync-labs/"
   },
   {
     "index": 4,
-    "text": "",
-    "tagName": "template"
+    "text": "Aurelius Systems\n\nHardware\n\nAdvancing C-UAS through Directed Energy.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/aurelius-systems/"
   },
   {
     "index": 5,
-    "text": "",
-    "tagName": "template"
+    "text": "Inference\n\nAI/ML\n\nDevTools\n\nDistributed AI inference network.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/inference/"
   },
   {
     "index": 6,
-    "text": "",
-    "tagName": "template"
+    "text": "Anara\n\nAI/ML\n\nAI for researchers.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/anara/"
   },
   {
     "index": 7,
-    "text": "",
-    "tagName": "template"
+    "text": "On Campus\nthirdweb\n\nWeb3\n\nDevTools\n\nFull-stack, open-source web3 development platform.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/thirdweb/"
   },
   {
     "index": 8,
-    "text": "",
-    "tagName": "template"
+    "text": "On Campus\nTrass Games\n\nAR/VR\n\nGaming\n\nVR game studio.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/trass-games/"
   },
   {
     "index": 9,
-    "text": "",
-    "tagName": "template"
+    "text": "LiveKit\n\nB2B\n\nDevTools\n\nOpen-source real-time communication platform and SDK.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/livekit/"
   },
   {
     "index": 10,
-    "text": "",
-    "tagName": "template"
+    "text": "Shapes\n\nAI/ML\n\nConsumer\n\nGeneral Purpose Social Agents.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/shapes/"
   },
   {
     "index": 11,
-    "text": "",
-    "tagName": "template"
+    "text": "Lexica\n\nAI/ML\n\nConsumer\n\nA search engine for AI-generated images.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/lexica/"
   },
   {
     "index": 12,
-    "text": "",
-    "tagName": "template"
+    "text": "On Campus\nWomp\n\nAI/ML\n\nConcept To Render In Minutes.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/womp/"
   },
   {
     "index": 13,
-    "text": "",
-    "tagName": "template"
+    "text": "Paraform\n\nAI/ML\n\nB2B\n\nMatch with expert recruiters and fill your hardest roles.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/paraform/"
   },
   {
     "index": 14,
-    "text": "",
-    "tagName": "template"
+    "text": "Syncere\n\nConsumer\n\nHardware\n\nRobots that blend in to your home.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/syncere/"
   },
   {
     "index": 15,
-    "text": "",
-    "tagName": "template"
+    "text": "Kontigo\n\nWeb3\n\nUSDC-Smart Neobank for Latinos.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/kontigo/"
   },
   {
     "index": 16,
-    "text": "",
-    "tagName": "template"
+    "text": "At Garage\nREK\n\nAR/VR\n\nAI/ML\n\nHardware\n\nFull-contact combat robot sports league.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/rek/"
   },
   {
     "index": 17,
-    "text": "",
-    "tagName": "template"
+    "text": "Rork\n\nAI/ML\n\nDevTools\n\nConsumer\n\nBuild mobile apps with AI, no code.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/rork/"
   },
   {
     "index": 18,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 19,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 20,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 21,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 22,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 23,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 24,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 25,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 26,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 27,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 28,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 29,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 30,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 31,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 32,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 33,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 34,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 35,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 36,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 37,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 38,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 39,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 40,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 41,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 42,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 43,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 44,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 45,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 46,
-    "text": "",
-    "tagName": "template"
-  },
-  {
-    "index": 47,
-    "text": "",
-    "tagName": "template"
+    "text": "Tangible\n\nHardware\n\nHumanoid robots for your home.",
+    "tagName": "a",
+    "href": "https://f.inc/portfolio/tangible/"
   }
 ]
