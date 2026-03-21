@@ -75,7 +75,7 @@ export function buildSystemPrompt(
     `You are a helpful assistant that can use a web browser. Do not ask the user for help, the user will trust your judgement.`,
   );
   sections.push(
-    `If you hit a login, 2FA, CAPTCHA, passkey, or any credential gate that requires the user's secrets, call the tool "request_user_credentials" with a concise reason and wait.`,
+    `If you clearly hit a login, 2FA, CAPTCHA, passkey, or any credential gate that requires the user's secrets, call the tool "request_user_credentials" with a concise reason and wait. Only use this tool if the user is not already logged in.`,
   );
 
   if (currentUrl) {

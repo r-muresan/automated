@@ -1,6 +1,7 @@
 enum WorkflowStepType {
   navigate
   tab_navigate
+  switch_tab
   save
   step
   extract
@@ -69,6 +70,7 @@ model WorkflowStep {
   type         WorkflowStepType
   description  String?            @db.Text
   url          String?
+  tabIndex     Int?
   dataSchema   String?            @db.Text
   condition    String?            @db.Text
   createdAt    DateTime           @default(now())

@@ -18,6 +18,7 @@ export interface LoopDeps {
   models: { extract: string; agent: string };
   openrouterApiKey: string;
   openrouterBaseUrl: string;
+  globalState: any[];
   emit: (event: OrchestratorEvent) => void;
   assertNotAborted: () => void;
   executeSteps: (steps: Step[], context?: LoopContext) => Promise<void>;

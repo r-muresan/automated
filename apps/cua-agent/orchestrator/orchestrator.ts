@@ -24,6 +24,7 @@ import { initSession, closeSession, type SessionState } from './session';
 import {
   executeNavigateStep,
   executeTabNavigateStep,
+  executeSwitchTabStep,
   executeExtractStep,
   executeSaveStep,
   executeSingleStep,
@@ -321,6 +322,8 @@ export class OrchestratorAgent {
         return `Navigate to ${step.url}`;
       case 'tab_navigate':
         return `Tab navigate to ${step.url}`;
+      case 'switch_tab':
+        return `Switch to tab ${step.tabIndex}`;
       case 'extract':
         return step.description;
       case 'save':
@@ -360,6 +363,8 @@ export class OrchestratorAgent {
           await executeNavigateStep(ctx, step, index);
         } else if (step.type === 'tab_navigate') {
           await executeTabNavigateStep(ctx, step, index);
+        } else if (step.type === 'switch_tab') {
+          await executeSwitchTabStep(ctx, step, index);
         }
       } finally {
         this.sessionFiles.endStep(stepContext);
@@ -376,6 +381,7 @@ export class OrchestratorAgent {
       models: this.resolveModels(),
       openrouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
       openrouterBaseUrl: OPENROUTER_BASE_URL,
+      globalState: this.globalState,
       emit: this.emit.bind(this),
       assertNotAborted: this.assertNotAborted.bind(this),
       executeSteps: this.executeSteps.bind(this),

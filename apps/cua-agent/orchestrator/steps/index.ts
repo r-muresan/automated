@@ -1,4 +1,4 @@
-export { executeNavigateStep, executeTabNavigateStep } from './navigate';
+export { executeNavigateStep, executeTabNavigateStep, executeSwitchTabStep } from './navigate';
 export { executeExtractStep } from './extract';
 export { executeSaveStep, generateSavedFile } from './save';
 export { executeSingleStep } from './single-step';

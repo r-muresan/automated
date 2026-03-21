@@ -226,6 +226,7 @@ export class WorkflowService {
       type: step.type,
       description: null as string | null,
       url: null as string | null,
+      tabIndex: null as number | null,
       dataSchema: null as string | null,
       condition: null as string | null,
     };
@@ -236,6 +237,11 @@ export class WorkflowService {
         return {
           ...base,
           url: step.url,
+        };
+      case 'switch_tab':
+        return {
+          ...base,
+          tabIndex: step.tabIndex,
         };
       case 'step':
         return {
@@ -274,6 +280,7 @@ export class WorkflowService {
     url: string | null;
     dataSchema: string | null;
     condition: string | null;
+    tabIndex: number | null;
   }): string {
     if (step.description && step.description.trim().length > 0) {
       return step.description;
@@ -284,6 +291,8 @@ export class WorkflowService {
         return step.url ? `Navigate to ${step.url}` : 'Navigate to a URL';
       case 'tab_navigate':
         return step.url ? `Open ${step.url} in a new tab` : 'Open a new tab';
+      case 'switch_tab':
+        return `Switch to tab ${step.tabIndex ?? ''}`.trim();
       case 'extract':
         return step.dataSchema ? `Extract data (${step.dataSchema})` : 'Extract data from the page';
       case 'loop':
@@ -326,6 +335,7 @@ export class WorkflowService {
             url: null,
             dataSchema: null,
             condition: null,
+            tabIndex: null,
           }),
         steps: (step.steps ?? []).map((child) => this.ensureStepDefaults(child)),
       };
@@ -344,6 +354,13 @@ export class WorkflowService {
       return {
         ...step,
         url: step.url ?? '',
+      };
+    }
+
+    if (step.type === 'switch_tab') {
+      return {
+        ...step,
+        tabIndex: step.tabIndex ?? 0,
       };
     }
 
@@ -377,6 +394,7 @@ export class WorkflowService {
       type: string;
       description: string | null;
       url: string | null;
+      tabIndex: number | null;
       dataSchema: string | null;
       condition: string | null;
     }>,
@@ -411,6 +429,7 @@ export class WorkflowService {
       type: string;
       description: string | null;
       url: string | null;
+      tabIndex: number | null;
       dataSchema: string | null;
       condition: string | null;
     },
@@ -421,6 +440,8 @@ export class WorkflowService {
         return { type: 'navigate', url: step.url ?? '' };
       case 'tab_navigate':
         return { type: 'tab_navigate', url: step.url ?? '' };
+      case 'switch_tab':
+        return { type: 'switch_tab', tabIndex: step.tabIndex ?? 0 };
       case 'save':
         return { type: 'save', description: step.description ?? '' };
       case 'extract':

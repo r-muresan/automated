@@ -6,7 +6,11 @@ export const DEFAULT_OPENROUTER_MODEL = 'google/gemini-3-flash-preview';
 
 // Base step schemas (non-recursive)
 const NavigateStepSchema = z.object({
-  type: z.literal('navigate').describe('Navigate to a URL'),
+  type: z
+    .literal('navigate')
+    .describe(
+      'Navigate directly to a URL. Only use when the browser is not already on that page and no prior step causes navigation there.',
+    ),
   url: z.string().describe('The URL to navigate to'),
 });
 
@@ -42,16 +46,27 @@ const ExtractStepSchema = z.object({
     .optional(),
 });
 
+const SwitchTabStepSchema = z.object({
+  type: z.literal('switch_tab').describe('Switch the active browser tab'),
+  tabIndex: z
+    .number()
+    .int()
+    .describe(
+      'Zero-based index of the tab to switch to. Tab 0 = first navigate, tab 1 = first tab_navigate, etc.',
+    ),
+});
+
 // Recursive step schema (supports nested loops/conditionals)
 export const StepSchema: z.ZodType<Step> = z.lazy(() =>
   z.discriminatedUnion('type', [
     NavigateStepSchema,
     TabNavigateStepSchema,
+    SwitchTabStepSchema,
     SaveStepSchema,
     SingleStepSchema,
     ExtractStepSchema,
     z.object({
-      type: z.literal('loop').describe('Repeat steps for each item'),
+      type: z.literal('loop').describe('Repeat steps for each item on the currently active page'),
       description: z.string().describe('What to loop over'),
       steps: z.array(StepSchema).describe('Array of step objects to execute in each iteration'),
     }),
@@ -86,13 +101,14 @@ DEFAULT: Leave inputs empty. Do NOT add inputs unless the user explicitly reques
 - Example of valid inputs (only when explicitly requested): A workflow adding a contact where the user asked for inputs might have: ["Name", "Email", "Phone Number"]
 
 # Step Types
-- \`navigate\`: Go to a URL. Must be the first step.
-- \`tab_navigate\`: Open a URL in a new tab.
+- \`navigate\`: Go to a URL directly. Only use this when the browser is not already on the target page and no prior \`step\` will cause navigation there.
+- \`tab_navigate\`: Open a URL in a new tab. The new tab becomes the active tab.
+- \`switch_tab\`: Switch to a tab by its 0-based index. Tab 0 is always the tab opened by \`navigate\`; each \`tab_navigate\` adds the next tab (1, 2, …). Use this to return to a source tab before a \`loop\` when a \`tab_navigate\` has made a different tab active.
 - \`step\`: A single logical action — what you'd tell a person to do as one instruction. Include all relevant details (what to type, which option to select, what to click).
 - \`extract\`: Extract data from the current page for use in other steps.
-- \`loop\`: Repeat steps over a collection. The loop identifies what to iterate over internally — do not add a separate \`extract\` step before it for the same data.
+- \`loop\`: Repeat steps for each item on the currently active page. The loop collects items from whichever tab is active when it runs — use \`switch_tab\` immediately before the loop if the active tab is not the source you want to iterate over. Do not add a separate \`extract\` step before the loop for the same data.
 - \`conditional\`: Branch based on a condition (trueSteps / falseSteps).
-- \`save\`: Save data to an output file.
+- \`save\`: Save data to an output file externally.
 
 # Step Granularity
 A step is NOT a single browser event. It groups all interactions needed for one logical action.
@@ -113,7 +129,11 @@ const WORKFLOW_JSON_SCHEMA = {
           type: 'object',
           required: ['type', 'url'],
           properties: {
-            type: { const: 'navigate', description: 'Navigate to a URL' },
+            type: {
+              const: 'navigate',
+              description:
+                'Navigate directly to a URL. Only use when the browser is not already on that page and no prior step causes navigation there.',
+            },
             url: { type: 'string', description: 'The URL to navigate to' },
           },
         },
@@ -123,6 +143,21 @@ const WORKFLOW_JSON_SCHEMA = {
           properties: {
             type: { const: 'tab_navigate', description: 'Open URL in new tab' },
             url: { type: 'string', description: 'The URL to open in a new tab' },
+          },
+        },
+        {
+          type: 'object',
+          required: ['type', 'tabIndex'],
+          properties: {
+            type: {
+              const: 'switch_tab',
+              description: 'Switch the active browser tab by its 0-based index',
+            },
+            tabIndex: {
+              type: 'integer',
+              description:
+                'Zero-based index of the tab to switch to. Tab 0 = first navigate, tab 1 = first tab_navigate, etc.',
+            },
           },
         },
         {
@@ -165,7 +200,10 @@ const WORKFLOW_JSON_SCHEMA = {
           type: 'object',
           required: ['type', 'description', 'steps'],
           properties: {
-            type: { const: 'loop', description: 'Repeat steps for each item' },
+            type: {
+              const: 'loop',
+              description: 'Repeat steps for each item on the currently active page',
+            },
             description: { type: 'string', description: 'What to loop over' },
             steps: {
               type: 'array',
@@ -277,6 +315,7 @@ export function getOpenRouterProviderConfig(): ProviderConfig {
 const VALID_STEP_TYPES = new Set([
   'navigate',
   'tab_navigate',
+  'switch_tab',
   'save',
   'step',
   'extract',

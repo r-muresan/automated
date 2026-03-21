@@ -38,9 +38,13 @@ async function processItems(params: {
   processedItems: CollectedItem[];
   initialPages: Set<StagehandPage>;
   initialActivePage: StagehandPage;
+  preLoopStateLength: number;
+  iterationStateAccumulator: any[];
 }): Promise<number> {
-  const { deps, step, index, items, maxItems, processedItems, initialPages, initialActivePage } =
-    params;
+  const {
+    deps, step, index, items, maxItems, processedItems,
+    initialPages, initialActivePage, preLoopStateLength, iterationStateAccumulator,
+  } = params;
   let { totalProcessed } = params;
 
   for (const item of items) {
@@ -48,6 +52,13 @@ async function processItems(params: {
     deps.assertNotAborted();
 
     console.log(`[LOOP] Processing item ${totalProcessed + 1}: "${item.fingerprint}"`);
+
+    // Scope iteration state: collect any entries added by previous iteration,
+    // then reset globalState back to pre-loop snapshot so iterations are isolated.
+    const addedByPrevIteration = deps.globalState.splice(preLoopStateLength);
+    if (addedByPrevIteration.length > 0) {
+      iterationStateAccumulator.push(...addedByPrevIteration);
+    }
 
     deps.emit({
       type: 'loop:iteration:start',
@@ -111,6 +122,12 @@ export async function executeLoopStep(
   const initialActivePage =
     deps.stagehand.context.activePage() ?? deps.stagehand.context.pages()[0];
 
+  // Snapshot globalState length before the loop so iteration data can be scoped.
+  // Each iteration will only see pre-loop state; iteration-specific data is
+  // accumulated separately and merged back after the loop completes.
+  const preLoopStateLength = deps.globalState.length;
+  const iterationStateAccumulator: any[] = [];
+
   try {
     const resolved = await resolveCollector({
       stagehand: deps.stagehand,
@@ -149,6 +166,8 @@ export async function executeLoopStep(
       processedItems,
       initialPages,
       initialActivePage,
+      preLoopStateLength,
+      iterationStateAccumulator,
     });
 
     // Collect and process subsequent pages
@@ -172,6 +191,8 @@ export async function executeLoopStep(
         processedItems,
         initialPages,
         initialActivePage,
+        preLoopStateLength,
+        iterationStateAccumulator,
       });
     }
 
@@ -181,6 +202,17 @@ export async function executeLoopStep(
     loopSuccess = false;
     loopError = error?.message ?? 'Loop failed';
     console.error(`[LOOP] Error: ${loopError}`);
+  }
+
+  // Merge iteration-scoped state back into globalState.
+  // Collect any entries from the final iteration first.
+  const finalIterationEntries = deps.globalState.splice(preLoopStateLength);
+  if (finalIterationEntries.length > 0) {
+    iterationStateAccumulator.push(...finalIterationEntries);
+  }
+  // Push all iteration data back so it's visible globally after the loop.
+  if (iterationStateAccumulator.length > 0) {
+    deps.globalState.push(...iterationStateAccumulator);
   }
 
   deps.emit({

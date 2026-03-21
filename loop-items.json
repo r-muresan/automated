@@ -1,110 +1,77 @@
 [
   {
     "index": 1,
-    "text": "On Campus\nNebula\n\nAI/ML\n\nYour Super Agent is ready to work.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/nebula/"
+    "Name": "Mike USA",
+    "Email": "musa@gmail.com"
   },
   {
     "index": 2,
-    "text": "At Garage\nMagical Toys\n\nAI/ML\n\nConsumer\n\nHardware\n\nAI plush toys for screen-free kids’ play.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/magical-toys/"
+    "Name": "Julia Jackson",
+    "Email": "jjackson@gmail.com"
   },
   {
     "index": 3,
-    "text": "Sync Labs\n\nAI/ML\n\nDevTools\n\nAPI for real-time lip sync.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/sync-labs/"
+    "Name": "Jackie Lap",
+    "Email": "jlap@gmail.com"
   },
   {
     "index": 4,
-    "text": "Aurelius Systems\n\nHardware\n\nAdvancing C-UAS through Directed Energy.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/aurelius-systems/"
+    "Name": "Sleat Jam",
+    "Email": "sj@gmail.com"
   },
   {
     "index": 5,
-    "text": "Inference\n\nAI/ML\n\nDevTools\n\nDistributed AI inference network.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/inference/"
+    "Name": "Chad Cleamins",
+    "Email": null
   },
   {
     "index": 6,
-    "text": "Anara\n\nAI/ML\n\nAI for researchers.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/anara/"
+    "Name": "Jlia Jackson",
+    "Email": "jjackson@gmail.com"
   },
   {
     "index": 7,
-    "text": "On Campus\nthirdweb\n\nWeb3\n\nDevTools\n\nFull-stack, open-source web3 development platform.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/thirdweb/"
+    "Name": "First Last",
+    "Email": null
   },
   {
     "index": 8,
-    "text": "On Campus\nTrass Games\n\nAR/VR\n\nGaming\n\nVR game studio.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/trass-games/"
+    "Name": "Junior Oid",
+    "Email": null
   },
   {
     "index": 9,
-    "text": "LiveKit\n\nB2B\n\nDevTools\n\nOpen-source real-time communication platform and SDK.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/livekit/"
+    "Name": "Allen M",
+    "Email": null
   },
   {
     "index": 10,
-    "text": "Shapes\n\nAI/ML\n\nConsumer\n\nGeneral Purpose Social Agents.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/shapes/"
+    "Name": "John Smith",
+    "Email": null
   },
   {
     "index": 11,
-    "text": "Lexica\n\nAI/ML\n\nConsumer\n\nA search engine for AI-generated images.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/lexica/"
+    "Name": "Kris Marrier (Sample)",
+    "Email": null
   },
   {
     "index": 12,
-    "text": "On Campus\nWomp\n\nAI/ML\n\nConcept To Render In Minutes.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/womp/"
+    "Name": "Sage Wieser (Sample)",
+    "Email": null
   },
   {
     "index": 13,
-    "text": "Paraform\n\nAI/ML\n\nB2B\n\nMatch with expert recruiters and fill your hardest roles.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/paraform/"
+    "Name": "Leota Dilliard (Sample)",
+    "Email": null
   },
   {
     "index": 14,
-    "text": "Syncere\n\nConsumer\n\nHardware\n\nRobots that blend in to your home.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/syncere/"
+    "Name": "Mitsue Tollner (Sample)",
+    "Email": null
   },
   {
     "index": 15,
-    "text": "Kontigo\n\nWeb3\n\nUSDC-Smart Neobank for Latinos.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/kontigo/"
-  },
-  {
-    "index": 16,
-    "text": "At Garage\nREK\n\nAR/VR\n\nAI/ML\n\nHardware\n\nFull-contact combat robot sports league.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/rek/"
-  },
-  {
-    "index": 17,
-    "text": "Rork\n\nAI/ML\n\nDevTools\n\nConsumer\n\nBuild mobile apps with AI, no code.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/rork/"
-  },
-  {
-    "index": 18,
-    "text": "Tangible\n\nHardware\n\nHumanoid robots for your home.",
-    "tagName": "a",
-    "href": "https://f.inc/portfolio/tangible/"
+    "Name": "F N",
+    "Email": "email@gmail.com"
   }
 ]

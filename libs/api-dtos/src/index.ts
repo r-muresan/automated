@@ -133,6 +133,7 @@ export interface WorkflowStepRecord {
   type: string;
   description: string | null;
   url: string | null;
+  tabIndex: number | null;
   dataSchema: string | null;
   condition: string | null;
   createdAt: ApiDate;

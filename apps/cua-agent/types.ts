@@ -9,6 +9,7 @@ export type Step =
   | ExtractStep
   | NavigateStep
   | TabNavigateStep
+  | SwitchTabStep
   | SaveStep;
 
 export interface NavigateStep {
@@ -19,6 +20,11 @@ export interface NavigateStep {
 export interface TabNavigateStep {
   type: 'tab_navigate';
   url: string;
+}
+
+export interface SwitchTabStep {
+  type: 'switch_tab';
+  tabIndex: number;
 }
 
 export interface SaveStep {
