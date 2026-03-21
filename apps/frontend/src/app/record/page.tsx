@@ -18,6 +18,7 @@ import {
 } from '../../hooks/api';
 import { Navbar } from '../components/Navbar';
 import { VNCBrowser } from '../components/Browser/VNCBrowser';
+import { KernelBrowser } from '../components/Browser/KernelBrowser';
 
 export default function NewWorkflow() {
   const RECORDING_KEEPALIVE_INTERVAL_MS = 15_000;
@@ -68,6 +69,7 @@ export default function NewWorkflow() {
     addInteractionDirect,
     updateInteraction,
     vncUrl,
+    kernelLiveViewUrl,
     vncViewerRef,
   } = useBrowser();
 
@@ -921,15 +923,26 @@ export default function NewWorkflow() {
         overflow="hidden"
       >
         <Box height="100%" overflow="hidden" width="full" borderRadius="2xl">
-          <VNCBrowser
-            contentRef={contentRef}
-            sessionId={sessionId}
-            vncUrl={vncUrl}
-            vncViewerRef={vncViewerRef}
-            isLoading={isLoading}
-            onInteraction={addInteractionDirect}
-            onInteractionUpdate={updateInteraction}
-          />
+          {kernelLiveViewUrl ? (
+            <KernelBrowser
+              contentRef={contentRef}
+              sessionId={sessionId}
+              kernelLiveViewUrl={kernelLiveViewUrl}
+              isLoading={isLoading}
+              onInteraction={addInteractionDirect}
+              onInteractionUpdate={updateInteraction}
+            />
+          ) : (
+            <VNCBrowser
+              contentRef={contentRef}
+              sessionId={sessionId}
+              vncUrl={vncUrl}
+              vncViewerRef={vncViewerRef}
+              isLoading={isLoading}
+              onInteraction={addInteractionDirect}
+              onInteractionUpdate={updateInteraction}
+            />
+          )}
         </Box>
       </Box>
 

@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { PrismaService } from './prisma.service';
 import { BrowserProvider } from './browser/browser-provider.interface';
 import { HyperbrowserBrowserProvider } from './browser/hyperbrowser-browser.provider';
+import { KernelBrowserProvider } from './browser/kernel-browser.provider';
 import { LocalBrowserProvider } from './browser/local-browser.provider';
 import { BrowserSessionService } from './browser-session/browser-session.service';
 import { BrowserSessionController } from './browser-session/browser-session.controller';
@@ -23,6 +24,9 @@ import { SettingsService } from './settings/settings.service';
 const BrowserProviderFactory = {
   provide: BrowserProvider,
   useFactory: (storage: LocalStorageService) => {
+    if (process.env.KERNEL_API_KEY) {
+      return new KernelBrowserProvider();
+    }
     if (process.env.HYPERBROWSER_API_KEY) {
       return new HyperbrowserBrowserProvider();
     }

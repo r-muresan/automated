@@ -47,6 +47,8 @@ export class OrchestratorAgent {
   private session: SessionState = {
     hyperbrowserClient: null,
     hyperbrowserSessionId: null,
+    kernelClient: null,
+    kernelSessionId: null,
     activeSessionId: null,
   };
   private aborted = false;

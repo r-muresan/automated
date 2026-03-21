@@ -12,12 +12,7 @@ import {
 } from 'react';
 import axios from 'axios';
 import posthog from 'posthog-js';
-import {
-  useCreateSession,
-  useDeleteSession,
-  usePingSession,
-  useStopSession,
-} from '../hooks/api';
+import { useCreateSession, useDeleteSession, usePingSession, useStopSession } from '../hooks/api';
 import {
   useBrowserCDP,
   type DownloadedFile,
@@ -53,13 +48,11 @@ interface BrowserContextType {
   handleTakeControl: (width?: number, height?: number) => Promise<void>;
   handleStopSession: () => Promise<void>;
   vncUrl: string | null;
+  kernelLiveViewUrl: string | null;
   vncViewerRef: React.RefObject<NoVNCViewerHandle | null>;
   downloadedFiles: DownloadedFile[];
   fileChooserState: FileChooserState | null;
-  handleFileChooser: (
-    action: 'accept' | 'cancel',
-    files?: string[],
-  ) => Promise<void>;
+  handleFileChooser: (action: 'accept' | 'cancel', files?: string[]) => Promise<void>;
 }
 
 const BrowserContext = createContext<BrowserContextType | undefined>(undefined);
@@ -85,6 +78,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [cdpWsUrlTemplate, setCdpWsUrlTemplate] = useState<string | null>(null);
   const [vncUrl, setVncUrl] = useState<string | null>(null);
+  const [kernelLiveViewUrl, setKernelLiveViewUrl] = useState<string | null>(null);
   const vncViewerRef = useRef<NoVNCViewerHandle | null>(null);
   const [fileChooserState, setFileChooserState] = useState<FileChooserState | null>(null);
 
@@ -123,6 +117,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
     setPages([]);
     setActivePageIndex(0);
     setVncUrl(null);
+    setKernelLiveViewUrl(null);
 
     try {
       const colorScheme = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -133,6 +128,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
 
       setCdpWsUrlTemplate(data.cdpWsUrlTemplate || null);
       setVncUrl(data.vncUrl || null);
+      setKernelLiveViewUrl(data.kernelLiveViewUrl || null);
       setSessionId(data.sessionId);
       setPages(normalizePages(data.pages));
       setActivePageIndex(0);
@@ -163,9 +159,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         );
       },
       onTitleUpdate: (title: string, pageId: string) => {
-        setPages((prev) =>
-          prev.map((page) => (page.id === pageId ? { ...page, title } : page)),
-        );
+        setPages((prev) => prev.map((page) => (page.id === pageId ? { ...page, title } : page)));
       },
       onFaviconUpdate: (faviconUrl: string, pageId: string) => {
         setPages((prev) =>
@@ -259,6 +253,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
 
         setCdpWsUrlTemplate(data.cdpWsUrlTemplate || null);
         setVncUrl(data.vncUrl || null);
+        setKernelLiveViewUrl(data.kernelLiveViewUrl || null);
         setSessionId(data.sessionId);
         setPages(normalizePages(data.pages));
         setActivePageIndex(0);
@@ -300,6 +295,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
       setActivePageIndex(0);
       setCdpWsUrlTemplate(null);
       setVncUrl(null);
+      setKernelLiveViewUrl(null);
     }
   }, [deleteSessionMutation, sessionId, stopSessionMutation]);
 
@@ -375,6 +371,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         handleTakeControl,
         handleStopSession,
         vncUrl,
+        kernelLiveViewUrl,
         vncViewerRef,
         downloadedFiles,
         fileChooserState,

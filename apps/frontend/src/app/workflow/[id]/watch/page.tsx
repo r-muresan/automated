@@ -16,6 +16,7 @@ import {
 } from '../../../../hooks/api';
 import { Navbar } from '../../../components/Navbar';
 import { VNCBrowser } from '../../../components/Browser/VNCBrowser';
+import { KernelBrowser } from '../../../components/Browser/KernelBrowser';
 import {
   WorkflowActionsList,
   type PendingCredentialRequestView,
@@ -101,6 +102,7 @@ export default function WatchWorkflowPage() {
   const contentRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef(executionActions);
   const [stableVncUrl, setStableVncUrl] = useState<string | null>(null);
+  const [stableKernelLiveViewUrl, setStableKernelLiveViewUrl] = useState<string | null>(null);
 
   const sessionId = executionStatus?.sessionId || null;
   const isRunning = executionStatus?.status === 'running';
@@ -157,6 +159,14 @@ export default function WatchWorkflowPage() {
       }
     });
   }, [debugInfo?.vncUrl]);
+
+  // Track Kernel live view URL from debug info
+  useEffect(() => {
+    const next = (debugInfo?.kernelLiveViewUrl as string | undefined) ?? null;
+    if (next) {
+      setStableKernelLiveViewUrl(next);
+    }
+  }, [debugInfo?.kernelLiveViewUrl]);
 
   // Poll for page updates
   useEffect(() => {
@@ -313,16 +323,29 @@ export default function WatchWorkflowPage() {
 
         <HStack align="stretch" gap={6} flex={1} minH={0}>
           <Box flex={1} minH={0}>
-            <VNCBrowser
-              contentRef={contentRef}
-              sessionId={sessionId}
-              vncUrl={stableVncUrl}
-              isLoading={isRunning && !stableVncUrl}
-              readOnly={!canUserControlBrowser}
-              freeze={isFinished}
-              overlayTitle={browserOverlayTitle}
-              overlayDescription={browserOverlayDescription}
-            />
+            {stableKernelLiveViewUrl ? (
+              <KernelBrowser
+                contentRef={contentRef}
+                sessionId={sessionId}
+                kernelLiveViewUrl={stableKernelLiveViewUrl}
+                isLoading={isRunning && !stableKernelLiveViewUrl}
+                readOnly={!canUserControlBrowser}
+                freeze={isFinished}
+                overlayTitle={browserOverlayTitle}
+                overlayDescription={browserOverlayDescription}
+              />
+            ) : (
+              <VNCBrowser
+                contentRef={contentRef}
+                sessionId={sessionId}
+                vncUrl={stableVncUrl}
+                isLoading={isRunning && !stableVncUrl}
+                readOnly={!canUserControlBrowser}
+                freeze={isFinished}
+                overlayTitle={browserOverlayTitle}
+                overlayDescription={browserOverlayDescription}
+              />
+            )}
           </Box>
           <Box w="360px" p={4} overflowY="auto">
             {actionsLoading && executionActions.length === 0 ? (

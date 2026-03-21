@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { Stagehand } from '../stagehand/v3';
 import { HyperbrowserScreenController } from '../stagehand/v3/screen/HyperbrowserScreenController.js';
 import { Hyperbrowser } from '@hyperbrowser/sdk';
+import { Kernel } from '@onkernel/sdk';
 import { DEFAULT_SESSION_DOWNLOAD_PATH } from './session-file-manager';
 import {
   acquireBrowserSessionCreateLease,
@@ -18,6 +19,8 @@ import type { ScreenController } from '../stagehand/v3/types/public/screen.js';
 export interface SessionState {
   hyperbrowserClient: Hyperbrowser | null;
   hyperbrowserSessionId: string | null;
+  kernelClient: Kernel | null;
+  kernelSessionId: string | null;
   activeSessionId: string | null;
 }
 
@@ -33,6 +36,8 @@ export async function initSession(
 
   if (ctx.options.localCdpUrl) {
     await initLocalSession(ctx, session, startingUrl);
+  } else if (process.env.KERNEL_API_KEY) {
+    await initKernelSession(ctx, session, startingUrl);
   } else {
     await initHyperbrowserSession(ctx, session, startingUrl);
   }
@@ -83,6 +88,82 @@ export async function initLocalSession(
     const page = ctx.stagehand.context.pages()[0];
     await page.goto(startingUrl, { waitUntil: 'domcontentloaded' });
     console.log(`[ORCHESTRATOR] Navigated to ${startingUrl}`);
+  }
+}
+
+export async function initKernelSession(
+  ctx: OrchestratorContext,
+  session: SessionState,
+  startingUrl?: string,
+): Promise<void> {
+  const models = ctx.resolveModels();
+  const kernelApiKey = process.env.KERNEL_API_KEY;
+  if (!kernelApiKey) {
+    throw new Error('Missing KERNEL_API_KEY for Kernel');
+  }
+
+  const screenSize = ctx.options.screenSize ?? { width: 1280, height: 720 };
+
+  const createLease = await acquireBrowserSessionCreateLease('orchestrator:init');
+  let leaseConfirmed = false;
+
+  try {
+    session.kernelClient = new Kernel({ apiKey: kernelApiKey });
+    const kernelBrowser = await session.kernelClient.browsers.create({
+      stealth: true,
+      timeout_seconds: 3600,
+      viewport: {
+        width: screenSize.width,
+        height: screenSize.height,
+      },
+    });
+
+    ctx.stagehand = new Stagehand({
+      env: 'LOCAL',
+      verbose: 1,
+      model: {
+        modelName: models.extract,
+        apiKey: process.env.OPENROUTER_API_KEY,
+        baseURL: OPENROUTER_BASE_URL,
+      },
+      localBrowserLaunchOptions: {
+        cdpUrl: kernelBrowser.cdp_ws_url,
+        acceptDownloads: true,
+        downloadsPath: DEFAULT_SESSION_DOWNLOAD_PATH,
+      },
+      experimental: true,
+      disableAPI: true,
+    });
+
+    await ctx.stagehand.init();
+
+    // Attach screen controller if externally provided
+    if (ctx.options.screenController) {
+      await ctx.options.screenController.connect();
+      ctx.stagehand.setScreenController(ctx.options.screenController);
+    }
+
+    await ctx.sessionFiles.attach(ctx.stagehand, ctx.openai!);
+    const sessionId = kernelBrowser.session_id;
+    createLease.confirmCreated(sessionId);
+    leaseConfirmed = true;
+    session.activeSessionId = sessionId;
+    session.kernelSessionId = sessionId;
+
+    ctx.assertNotAborted();
+    const liveViewUrl = kernelBrowser.browser_live_view_url ?? '';
+    ctx.emit({ type: 'session:ready', sessionId, liveViewUrl });
+
+    if (startingUrl) {
+      const page = ctx.stagehand.context.pages()[0];
+      await page.goto(startingUrl, { waitUntil: 'domcontentloaded' });
+      console.log(`[ORCHESTRATOR] Navigated to ${startingUrl}`);
+    }
+  } catch (error) {
+    if (!leaseConfirmed) {
+      createLease.cancel();
+    }
+    throw error;
   }
 }
 
@@ -182,7 +263,7 @@ export async function initHyperbrowserSession(
 }
 
 export async function closeSession(ctx: OrchestratorContext, session: SessionState): Promise<void> {
-  const sessionId = session.hyperbrowserSessionId ?? session.activeSessionId;
+  const sessionId = session.kernelSessionId ?? session.hyperbrowserSessionId ?? session.activeSessionId;
   const isLocal = !!ctx.options.localCdpUrl;
   ctx.sessionFiles.reset();
 
@@ -196,7 +277,11 @@ export async function closeSession(ctx: OrchestratorContext, session: SessionSta
   }
 
   if (sessionId && !isLocal) {
-    if (session.hyperbrowserClient) {
+    if (session.kernelClient && session.kernelSessionId) {
+      await session.kernelClient.browsers.deleteByID(session.kernelSessionId).catch((error) => {
+        console.warn(`[ORCHESTRATOR] Failed to delete Kernel session ${session.kernelSessionId}:`, error);
+      });
+    } else if (session.hyperbrowserClient) {
       await session.hyperbrowserClient.sessions.stop(sessionId).catch((error) => {
         console.warn(`[ORCHESTRATOR] Failed to stop Hyperbrowser session ${sessionId}:`, error);
       });
@@ -206,4 +291,6 @@ export async function closeSession(ctx: OrchestratorContext, session: SessionSta
   session.activeSessionId = null;
   session.hyperbrowserSessionId = null;
   session.hyperbrowserClient = null;
+  session.kernelClient = null;
+  session.kernelSessionId = null;
 }

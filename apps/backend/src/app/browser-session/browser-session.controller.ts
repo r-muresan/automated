@@ -39,7 +39,7 @@ export class BrowserSessionController {
     const email = user?.email;
     const dbUser = email ? await this.prisma.user.findUnique({ where: { email } }) : null;
     const minutesUsed = dbUser?.browserMinutesUsed ?? 0;
-    const isUsingManagedBrowser = !!process.env.HYPERBROWSER_API_KEY;
+    const isUsingManagedBrowser = !!process.env.KERNEL_API_KEY || !!process.env.HYPERBROWSER_API_KEY;
     const minutesCap = isUsingManagedBrowser ? 60 : Infinity;
     return {
       minutesUsed: Math.round(minutesUsed * 100) / 100,
@@ -74,6 +74,7 @@ export class BrowserSessionController {
       cdpWsUrlTemplate: session.cdpWsUrlTemplate,
       liveViewUrl: session.liveViewUrl,
       vncUrl: session.vncUrl,
+      kernelLiveViewUrl: session.kernelLiveViewUrl,
     };
   }
 
@@ -85,12 +86,14 @@ export class BrowserSessionController {
   ): Promise<BrowserSessionDebugResponse> {
     const touchLastUsed = touch !== 'false';
     const debugInfo = await this.browserSessionService.getDebugUrl(sessionId, touchLastUsed);
+    const isKernel = !!process.env.KERNEL_API_KEY;
     return {
       ...debugInfo,
       pages: debugInfo.pages || [],
       cdpWsUrlTemplate: debugInfo.cdpWsUrlTemplate,
       liveViewUrl: debugInfo.liveViewUrl,
       vncUrl: debugInfo.vncUrl,
+      kernelLiveViewUrl: isKernel ? debugInfo.liveViewUrl : undefined,
     };
   }
 
