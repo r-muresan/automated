@@ -90,14 +90,8 @@ export class OrchestratorAgent {
     }
   }
 
-  private buildPrepareStepForActiveTools(
-    scope: string,
-    context?: LoopContext,
-  ) {
-    return async ({
-      stepNumber,
-      messages,
-    }: { stepNumber?: number; messages?: any[] } = {}) => {
+  private buildPrepareStepForActiveTools(scope: string, context?: LoopContext) {
+    return async ({ stepNumber, messages }: { stepNumber?: number; messages?: any[] } = {}) => {
       const activeUrl = this.getActivePageUrl();
       const activeTools = buildHybridActiveToolsForUrl(activeUrl);
 

@@ -244,7 +244,8 @@ export class WorkflowExecutionService {
       await this.browserSessionService.assertBrowserMinutesRemaining(email);
     }
 
-    const userBrowserIdentity = await this.browserSessionService.getOrCreateUserBrowserIdentity(email);
+    const userBrowserIdentity =
+      await this.browserSessionService.getOrCreateUserBrowserIdentity(email);
 
     const hyperbrowserProfileId = userBrowserIdentity?.hyperbrowserProfileId ?? undefined;
 
@@ -523,6 +524,7 @@ export class WorkflowExecutionService {
       url: string | null;
       dataSchema: string | null;
       condition: string | null;
+      tabIndex: number | null;
     }>,
   ): Step[] {
     const grouped = new Map<string | null, Array<(typeof steps)[number]>>();
@@ -557,6 +559,7 @@ export class WorkflowExecutionService {
       url: string | null;
       dataSchema: string | null;
       condition: string | null;
+      tabIndex: number | null;
     },
     buildBranch: (parentStepId: string, branch: 'main' | 'loop' | 'true' | 'false') => Step[],
   ): Step {
@@ -565,6 +568,8 @@ export class WorkflowExecutionService {
         return { type: 'navigate', url: step.url ?? 'about:blank' };
       case 'tab_navigate':
         return { type: 'tab_navigate', url: step.url ?? 'about:blank' };
+      case 'switch_tab':
+        return { type: 'switch_tab', tabIndex: step.tabIndex ?? 0 };
       case 'save':
         return { type: 'save', description: step.description ?? '' };
       case 'extract':

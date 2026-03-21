@@ -212,6 +212,6 @@ export function getStepLabel(step: EditorStep): string {
     case 'tab_navigate':
       return step.url || '(no URL)';
     case 'switch_tab':
-      return `Tab ${step.tabIndex}`;
+      return `Tab ${step.tabIndex + 1}`;
   }
 }
