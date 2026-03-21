@@ -1,5 +1,6 @@
 import type { LoopStep } from '../../../types';
 import { resolveCollector, type CollectedItem } from '../../extraction/loop';
+import { cleanExtractedItems } from '../../extraction/loop/clean-items';
 import { waitForPageReady } from '../../page-ready';
 import type { LoopDeps } from './deps';
 import { deriveLoopPlan } from './plan';
@@ -143,8 +144,17 @@ export async function executeLoopStep(
       return;
     }
 
-    const { mode, collector, firstPage } = resolved;
+    const { mode, collector, firstPage: rawFirstPage } = resolved;
     console.log(`[LOOP] Using ${mode} collector`);
+
+    // Clean extracted items: remove empty and header/footer rows
+    const firstPage = await cleanExtractedItems({
+      items: rawFirstPage,
+      description: loopPlan.query,
+      llmClient: deps.openai,
+      model: deps.models.extract,
+    });
+    console.log(`[LOOP] Cleaned first page: ${rawFirstPage.length} → ${firstPage.length} items`);
 
     const savedLoopItemsJson = JSON.stringify(
       firstPage.map((i, idx) => ({ index: idx + 1, ...i.data })),
@@ -175,11 +185,24 @@ export async function executeLoopStep(
     while (totalProcessed < loopPlan.maxItems) {
       deps.assertNotAborted();
 
-      const batch = await collector.collect(pageIndex++);
+      const rawBatch = await collector.collect(pageIndex++);
 
-      if (batch.length === 0) break;
+      if (rawBatch.length === 0) break;
 
-      console.log(`[LOOP] Page ${pageIndex - 1}: ${batch.length} new item(s) via ${mode}`);
+      // Clean extracted items for this page
+      const batch = await cleanExtractedItems({
+        items: rawBatch,
+        description: loopPlan.query,
+        llmClient: deps.openai,
+        model: deps.models.extract,
+      });
+
+      if (batch.length === 0) {
+        console.log(`[LOOP] Page ${pageIndex - 1}: all ${rawBatch.length} items filtered out`);
+        continue;
+      }
+
+      console.log(`[LOOP] Page ${pageIndex - 1}: ${rawBatch.length} → ${batch.length} item(s) via ${mode}`);
 
       totalProcessed = await processItems({
         deps,
