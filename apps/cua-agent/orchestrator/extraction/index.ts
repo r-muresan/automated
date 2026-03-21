@@ -10,7 +10,6 @@ export {
   checkForMoreItemsFromVision,
   capturePageScreenshot,
   extractWithSharedStrategy,
-  identifyItemsWithSharedStrategy,
   type ExtractOutput,
   type ExtractionMode,
   type PaginationCheck,

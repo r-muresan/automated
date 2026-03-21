@@ -108,7 +108,7 @@ DEFAULT: Leave inputs empty. Do NOT add inputs unless the user explicitly reques
 - \`extract\`: Extract data from the current page for use in other steps.
 - \`loop\`: Repeat steps for each item on the currently active page. The loop collects items from whichever tab is active when it runs — use \`switch_tab\` immediately before the loop if the active tab is not the source you want to iterate over. Do not add a separate \`extract\` step before the loop for the same data.
 - \`conditional\`: Branch based on a condition (trueSteps / falseSteps).
-- \`save\`: Save data to an output file externally.
+- \`save\`: Save data to an output file externally. Each save step creates a new file.
 
 # Step Granularity
 A step is NOT a single browser event. It groups all interactions needed for one logical action.
