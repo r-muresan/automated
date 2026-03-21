@@ -234,6 +234,7 @@ export interface OrchestratorOptions {
   browserbaseProjectId?: string;
   browserbaseContextId?: string;
   hyperbrowserProfileId?: string;
+  kernelProfileId?: string;
   /** CDP WebSocket URL to connect to an existing local browser session instead of Browserbase */
   localCdpUrl?: string;
   /** Optional external ScreenController to use instead of the default Hyperbrowser Computer Actions.

@@ -25,10 +25,12 @@ export class KernelBrowserProvider extends BrowserProvider {
   // them at creation time.
   private readonly sessionCdpUrls = new Map<string, string>();
   private readonly sessionLiveViewUrls = new Map<string, string>();
+  // Cache replay IDs by session ID for stopping recordings on session cleanup.
+  private readonly sessionReplayIds = new Map<string, string>();
 
   async createSession(options: CreateBrowserSessionOptions): Promise<BrowserSessionResult> {
     const client = this.requireClient();
-    const { width, height } = options;
+    const { width, height, contextId } = options;
 
     const browser = await client.browsers.create({
       stealth: true,
@@ -37,7 +39,7 @@ export class KernelBrowserProvider extends BrowserProvider {
         width: width ? Math.round(width) : 1280,
         height: height ? Math.round(height) : 800,
       },
-      gpu: true,
+      profile: contextId ? { id: contextId, save_changes: true } : undefined,
     });
 
     const sessionId = browser.session_id;
@@ -48,6 +50,26 @@ export class KernelBrowserProvider extends BrowserProvider {
     if (liveViewUrl) {
       this.sessionLiveViewUrls.set(sessionId, liveViewUrl);
     }
+
+    // Hide the browser cursor
+    client.browsers.computer
+      .setCursorVisibility(sessionId, { hidden: true })
+      .catch((err) =>
+        console.error(`[KernelBrowserProvider] Failed to hide cursor for ${sessionId}:`, err),
+      );
+
+    // Start a replay recording
+    client.browsers.replays
+      .start(sessionId)
+      .then((replay) => {
+        console.log(
+          `[KernelBrowserProvider] Started recording for session ${sessionId}: replayId=${replay.replay_id}`,
+        );
+        this.sessionReplayIds.set(sessionId, replay.replay_id);
+      })
+      .catch((err) =>
+        console.error(`[KernelBrowserProvider] Failed to start recording for ${sessionId}:`, err),
+      );
 
     return {
       id: sessionId,
@@ -62,6 +84,17 @@ export class KernelBrowserProvider extends BrowserProvider {
     const client = this.requireClient();
 
     try {
+      // Stop the replay recording if one is active
+      const replayId = this.sessionReplayIds.get(sessionId);
+      if (replayId) {
+        await client.browsers.replays
+          .stop(replayId, { id: sessionId })
+          .catch((err) =>
+            console.warn(`[KernelBrowserProvider] Failed to stop recording for ${sessionId}:`, err),
+          );
+        this.sessionReplayIds.delete(sessionId);
+      }
+
       await client.browsers.deleteByID(sessionId);
       this.sessionCdpUrls.delete(sessionId);
       this.sessionLiveViewUrls.delete(sessionId);
@@ -71,6 +104,7 @@ export class KernelBrowserProvider extends BrowserProvider {
       if (status === 404) {
         this.sessionCdpUrls.delete(sessionId);
         this.sessionLiveViewUrls.delete(sessionId);
+        this.sessionReplayIds.delete(sessionId);
         return true;
       }
       console.error(`[KernelBrowserProvider] Error stopping session ${sessionId}:`, error);
@@ -194,6 +228,30 @@ export class KernelBrowserProvider extends BrowserProvider {
     await client.browsers.fs.writeFile(sessionId, file.buffer, { path: remotePath });
 
     return { filePath: remotePath };
+  }
+
+  /**
+   * Create a Kernel profile for persistent browser state.
+   */
+  async createProfile(name: string): Promise<string> {
+    const client = this.requireClient();
+    // Profile names must match ^[a-zA-Z0-9._-]+$ — sanitize email addresses
+    const sanitizedName = name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const profile = await client.profiles.create({ name: sanitizedName });
+    console.log(`[KernelBrowserProvider] Created profile: ${profile.id} (name=${sanitizedName})`);
+    return profile.id;
+  }
+
+  /**
+   * Retrieve a Kernel profile by ID or name. Returns null if not found.
+   */
+  async getProfile(idOrName: string): Promise<any> {
+    const client = this.requireClient();
+    try {
+      return await client.profiles.retrieve(idOrName);
+    } catch {
+      return null;
+    }
   }
 
   private requireClient(): Kernel {

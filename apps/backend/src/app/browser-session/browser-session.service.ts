@@ -34,6 +34,7 @@ function buildCdpWsUrlTemplate(
 interface UserBrowserIdentity {
   browserbaseContextId: string | null;
   hyperbrowserProfileId: string | null;
+  kernelProfileId: string | null;
 }
 
 @Injectable()
@@ -98,12 +99,17 @@ export class BrowserSessionService implements OnModuleInit {
     });
 
     if (!userContext) {
-      // Kernel doesn't need persistent profiles — use simple user ID context
       if (this.browserProvider instanceof KernelBrowserProvider) {
+        const profileId = await (this.browserProvider as KernelBrowserProvider).createProfile(email);
+
         userContext = await this.prisma.userContext.upsert({
           where: { userId: user.id },
-          update: {},
-          create: { userId: user.id, browserbaseContextId: String(user.id) },
+          update: { kernelProfileId: profileId },
+          create: {
+            userId: user.id,
+            browserbaseContextId: String(user.id),
+            kernelProfileId: profileId,
+          },
         });
       } else if (this.browserProvider instanceof HyperbrowserBrowserProvider) {
         const profileId = await (this.browserProvider as HyperbrowserBrowserProvider).createContext(
@@ -130,6 +136,16 @@ export class BrowserSessionService implements OnModuleInit {
         });
       }
     } else if (
+      this.browserProvider instanceof KernelBrowserProvider &&
+      !userContext.kernelProfileId
+    ) {
+      const profileId = await (this.browserProvider as KernelBrowserProvider).createProfile(email);
+
+      userContext = await this.prisma.userContext.update({
+        where: { userId: user.id },
+        data: { kernelProfileId: profileId },
+      });
+    } else if (
       this.browserProvider instanceof HyperbrowserBrowserProvider &&
       !userContext.hyperbrowserProfileId
     ) {
@@ -146,6 +162,7 @@ export class BrowserSessionService implements OnModuleInit {
     return {
       browserbaseContextId: userContext.browserbaseContextId,
       hyperbrowserProfileId: userContext.hyperbrowserProfileId ?? null,
+      kernelProfileId: userContext.kernelProfileId ?? null,
     };
   }
 
@@ -165,7 +182,7 @@ export class BrowserSessionService implements OnModuleInit {
     ]);
     const contextId =
       this.browserProvider instanceof KernelBrowserProvider
-        ? undefined
+        ? (userBrowserIdentity?.kernelProfileId ?? undefined)
         : this.browserProvider instanceof HyperbrowserBrowserProvider
           ? (userBrowserIdentity?.hyperbrowserProfileId ?? undefined)
           : (userBrowserIdentity?.browserbaseContextId ?? undefined);

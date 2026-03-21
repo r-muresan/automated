@@ -49,6 +49,7 @@ export class OrchestratorAgent {
     hyperbrowserSessionId: null,
     kernelClient: null,
     kernelSessionId: null,
+    kernelReplayId: null,
     activeSessionId: null,
   };
   private aborted = false;
