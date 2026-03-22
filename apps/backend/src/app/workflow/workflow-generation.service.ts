@@ -126,7 +126,10 @@ export class WorkflowGenerationService {
         parts.push(`  URL: ${interaction.element?.href || 'unknown'}`);
       } else if (interaction.data?.type === 'click') {
         parts.push(`  Type: Click`);
-        // if (interaction.element?.text) parts.push(`  Text: ${interaction.element.text}`);
+        if (interaction.element?.text) parts.push(`  Element text: "${interaction.element.text}"`);
+        if (interaction.element?.tagName && interaction.element.tagName !== 'CLICK')
+          parts.push(`  Element: <${interaction.element.tagName}>`);
+        if (interaction.element?.href) parts.push(`  Link: ${interaction.element.href}`);
       } else if (interaction.data?.type === 'keydown') {
         parts.push(`  Type: Typing`);
         if (interaction.element?.text) parts.push(`  Typed: "${interaction.element.text}"`);

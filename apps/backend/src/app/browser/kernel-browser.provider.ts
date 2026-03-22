@@ -188,7 +188,14 @@ export class KernelBrowserProvider extends BrowserProvider {
         return { pages: [] };
       }
 
-      const page = defaultContext.pages()[0] || (await defaultContext.newPage());
+      const existingPages = defaultContext.pages();
+
+      // Close all extra tabs from previous sessions (profile restore), keeping
+      // only the first page which we'll navigate to the default URL.
+      const page = existingPages[0] || (await defaultContext.newPage());
+      if (existingPages.length > 1) {
+        await Promise.all(existingPages.slice(1).map((p) => p.close().catch(() => {})));
+      }
 
       page.goto(DEFAULT_INITIAL_PAGE_URL, { waitUntil: 'commit' }).catch(() => {});
 

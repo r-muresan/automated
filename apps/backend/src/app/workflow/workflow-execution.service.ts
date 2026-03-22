@@ -247,6 +247,7 @@ export class WorkflowExecutionService {
     const userBrowserIdentity =
       await this.browserSessionService.getOrCreateUserBrowserIdentity(email);
 
+    const kernelProfileId = userBrowserIdentity?.kernelProfileId ?? undefined;
     const hyperbrowserProfileId = userBrowserIdentity?.hyperbrowserProfileId ?? undefined;
 
     let agentSteps = this.buildStepTree(workflow.steps);
@@ -309,6 +310,7 @@ export class WorkflowExecutionService {
 
     const localSessionId = this.workflowLocalSessions.get(workflowId);
     const orchestrator = new OrchestratorAgent({
+      kernelProfileId,
       hyperbrowserProfileId,
       localSessionId: localSessionId ?? undefined,
       onEvent: (event) => this.handleOrchestratorEvent(workflowId, event),
