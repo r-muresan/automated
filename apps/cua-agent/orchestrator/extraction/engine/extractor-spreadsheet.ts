@@ -6,11 +6,8 @@ import {
   extractFromSpreadsheetWithLlm,
   extractLoopItemsFromSpreadsheetWithLlm,
 } from '../spreadsheet';
-import type { ParsedSchema } from '../schema';
-import { validateAndFillExtractionResult } from '../schema';
 import { buildDeterministicItemKey } from '../item-key';
 import type { Extractor, ExtractOutput } from './types';
-import { applyValidation } from './types';
 import type { ExtractionItem } from '../vision';
 
 export function createSpreadsheetExtractor(params: {
@@ -18,10 +15,8 @@ export function createSpreadsheetExtractor(params: {
   llmClient: OpenAI;
   model: string;
   goalWithMemory: string;
-  schema?: ParsedSchema | null;
-  skipValidation?: boolean;
 }): Extractor | null {
-  const { stagehand, llmClient, model, goalWithMemory, schema, skipValidation } = params;
+  const { stagehand, llmClient, model, goalWithMemory } = params;
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
   const activeUrl = page?.url?.() ?? '';
 
@@ -40,13 +35,12 @@ export function createSpreadsheetExtractor(params: {
         llmClient,
         model,
         dataExtractionGoal: goalWithMemory,
-        schema,
         snapshot,
       });
       console.log(`[EXTRACTION] spreadsheet:llm-ready duration_ms=${Date.now() - llmStart}`);
       return {
         mode: 'spreadsheet',
-        scraped_data: applyValidation(result, schema, skipValidation, validateAndFillExtractionResult),
+        scraped_data: result,
       };
     },
   };

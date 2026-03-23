@@ -1,31 +1,25 @@
 import OpenAI from 'openai';
 import type { Stagehand } from '../../../stagehand/v3';
-import { extractFromDomWithSelector } from '../dom';
-import type { ParsedSchema } from '../schema';
-import { validateAndFillExtractionResult } from '../schema';
+import { extractDom } from '../dom';
 import type { Extractor, ExtractOutput } from './types';
-import { applyValidation } from './types';
 
-export function createDomSelectorExtractor(params: {
+export function createDomExtractor(params: {
   stagehand: Stagehand;
   llmClient: OpenAI;
   model: string;
   goalWithMemory: string;
-  schema?: ParsedSchema | null;
-  skipValidation?: boolean;
 }): Extractor {
-  const { stagehand, llmClient, model, goalWithMemory, schema, skipValidation } = params;
+  const { stagehand, llmClient, model, goalWithMemory } = params;
 
   return {
     name: 'dom-selector',
     async tryExtract(): Promise<ExtractOutput | null> {
       const domSelectorStart = Date.now();
-      const result = await extractFromDomWithSelector({
+      const result = await extractDom({
         stagehand,
         llmClient,
         model,
         dataExtractionGoal: goalWithMemory,
-        schema,
       });
       if (result == null) return null;
       console.log(
@@ -33,7 +27,7 @@ export function createDomSelectorExtractor(params: {
       );
       return {
         mode: 'dom',
-        scraped_data: applyValidation(result, schema, skipValidation, validateAndFillExtractionResult),
+        scraped_data: result,
       };
     },
   };

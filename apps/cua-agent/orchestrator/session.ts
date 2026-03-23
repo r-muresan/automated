@@ -124,9 +124,9 @@ export async function initKernelSession(
     });
 
     // Hide the browser cursor
-    session.kernelClient.browsers.computer
-      .setCursorVisibility(kernelBrowser.session_id, { hidden: true })
-      .catch((err) => console.warn('[ORCHESTRATOR] Failed to hide Kernel cursor:', err));
+    // session.kernelClient.browsers.computer
+    //   .setCursorVisibility(kernelBrowser.session_id, { hidden: true })
+    //   .catch((err) => console.warn('[ORCHESTRATOR] Failed to hide Kernel cursor:', err));
 
     // Start a replay recording
     session.kernelClient.browsers.replays
@@ -177,6 +177,22 @@ export async function initKernelSession(
       const page = ctx.stagehand.context.pages()[0];
       await page.goto(startingUrl, { waitUntil: 'domcontentloaded' });
       console.log(`[ORCHESTRATOR] Navigated to ${startingUrl}`);
+    }
+
+    // Close any extra tabs the Kernel browser opened from a saved profile.
+    // This runs AFTER navigation so that any tabs restored asynchronously
+    // by the profile are also caught.
+    const activePage = ctx.stagehand.context.pages().find(
+      (p) => startingUrl && p.url().includes(new URL(startingUrl).hostname),
+    ) ?? ctx.stagehand.context.pages()[0];
+    const allPages = ctx.stagehand.context.pages();
+    if (allPages.length > 1) {
+      for (const p of allPages) {
+        if (p !== activePage) {
+          await p.close().catch(() => {});
+        }
+      }
+      console.log(`[ORCHESTRATOR] Closed ${allPages.length - 1} extra Kernel tab(s)`);
     }
   } catch (error) {
     if (!leaseConfirmed) {

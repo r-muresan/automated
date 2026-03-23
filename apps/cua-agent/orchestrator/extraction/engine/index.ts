@@ -1,15 +1,14 @@
 import OpenAI from 'openai';
 import type { Stagehand } from '../../../stagehand/v3';
-import type { DownloadedSessionFile, LoopContext } from '../../../types';
+import type { LoopContext } from '../../../types';
 import { getSpreadsheetProvider } from '../../agent-tools';
 import { capturePageScreenshot } from '../common';
-import type { ParsedSchema } from '../schema';
 import type { Extractor, ExtractOutput, ExtractionMode } from './types';
 import type { PaginationCheck, ExtractionItem } from '../vision';
 import { checkForMoreItemsFromVision } from '../vision';
 import { createSpreadsheetExtractor, identifySpreadsheetItems } from './extractor-spreadsheet';
-import { createDomSelectorExtractor } from './extractor-dom-selector';
-import { createDomExtractor, identifyDomItems } from './extractor-dom';
+import { createDomExtractor } from './extractor-dom-selector';
+import { identifyDomItems } from './extractor-dom';
 import { identifyFileItems } from './extractor-files';
 import { createVisionExtractor, identifyVisionItems } from './extractor-vision';
 
@@ -21,8 +20,6 @@ export async function extractWithSharedStrategy(params: {
   llmClient: OpenAI;
   model: string;
   dataExtractionGoal: string;
-  schema?: ParsedSchema | null;
-  skipValidation?: boolean;
   context?: LoopContext;
   globalState?: any[];
 }): Promise<ExtractOutput> {
@@ -31,8 +28,6 @@ export async function extractWithSharedStrategy(params: {
     llmClient,
     model,
     dataExtractionGoal,
-    schema,
-    skipValidation,
     context,
     globalState,
   } = params;
@@ -42,7 +37,7 @@ export async function extractWithSharedStrategy(params: {
   const spreadsheetProvider = getSpreadsheetProvider(activeUrl);
   const start = Date.now();
   console.log(
-    `[EXTRACTION] extractWithSharedStrategy:start provider=${spreadsheetProvider ?? 'none'} schema=${schema ? 'yes' : 'no'} url="${activeUrl}"`,
+    `[EXTRACTION] extractWithSharedStrategy:start provider=${spreadsheetProvider ?? 'none'} url="${activeUrl}"`,
   );
 
   const contextualGoal =
@@ -54,12 +49,11 @@ export async function extractWithSharedStrategy(params: {
       ? `${contextualGoal}\n\nPreviously collected data:\n${JSON.stringify(globalState, null, 2)}`
       : contextualGoal;
 
-  const shared = { stagehand, llmClient, model, goalWithMemory, schema, skipValidation };
+  const shared = { stagehand, llmClient, model, goalWithMemory };
 
   // Build ordered list of extractors, each in its own file
   const extractors: (Extractor | null)[] = [
     createSpreadsheetExtractor(shared),
-    createDomSelectorExtractor(shared),
     createDomExtractor(shared),
     createVisionExtractor(shared),
   ];

@@ -1,38 +1,28 @@
 import type { ExtractStep, LoopContext } from '../../types';
 import type { OrchestratorContext } from '../orchestrator-context';
 import { getSpreadsheetProvider } from '../agent-tools';
-import { extractWithSharedStrategy, parseSchemaMap } from '../extraction';
+import { extractWithSharedStrategy } from '../extraction';
 import { waitForPageReady } from '../page-ready';
 
-function toStringValue(v: unknown): string {
-  if (typeof v === 'string') return v;
-  if (v === null || v === undefined) return 'null';
-  return JSON.stringify(v);
-}
-
-function flattenToStringMap(output: unknown): Record<string, string> {
+function flattenToMap(output: unknown): Record<string, unknown> {
   if (!output || typeof output !== 'object' || Array.isArray(output)) return {};
-  return Object.fromEntries(
-    Object.entries(output as Record<string, unknown>).map(([k, v]) => [k, toStringValue(v)]),
-  );
+  return { ...(output as Record<string, unknown>) };
 }
 
-function extractExpandedItems(output: unknown): Record<string, string>[] | null {
+function extractExpandedItems(output: unknown): Record<string, unknown>[] | null {
   if (!output || typeof output !== 'object' || Array.isArray(output)) return null;
   const entries = Object.entries(output as Record<string, unknown>);
   if (entries.length !== 1) return null;
   const [, value] = entries[0];
   if (!Array.isArray(value) || value.length === 0) return null;
   if (!value.every((v) => v && typeof v === 'object' && !Array.isArray(v))) return null;
-  return value.map((item: Record<string, unknown>) =>
-    Object.fromEntries(Object.entries(item).map(([k, v]) => [k, toStringValue(v)])),
-  );
+  return value.map((item: Record<string, unknown>) => ({ ...item }));
 }
 
 function mergeIntoGlobalState(
-  globalState: { source: string; items: Record<string, string>[] }[],
+  globalState: { source: string; items: Record<string, unknown>[] }[],
   source: string,
-  items: Record<string, string>[],
+  items: Record<string, unknown>[],
 ): void {
   const existing = globalState.find((entry) => entry.source === source);
   if (existing) {
@@ -74,15 +64,12 @@ export async function executeExtractStep(
 
   try {
     ctx.assertNotAborted();
-    const schema = parseSchemaMap(step.dataSchema);
-    console.log(`[EXTRACT] schema step_index=${index} fields=${Object.keys(schema ?? {}).length}`);
     const sharedStrategyStart = Date.now();
     const result = await extractWithSharedStrategy({
       stagehand: ctx.stagehand,
       llmClient: ctx.openai,
       model: ctx.resolveModels().extract,
       dataExtractionGoal: contextualInstruction,
-      schema,
       context,
       globalState: ctx.globalState,
     });
@@ -99,7 +86,7 @@ export async function executeExtractStep(
     }
 
     const expandedItems = extractExpandedItems(output);
-    const items = expandedItems ?? [flattenToStringMap(output)];
+    const items = expandedItems ?? [flattenToMap(output)];
     const nonEmpty = expandedItems ? items : items.filter((m) => Object.keys(m).length > 0);
 
     if (nonEmpty.length > 0) {

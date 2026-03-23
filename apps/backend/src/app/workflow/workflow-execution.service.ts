@@ -424,12 +424,23 @@ export class WorkflowExecutionService {
     const sessionId = currentState.sessionId ?? orchestrator?.getSessionId() ?? undefined;
 
     if (orchestrator) {
-      await orchestrator.abort();
+      try {
+        await orchestrator.abort();
+      } catch (err) {
+        console.error(`[WORKFLOW] Error aborting orchestrator for ${workflowId}:`, err);
+      }
       this.orchestrators.delete(workflowId);
     }
 
+    // Always try to stop the browser session via the backend provider as a
+    // safety net — even if orchestrator.abort() already deleted it, the
+    // provider handles 404s gracefully.
     if (sessionId) {
-      await this.browserSessionService.stopSession(sessionId);
+      await this.browserSessionService
+        .stopSession(sessionId)
+        .catch((err) =>
+          console.error(`[WORKFLOW] Failed to stop browser session ${sessionId}:`, err),
+        );
     }
 
     // Clean up local browser session

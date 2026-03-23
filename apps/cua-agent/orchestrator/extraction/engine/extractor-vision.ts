@@ -6,20 +6,15 @@ import {
   identifyItemsFromVision,
   type ExtractionItem,
 } from '../vision';
-import type { ParsedSchema } from '../schema';
-import { validateAndFillExtractionResult } from '../schema';
 import type { Extractor, ExtractOutput } from './types';
-import { applyValidation } from './types';
 
 export function createVisionExtractor(params: {
   stagehand: Stagehand;
   llmClient: OpenAI;
   model: string;
   goalWithMemory: string;
-  schema?: ParsedSchema | null;
-  skipValidation?: boolean;
 }): Extractor {
-  const { stagehand, llmClient, model, goalWithMemory, schema, skipValidation } = params;
+  const { stagehand, llmClient, model, goalWithMemory } = params;
 
   return {
     name: 'vision',
@@ -35,12 +30,11 @@ export function createVisionExtractor(params: {
         model,
         screenshotDataUrl,
         dataExtractionGoal: goalWithMemory,
-        schema,
       });
       console.log(`[EXTRACTION] vision:llm-ready duration_ms=${Date.now() - visionStart}`);
       return {
         mode: 'vision',
-        scraped_data: applyValidation(result, schema, skipValidation, validateAndFillExtractionResult),
+        scraped_data: result,
       };
     },
   };
