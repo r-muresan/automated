@@ -22,26 +22,21 @@ export async function extractWithSelector(params: {
   truncatedOutline: string;
   candidatesSection: string;
 }): Promise<unknown | null> {
-  const {
-    page,
-    llmClient,
-    model,
-    dataExtractionGoal,
-    truncatedOutline,
-    candidatesSection,
-  } = params;
+  const { page, llmClient, model, dataExtractionGoal, truncatedOutline, candidatesSection } =
+    params;
 
   console.log(candidatesSection);
 
   const prompt = `You are extracting data from a web page DOM.
 
 Extraction goal: ${dataExtractionGoal}
+${candidatesSection}
 
 DOM outline:
 \`\`\`
 ${truncatedOutline}
 \`\`\`
-${candidatesSection}
+
 Choose a strategy:
 1. **selector** (STRONGLY preferred): You MUST use one of the candidate selectors listed above under "Repeating element patterns found on page". The DOM outline is compressed and simplified, so selectors you invent yourself will almost certainly not match any real elements. Pick the candidate selector that best matches the target data.
 2. **direct**: Return the extracted data directly from the DOM outline above. Use this ONLY when no candidate selector is relevant (e.g., the data is spread across unrelated parts of the page) or when no candidates are listed.

@@ -8,7 +8,6 @@ import type { PaginationCheck, ExtractionItem } from '../vision';
 import { checkForMoreItemsFromVision } from '../vision';
 import { createSpreadsheetExtractor, identifySpreadsheetItems } from './extractor-spreadsheet';
 import { createDomExtractor } from './extractor-dom-selector';
-import { identifyDomItems } from './extractor-dom';
 import { identifyFileItems } from './extractor-files';
 import { createVisionExtractor, identifyVisionItems } from './extractor-vision';
 
@@ -23,14 +22,7 @@ export async function extractWithSharedStrategy(params: {
   context?: LoopContext;
   globalState?: any[];
 }): Promise<ExtractOutput> {
-  const {
-    stagehand,
-    llmClient,
-    model,
-    dataExtractionGoal,
-    context,
-    globalState,
-  } = params;
+  const { stagehand, llmClient, model, dataExtractionGoal, context, globalState } = params;
 
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
   const activeUrl = page?.url?.() ?? '';

@@ -7,8 +7,6 @@ import {
 } from '../dom-scripts';
 import { extractWithSelector } from './extract-selector';
 
-export { extractLoopItemsFromDom } from './extract-loop-items';
-
 /**
  * DOM extraction: gathers the DOM outline and structural candidates,
  * then delegates to selector-based or direct extraction.

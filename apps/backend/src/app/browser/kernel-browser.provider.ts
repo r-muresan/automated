@@ -60,7 +60,7 @@ export class KernelBrowserProvider extends BrowserProvider {
 
     const browser = await client.browsers.create({
       stealth: true,
-      timeout_seconds: 3600,
+      timeout_seconds: 120,
       viewport: {
         width: width ? Math.round(width) : 1280,
         height: height ? Math.round(height) : 800,
@@ -269,8 +269,11 @@ export class KernelBrowserProvider extends BrowserProvider {
    */
   async createProfile(name: string): Promise<string> {
     const client = this.requireClient();
+
     // Profile names must match ^[a-zA-Z0-9._-]+$ — sanitize email addresses
-    const sanitizedName = name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const isDev = process.env.NODE_ENV === 'development';
+    const sanitizedName = name.replace(/[^a-zA-Z0-9._-]/g, '_') + (isDev ? '_DEV' : '');
+
     const profile = await client.profiles.create({ name: sanitizedName });
     console.log(`[KernelBrowserProvider] Created profile: ${profile.id} (name=${sanitizedName})`);
     return profile.id;

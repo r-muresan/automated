@@ -1,98 +1,62 @@
 [
   {
     "index": 1,
-    "text": "Mike USA\n\t\n\tmusa@gmail.com\t\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000607047"
+    "text": "TSLA\nTesla Inc\n$379.91\n+$11.95\n3.25%\nadd_circle_outline",
+    "tagName": "li",
+    "href": "https://www.google.com/finance/quote/TSLA:NASDAQ"
   },
   {
     "index": 2,
-    "text": "Julia Jackson\n\t\n\tjjackson@gmail.com\t\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000607042"
+    "text": "BABA\nAlibaba Group Holding Ltd - ADR\n$126.15\n+$3.72\n3.04%\nadd_circle_outline",
+    "tagName": "li",
+    "href": "https://www.google.com/finance/quote/BABA:NYSE"
   },
   {
     "index": 3,
-    "text": "Jackie Lap\n\t\n\tjlap@gmail.com\t\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000607037"
+    "text": "F\nFord Motor Co\n$11.86\n+$0.34\n2.95%\nadd_circle_outline",
+    "tagName": "li",
+    "href": "https://www.google.com/finance/quote/F:NYSE"
   },
   {
     "index": 4,
-    "text": "Sleat Jam\n\t\n\tsj@gmail.com\t\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000607032"
+    "text": "AMZN\nAmazon.com Inc\n$210.83\n+$5.46\n2.66%\nadd_circle_outline",
+    "tagName": "li",
+    "href": "https://www.google.com/finance/quote/AMZN:NASDAQ"
   },
   {
     "index": 5,
-    "text": "Chad Cleamins\n\t\n\tclmen@gmail.com\t\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000607025"
+    "text": "NVDA\nNVIDIA Corp\nWhy Broadcom Stock Popped Today\nYahoo Finance • 2 hours ago\n$176.17\n1.87%\nadd_circle_outline",
+    "tagName": "li",
+    "href": "https://www.google.com/finance/quote/NVDA:NASDAQ"
   },
   {
     "index": 6,
-    "text": "F N\n\t\n\temail@gmail.com\t\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000607018"
+    "text": "SMCI\nSuper Micro Computer Inc\nThe Super Micro Computer Co-Founder Faces New Chip Smuggling Charges. Does That Actually Matter for SMCI Stock?\nYahoo Finance • 3 hours ago\n$22.02\n7.26%\nadd_circle_outline",
+    "tagName": "li",
+    "href": "https://www.google.com/finance/quote/SMCI:NASDAQ"
   },
   {
     "index": 7,
-    "text": "First Last\n\t\n\tfirstlast@gmail.com\t\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000607013"
+    "text": "NVD\nGraniteShares 2x Short NVDA Daily ETF\n$7.51\n3.90%\nadd_circle_outline",
+    "tagName": "li",
+    "href": "https://www.google.com/finance/quote/NVD:NASDAQ"
   },
   {
     "index": 8,
-    "text": "Junior Oid\n\t\n\tjoid@gmail.com\t\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000607008"
+    "text": "QQQ\nInvesco QQQ Trust, Series 1\nQQQ: Bullish Asymmetric Reward-to-Risk Here\nZacks Investment Research • 2 hours ago\n$589.69\n1.44%\nadd_circle_outline",
+    "tagName": "li",
+    "href": "https://www.google.com/finance/quote/QQQ:NASDAQ"
   },
   {
     "index": 9,
-    "text": "Allen M\n\t\n\tallen@gmail.com\t\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000607003"
+    "text": "ONDS\nOndas Inc\nOndas Inc. Reports Record Fourth Quarter and Full Year 2025 Financial Results: Expects Outsized Growth in 2026 Driven by Execution at OAS, Accelerated Strategic Growth Program and Strong Global Demand for Autonomous Systems\nOndas Holdings • 6 hours ago\n$10.76\n6.75%\nadd_circle_outline",
+    "tagName": "li",
+    "href": "https://www.google.com/finance/quote/ONDS:NASDAQ"
   },
   {
     "index": 10,
-    "text": "John Smith\n\t\n\tjsmith@gmail.com\t\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000602006"
-  },
-  {
-    "index": 11,
-    "text": "John Smith\n\t\n\tjsmith@gmail.com\t\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000602001"
-  },
-  {
-    "index": 12,
-    "text": "John Smith\n\t\n\tjsmith@gmail.com\t\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000599003"
-  },
-  {
-    "index": 13,
-    "text": "Feb 12\n\t\nKris Marrier (Sample)\n\t\nKing (Sample)\n\tkrismarrier@noemail.invalid\t\n555-555-5555\n\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000596346"
-  },
-  {
-    "index": 14,
-    "text": "Feb 14\n\t\nSage Wieser (Sample)\n\t\nTruhlar And Truhlar (Sample)\n\tsage-wieser@noemail.invalid\t\n555-555-5555\n\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000596345"
-  },
-  {
-    "index": 15,
-    "text": "Feb 13\n\t\nLeota Dilliard (Sample)\n\t\nCommercial Press (Sample)\n\tleota-dilliard@noemail.invalid\t\n555-555-5555\n\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000596344"
-  },
-  {
-    "index": 16,
-    "text": "Feb 14\n\t\nMitsue Tollner (Sample)\n\t\nMorlong Associates (Sample)\n\ttollner-morlong@noemail.invalid\t\n555-555-5555\n\t\nRobert Muresan",
-    "tagName": "lyte-exptable-tr",
-    "href": "https://crmplus.zoho.com/crm/org914520656/tab/Contacts/7235719000000596343"
+    "text": "AAL\nAmerican Airlines Group Inc\nAmerican Airlines stock (AAL) rises as oil falls after Trump delays strikes on Iranian power plants\nTechStock² • 1 hour ago\n$10.91\n4.60%\nadd_circle_outline",
+    "tagName": "li",
+    "href": "https://www.google.com/finance/quote/AAL:NASDAQ"
   }
 ]

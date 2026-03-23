@@ -115,7 +115,7 @@ export async function initKernelSession(
 
     const kernelBrowser = await session.kernelClient.browsers.create({
       stealth: true,
-      timeout_seconds: 3600,
+      timeout_seconds: 30,
       viewport: {
         width: screenSize.width,
         height: screenSize.height,
@@ -182,9 +182,11 @@ export async function initKernelSession(
     // Close any extra tabs the Kernel browser opened from a saved profile.
     // This runs AFTER navigation so that any tabs restored asynchronously
     // by the profile are also caught.
-    const activePage = ctx.stagehand.context.pages().find(
-      (p) => startingUrl && p.url().includes(new URL(startingUrl).hostname),
-    ) ?? ctx.stagehand.context.pages()[0];
+    const activePage =
+      ctx.stagehand.context
+        .pages()
+        .find((p) => startingUrl && p.url().includes(new URL(startingUrl).hostname)) ??
+      ctx.stagehand.context.pages()[0];
     const allPages = ctx.stagehand.context.pages();
     if (allPages.length > 1) {
       for (const p of allPages) {
