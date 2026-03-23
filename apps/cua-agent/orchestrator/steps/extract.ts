@@ -3,6 +3,7 @@ import type { OrchestratorContext } from '../orchestrator-context';
 import { getSpreadsheetProvider } from '../agent-tools';
 import { extractWithSharedStrategy } from '../extraction';
 import { waitForPageReady } from '../page-ready';
+import fs from 'fs/promises';
 
 function flattenToMap(output: unknown): Record<string, unknown> {
   if (!output || typeof output !== 'object' || Array.isArray(output)) return {};
@@ -78,6 +79,7 @@ export async function executeExtractStep(
           : {}),
         items,
       });
+      fs.writeFile('global-state.json', JSON.stringify(ctx.globalState, null, 2));
       console.log(
         expandedItems
           ? `[ORCHESTRATOR] Extracted ${nonEmpty.length} items (expanded array, saved to global state)`

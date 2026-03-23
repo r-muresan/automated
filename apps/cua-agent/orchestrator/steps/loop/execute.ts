@@ -230,6 +230,7 @@ export async function executeLoopStep(
   if (iterationStateAccumulator.length > 0) {
     deps.globalState.push(...iterationStateAccumulator);
   }
+  fs.writeFile('global-state.json', JSON.stringify(deps.globalState, null, 2));
 
   deps.emit({
     type: 'step:end',

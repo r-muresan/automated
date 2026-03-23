@@ -3,6 +3,7 @@ import type { OrchestratorContext } from '../orchestrator-context';
 import { createBrowserTabTools } from '../agent-tools';
 import { buildSystemPrompt } from '../system-prompt';
 import { OPENROUTER_BASE_URL } from '../orchestrator-context';
+import { AGENT_STEP_TIMEOUT_MS } from '../constants';
 
 // ---------------------------------------------------------------------------
 // Local helpers
@@ -136,6 +137,7 @@ export async function executeSingleStep(
         instruction: instruction,
         maxSteps: 50,
         highlightCursor: false,
+        signal: AbortSignal.timeout(AGENT_STEP_TIMEOUT_MS),
         callbacks: {
           prepareStep,
           onStepFinish,
