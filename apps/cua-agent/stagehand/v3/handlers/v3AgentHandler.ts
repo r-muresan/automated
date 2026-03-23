@@ -144,9 +144,7 @@ export class V3AgentHandler {
 
       const maxSteps = options.maxSteps || 20;
 
-      if (this.mode === 'hybrid') {
-        this.v3.assertScreenMode('Hybrid agent execution');
-      }
+      // Hybrid mode works with either a ScreenController or direct CDP/Playwright fallback
 
       // Get the initial page URL first (needed for the system prompt)
       const initialPageUrl = (await this.v3.context.awaitActivePage()).url();

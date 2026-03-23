@@ -12,12 +12,7 @@ import {
 } from 'react';
 import axios from 'axios';
 import posthog from 'posthog-js';
-import {
-  useCreateSession,
-  useDeleteSession,
-  usePingSession,
-  useStopSession,
-} from '../hooks/api';
+import { useCreateSession, useDeleteSession, usePingSession, useStopSession } from '../hooks/api';
 import {
   useBrowserCDP,
   type DownloadedFile,
@@ -53,13 +48,11 @@ interface BrowserContextType {
   handleTakeControl: (width?: number, height?: number) => Promise<void>;
   handleStopSession: () => Promise<void>;
   vncUrl: string | null;
+  kernelLiveViewUrl: string | null;
   vncViewerRef: React.RefObject<NoVNCViewerHandle | null>;
   downloadedFiles: DownloadedFile[];
   fileChooserState: FileChooserState | null;
-  handleFileChooser: (
-    action: 'accept' | 'cancel',
-    files?: string[],
-  ) => Promise<void>;
+  handleFileChooser: (action: 'accept' | 'cancel', files?: string[]) => Promise<void>;
 }
 
 const BrowserContext = createContext<BrowserContextType | undefined>(undefined);
@@ -85,9 +78,11 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [cdpWsUrlTemplate, setCdpWsUrlTemplate] = useState<string | null>(null);
   const [vncUrl, setVncUrl] = useState<string | null>(null);
+  const [kernelLiveViewUrl, setKernelLiveViewUrl] = useState<string | null>(null);
   const vncViewerRef = useRef<NoVNCViewerHandle | null>(null);
   const [fileChooserState, setFileChooserState] = useState<FileChooserState | null>(null);
 
+  const pagesRef = useRef<BrowserPage[]>([]);
   const recreateSessionRef = useRef<(() => Promise<boolean>) | null>(null);
   const addInteractionRef = useRef<
     | ((
@@ -110,6 +105,9 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
     pingSessionRef.current = pingSessionMutation;
   }, [pingSessionMutation]);
 
+  // Keep pagesRef in sync for use in callbacks
+  pagesRef.current = pages;
+
   const firstPageId = pages.find((page) => !page.isSkeleton)?.id;
 
   const recreateSession = useCallback(async (): Promise<boolean> => {
@@ -123,6 +121,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
     setPages([]);
     setActivePageIndex(0);
     setVncUrl(null);
+    setKernelLiveViewUrl(null);
 
     try {
       const colorScheme = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -133,6 +132,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
 
       setCdpWsUrlTemplate(data.cdpWsUrlTemplate || null);
       setVncUrl(data.vncUrl || null);
+      setKernelLiveViewUrl(data.kernelLiveViewUrl || null);
       setSessionId(data.sessionId);
       setPages(normalizePages(data.pages));
       setActivePageIndex(0);
@@ -163,9 +163,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         );
       },
       onTitleUpdate: (title: string, pageId: string) => {
-        setPages((prev) =>
-          prev.map((page) => (page.id === pageId ? { ...page, title } : page)),
-        );
+        setPages((prev) => prev.map((page) => (page.id === pageId ? { ...page, title } : page)));
       },
       onFaviconUpdate: (faviconUrl: string, pageId: string) => {
         setPages((prev) =>
@@ -173,23 +171,14 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         );
       },
       onNewTabDetected: (targetId: string, url: string) => {
-        addInteractionRef.current?.(
-          'tab_navigation',
-          {
-            tagName: 'NEW_TAB',
-            text: 'Open new tab',
-            href: url,
-          },
-          targetId,
-          { type: 'new_tab', url },
-        );
-
         let nextIndex = -1;
+        let nonSkeletonCount = -1;
         setPages((prev) => {
           if (prev.some((page) => page.id === targetId)) {
             return prev;
           }
 
+          nonSkeletonCount = prev.filter((p) => !p.isSkeleton).length;
           nextIndex = prev.length;
           return [
             ...prev,
@@ -201,8 +190,43 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
           ];
         });
 
+        // Use the count of non-skeleton pages as the tab index for the new tab
+        const tabIndex = nonSkeletonCount !== -1 ? nonSkeletonCount : undefined;
+        addInteractionRef.current?.(
+          'tab_navigation',
+          {
+            tagName: 'NEW_TAB',
+            text: 'Open new tab',
+            href: url,
+          },
+          targetId,
+          { type: 'new_tab', url, tabIndex },
+        );
+
         if (nextIndex !== -1) {
           setActivePageIndex(nextIndex);
+        }
+      },
+      onTabSwitched: (targetId: string, url: string) => {
+        const allPages = pagesRef.current;
+        const pageArrayIndex = allPages.findIndex((page) => page.id === targetId);
+        // Compute tab index among non-skeleton pages
+        const nonSkeletonPages = allPages.filter((p) => !p.isSkeleton);
+        const tabIndex = nonSkeletonPages.findIndex((page) => page.id === targetId);
+
+        addInteractionRef.current?.(
+          'tab_navigation',
+          {
+            tagName: 'SWITCH_TAB',
+            text: `Switch to tab ${tabIndex !== -1 ? tabIndex : '?'}`,
+            href: url,
+          },
+          targetId,
+          { type: 'switch_tab', tabIndex: tabIndex !== -1 ? tabIndex : undefined, url },
+        );
+
+        if (pageArrayIndex !== -1) {
+          setActivePageIndex(pageArrayIndex);
         }
       },
       onWebSocketDisconnected: () => {
@@ -259,6 +283,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
 
         setCdpWsUrlTemplate(data.cdpWsUrlTemplate || null);
         setVncUrl(data.vncUrl || null);
+        setKernelLiveViewUrl(data.kernelLiveViewUrl || null);
         setSessionId(data.sessionId);
         setPages(normalizePages(data.pages));
         setActivePageIndex(0);
@@ -300,6 +325,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
       setActivePageIndex(0);
       setCdpWsUrlTemplate(null);
       setVncUrl(null);
+      setKernelLiveViewUrl(null);
     }
   }, [deleteSessionMutation, sessionId, stopSessionMutation]);
 
@@ -375,6 +401,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         handleTakeControl,
         handleStopSession,
         vncUrl,
+        kernelLiveViewUrl,
         vncViewerRef,
         downloadedFiles,
         fileChooserState,

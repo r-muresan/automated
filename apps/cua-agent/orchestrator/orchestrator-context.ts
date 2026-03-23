@@ -15,7 +15,7 @@ import type { CredentialHandoffRequest } from './agent-tools';
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
 export const DEFAULT_MODELS = {
-  extract: 'google/gemini-2.5-flash',
+  extract: 'google/gemini-3-flash-preview',
   agent: 'moonshotai/kimi-k2.5',
   conditional: 'google/gemini-3-flash-preview',
   save: 'google/gemini-3-flash-preview',

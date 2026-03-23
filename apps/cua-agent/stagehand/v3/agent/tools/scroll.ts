@@ -227,14 +227,12 @@ export const scrollVisionTool = (v3: V3, provider?: string, modelId?: string) =>
       const deltaY = direction === "up" ? -scrollDistance : scrollDistance;
 
       const screenController = v3.getScreenController();
-      if (!screenController) {
-        throw new Error(
-          "Hybrid scroll requires screen mode. Attach a ScreenController to this session.",
-        );
+      if (screenController) {
+        await screenController.scroll(cx, cy, 0, deltaY);
+        await v3.syncActivePageFromFocus();
+      } else {
+        await page.scroll(cx, cy, 0, deltaY);
       }
-
-      await screenController.scroll(cx, cy, 0, deltaY);
-      await v3.syncActivePageFromFocus();
 
       const screenshotBase64 = await waitAndCaptureScreenshot(v3, page, 100);
 

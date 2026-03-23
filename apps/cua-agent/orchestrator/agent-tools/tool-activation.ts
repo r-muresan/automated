@@ -6,8 +6,8 @@ import {
 export { SPREADSHEET_TOOL_NAMES };
 
 export const ORCHESTRATOR_ALWAYS_ON_TOOL_NAMES = [
-  // 'list_tabs',
-  // 'switch_tab',
+  'list_tabs',
+  'switch_tab',
   'request_user_credentials',
 ] as const;
 

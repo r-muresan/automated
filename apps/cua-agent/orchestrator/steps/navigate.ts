@@ -1,5 +1,6 @@
-import type { NavigateStep, TabNavigateStep } from '../../types';
+import type { NavigateStep, SwitchTabStep, TabNavigateStep } from '../../types';
 import type { OrchestratorContext } from '../orchestrator-context';
+import { waitForPageReady } from '../page-ready';
 
 export async function executeNavigateStep(
   ctx: OrchestratorContext,
@@ -84,6 +85,47 @@ export async function executeTabNavigateStep(
       index,
       success: false,
       error: error?.message ?? 'Tab navigation failed',
+    });
+  }
+}
+
+export async function executeSwitchTabStep(
+  ctx: OrchestratorContext,
+  step: SwitchTabStep,
+  index: number,
+): Promise<void> {
+  if (!ctx.stagehand) throw new Error('Browser session not initialized');
+
+  console.log(`[ORCHESTRATOR] Switching to tab ${step.tabIndex}`);
+
+  try {
+    ctx.assertNotAborted();
+    const pages = ctx.stagehand.context.pages();
+    const targetPage = pages[step.tabIndex];
+
+    if (!targetPage) {
+      throw new Error(`Tab index ${step.tabIndex} out of range (${pages.length} tab(s) open)`);
+    }
+
+    ctx.stagehand.context.setActivePage(targetPage);
+    await targetPage.sendCDP('Page.bringToFront');
+    // await waitForPageReady(ctx.stagehand);
+
+    ctx.stepResults.push({ instruction: `Switch to tab ${step.tabIndex}`, success: true });
+    ctx.emit({ type: 'step:end', step, index, success: true });
+  } catch (error: any) {
+    console.error(`[ORCHESTRATOR] Switch tab failed:`, error.message ?? error);
+    ctx.stepResults.push({
+      instruction: `Switch to tab ${step.tabIndex}`,
+      success: false,
+      error: error.message,
+    });
+    ctx.emit({
+      type: 'step:end',
+      step,
+      index,
+      success: false,
+      error: error?.message ?? 'Switch tab failed',
     });
   }
 }

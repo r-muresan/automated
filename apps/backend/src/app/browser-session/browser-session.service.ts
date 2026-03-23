@@ -2,10 +2,11 @@ import { Injectable, ForbiddenException, OnModuleInit, BadRequestException } fro
 import { PrismaService } from '../prisma.service';
 import { BrowserProvider, SessionUploadFile } from '../browser/browser-provider.interface';
 import { HyperbrowserBrowserProvider } from '../browser/hyperbrowser-browser.provider';
+import { KernelBrowserProvider } from '../browser/kernel-browser.provider';
 import { acquireBrowserSessionCreateLease, releaseBrowserSession } from 'apps/cua-agent';
 
 const BROWSER_MINUTES_CAP = 10000;
-const isUsingManagedBrowser = !!process.env.HYPERBROWSER_API_KEY;
+const isUsingManagedBrowser = !!process.env.KERNEL_API_KEY || !!process.env.HYPERBROWSER_API_KEY;
 
 function buildCdpWsUrlTemplate(
   connectUrl: string | null | undefined,
@@ -33,6 +34,7 @@ function buildCdpWsUrlTemplate(
 interface UserBrowserIdentity {
   browserbaseContextId: string | null;
   hyperbrowserProfileId: string | null;
+  kernelProfileId: string | null;
 }
 
 @Injectable()
@@ -97,8 +99,19 @@ export class BrowserSessionService implements OnModuleInit {
     });
 
     if (!userContext) {
-      // Only create managed-browser profile context when using Hyperbrowser provider
-      if (this.browserProvider instanceof HyperbrowserBrowserProvider) {
+      if (this.browserProvider instanceof KernelBrowserProvider) {
+        const profileId = await (this.browserProvider as KernelBrowserProvider).createProfile(email);
+
+        userContext = await this.prisma.userContext.upsert({
+          where: { userId: user.id },
+          update: { kernelProfileId: profileId },
+          create: {
+            userId: user.id,
+            browserbaseContextId: String(user.id),
+            kernelProfileId: profileId,
+          },
+        });
+      } else if (this.browserProvider instanceof HyperbrowserBrowserProvider) {
         const profileId = await (this.browserProvider as HyperbrowserBrowserProvider).createContext(
           {
             name: email,
@@ -123,6 +136,16 @@ export class BrowserSessionService implements OnModuleInit {
         });
       }
     } else if (
+      this.browserProvider instanceof KernelBrowserProvider &&
+      !userContext.kernelProfileId
+    ) {
+      const profileId = await (this.browserProvider as KernelBrowserProvider).createProfile(email);
+
+      userContext = await this.prisma.userContext.update({
+        where: { userId: user.id },
+        data: { kernelProfileId: profileId },
+      });
+    } else if (
       this.browserProvider instanceof HyperbrowserBrowserProvider &&
       !userContext.hyperbrowserProfileId
     ) {
@@ -139,6 +162,7 @@ export class BrowserSessionService implements OnModuleInit {
     return {
       browserbaseContextId: userContext.browserbaseContextId,
       hyperbrowserProfileId: userContext.hyperbrowserProfileId ?? null,
+      kernelProfileId: userContext.kernelProfileId ?? null,
     };
   }
 
@@ -157,9 +181,11 @@ export class BrowserSessionService implements OnModuleInit {
       acquireBrowserSessionCreateLease('backend:createSession'),
     ]);
     const contextId =
-      this.browserProvider instanceof HyperbrowserBrowserProvider
-        ? (userBrowserIdentity?.hyperbrowserProfileId ?? undefined)
-        : (userBrowserIdentity?.browserbaseContextId ?? undefined);
+      this.browserProvider instanceof KernelBrowserProvider
+        ? (userBrowserIdentity?.kernelProfileId ?? undefined)
+        : this.browserProvider instanceof HyperbrowserBrowserProvider
+          ? (userBrowserIdentity?.hyperbrowserProfileId ?? undefined)
+          : (userBrowserIdentity?.browserbaseContextId ?? undefined);
 
     let leaseConfirmed = false;
     let createdSessionId: string | undefined;
@@ -204,6 +230,9 @@ export class BrowserSessionService implements OnModuleInit {
         connectUrl: resolvedConnectUrl ?? undefined,
       });
 
+      const liveViewUrl = session.liveUrl ?? session.liveViewUrl ?? initResult.liveViewUrl;
+      const isKernel = this.browserProvider instanceof KernelBrowserProvider;
+
       return {
         ...session,
         pages: initResult.pages,
@@ -211,8 +240,9 @@ export class BrowserSessionService implements OnModuleInit {
           session.cdpWsUrlTemplate ??
           initResult.cdpWsUrlTemplate ??
           buildCdpWsUrlTemplate(resolvedConnectUrl, session.id),
-        liveViewUrl: session.liveUrl ?? session.liveViewUrl ?? initResult.liveViewUrl,
+        liveViewUrl,
         vncUrl: initResult.vncUrl,
+        kernelLiveViewUrl: isKernel ? liveViewUrl : undefined,
       };
     } catch (error) {
       if (!leaseConfirmed) {

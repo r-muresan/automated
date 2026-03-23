@@ -17,8 +17,6 @@ import {
   quoteSheetName,
   splitRangeReference,
 } from '../agent-tools/spreadsheet/shared-utils';
-import type { ParsedSchema } from './schema';
-import { buildZodObjectFromMap } from './schema';
 import { parseJsonFromText } from './common';
 
 const SPREADSHEET_PREVIEW_MAX_ROWS = 50;
@@ -311,14 +309,13 @@ export async function extractFromSpreadsheetWithLlm(params: {
   llmClient: OpenAI;
   model: string;
   dataExtractionGoal: string;
-  schema?: ParsedSchema | null;
   snapshot: SpreadsheetSnapshot;
 }): Promise<unknown> {
-  const { llmClient, model, dataExtractionGoal, schema, snapshot } = params;
+  const { llmClient, model, dataExtractionGoal, snapshot } = params;
   const start = Date.now();
   const { rows, cols } = gridDimensions(snapshot.values);
   console.log(
-    `[SPREADSHEET_EXTRACT] llm:start model=${model} schema=${schema ? 'yes' : 'no'} rows=${rows} cols=${cols} sampledRange="${snapshot.sampledRangeA1}"`,
+    `[SPREADSHEET_EXTRACT] llm:start model=${model} rows=${rows} cols=${cols} sampledRange="${snapshot.sampledRangeA1}"`,
   );
 
   const prompt =
@@ -330,17 +327,6 @@ export async function extractFromSpreadsheetWithLlm(params: {
     `- Total sheets: ${snapshot.totalSheets}\n\n` +
     `Table preview:\n${snapshot.tablePreview}\n\n` +
     'Return only JSON.';
-
-  if (schema) {
-    const zodSchema = buildZodObjectFromMap(schema);
-    const response = await llmClient.chat.completions.parse({
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      response_format: zodResponseFormat(zodSchema, 'spreadsheet_extract_response'),
-    });
-    console.log(`[SPREADSHEET_EXTRACT] llm:end duration_ms=${Date.now() - start} parsed=true`);
-    return response.choices[0]?.message?.parsed ?? {};
-  }
 
   const response = await llmClient.chat.completions.create({
     model,

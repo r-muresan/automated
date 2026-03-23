@@ -30,6 +30,7 @@ export interface BrowserSessionCreateResponse {
   cdpWsUrlTemplate?: string;
   liveViewUrl?: string;
   vncUrl?: string;
+  kernelLiveViewUrl?: string;
 }
 
 export interface BrowserSessionDebugResponse extends Record<string, unknown> {
@@ -37,6 +38,7 @@ export interface BrowserSessionDebugResponse extends Record<string, unknown> {
   cdpWsUrlTemplate?: string;
   liveViewUrl?: string;
   vncUrl?: string;
+  kernelLiveViewUrl?: string;
 }
 
 export interface BrowserSessionPingResponse {
@@ -133,6 +135,7 @@ export interface WorkflowStepRecord {
   type: string;
   description: string | null;
   url: string | null;
+  tabIndex: number | null;
   dataSchema: string | null;
   condition: string | null;
   createdAt: ApiDate;

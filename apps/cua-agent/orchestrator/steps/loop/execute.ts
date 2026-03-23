@@ -1,5 +1,6 @@
 import type { LoopStep } from '../../../types';
 import { resolveCollector, type CollectedItem } from '../../extraction/loop';
+import { cleanExtractedItems } from '../../extraction/loop/clean-items';
 import { waitForPageReady } from '../../page-ready';
 import type { LoopDeps } from './deps';
 import { deriveLoopPlan } from './plan';
@@ -38,9 +39,13 @@ async function processItems(params: {
   processedItems: CollectedItem[];
   initialPages: Set<StagehandPage>;
   initialActivePage: StagehandPage;
+  preLoopStateLength: number;
+  iterationStateAccumulator: any[];
 }): Promise<number> {
-  const { deps, step, index, items, maxItems, processedItems, initialPages, initialActivePage } =
-    params;
+  const {
+    deps, step, index, items, maxItems, processedItems,
+    initialPages, initialActivePage, preLoopStateLength, iterationStateAccumulator,
+  } = params;
   let { totalProcessed } = params;
 
   for (const item of items) {
@@ -48,6 +53,13 @@ async function processItems(params: {
     deps.assertNotAborted();
 
     console.log(`[LOOP] Processing item ${totalProcessed + 1}: "${item.fingerprint}"`);
+
+    // Scope iteration state: collect any entries added by previous iteration,
+    // then reset globalState back to pre-loop snapshot so iterations are isolated.
+    const addedByPrevIteration = deps.globalState.splice(preLoopStateLength);
+    if (addedByPrevIteration.length > 0) {
+      iterationStateAccumulator.push(...addedByPrevIteration);
+    }
 
     deps.emit({
       type: 'loop:iteration:start',
@@ -111,6 +123,12 @@ export async function executeLoopStep(
   const initialActivePage =
     deps.stagehand.context.activePage() ?? deps.stagehand.context.pages()[0];
 
+  // Snapshot globalState length before the loop so iteration data can be scoped.
+  // Each iteration will only see pre-loop state; iteration-specific data is
+  // accumulated separately and merged back after the loop completes.
+  const preLoopStateLength = deps.globalState.length;
+  const iterationStateAccumulator: any[] = [];
+
   try {
     const resolved = await resolveCollector({
       stagehand: deps.stagehand,
@@ -126,8 +144,17 @@ export async function executeLoopStep(
       return;
     }
 
-    const { mode, collector, firstPage } = resolved;
+    const { mode, collector, firstPage: rawFirstPage } = resolved;
     console.log(`[LOOP] Using ${mode} collector`);
+
+    // Clean extracted items: remove empty and header/footer rows
+    const firstPage = await cleanExtractedItems({
+      items: rawFirstPage,
+      description: loopPlan.query,
+      llmClient: deps.openai,
+      model: deps.models.extract,
+    });
+    console.log(`[LOOP] Cleaned first page: ${rawFirstPage.length} → ${firstPage.length} items`);
 
     const savedLoopItemsJson = JSON.stringify(
       firstPage.map((i, idx) => ({ index: idx + 1, ...i.data })),
@@ -149,6 +176,8 @@ export async function executeLoopStep(
       processedItems,
       initialPages,
       initialActivePage,
+      preLoopStateLength,
+      iterationStateAccumulator,
     });
 
     // Collect and process subsequent pages
@@ -156,11 +185,24 @@ export async function executeLoopStep(
     while (totalProcessed < loopPlan.maxItems) {
       deps.assertNotAborted();
 
-      const batch = await collector.collect(pageIndex++);
+      const rawBatch = await collector.collect(pageIndex++);
 
-      if (batch.length === 0) break;
+      if (rawBatch.length === 0) break;
 
-      console.log(`[LOOP] Page ${pageIndex - 1}: ${batch.length} new item(s) via ${mode}`);
+      // Clean extracted items for this page
+      const batch = await cleanExtractedItems({
+        items: rawBatch,
+        description: loopPlan.query,
+        llmClient: deps.openai,
+        model: deps.models.extract,
+      });
+
+      if (batch.length === 0) {
+        console.log(`[LOOP] Page ${pageIndex - 1}: all ${rawBatch.length} items filtered out`);
+        continue;
+      }
+
+      console.log(`[LOOP] Page ${pageIndex - 1}: ${rawBatch.length} → ${batch.length} item(s) via ${mode}`);
 
       totalProcessed = await processItems({
         deps,
@@ -172,6 +214,8 @@ export async function executeLoopStep(
         processedItems,
         initialPages,
         initialActivePage,
+        preLoopStateLength,
+        iterationStateAccumulator,
       });
     }
 
@@ -181,6 +225,17 @@ export async function executeLoopStep(
     loopSuccess = false;
     loopError = error?.message ?? 'Loop failed';
     console.error(`[LOOP] Error: ${loopError}`);
+  }
+
+  // Merge iteration-scoped state back into globalState.
+  // Collect any entries from the final iteration first.
+  const finalIterationEntries = deps.globalState.splice(preLoopStateLength);
+  if (finalIterationEntries.length > 0) {
+    iterationStateAccumulator.push(...finalIterationEntries);
+  }
+  // Push all iteration data back so it's visible globally after the loop.
+  if (iterationStateAccumulator.length > 0) {
+    deps.globalState.push(...iterationStateAccumulator);
   }
 
   deps.emit({

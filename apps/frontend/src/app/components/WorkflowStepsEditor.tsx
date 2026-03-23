@@ -26,15 +26,17 @@ import {
   FiRepeat,
   FiSave,
   FiSearch,
+  FiLayers,
 } from 'react-icons/fi';
 
-type StepType = 'step' | 'extract' | 'loop' | 'conditional' | 'navigate' | 'tab_navigate' | 'save';
+type StepType = 'step' | 'extract' | 'loop' | 'conditional' | 'navigate' | 'tab_navigate' | 'switch_tab' | 'save';
 
 type EditorStep =
   | { id: string; type: 'step'; description: string }
   | { id: string; type: 'extract'; description: string; dataSchema?: string }
   | { id: string; type: 'navigate'; url: string }
   | { id: string; type: 'tab_navigate'; url: string }
+  | { id: string; type: 'switch_tab'; tabIndex: number }
   | { id: string; type: 'save'; description: string }
   | { id: string; type: 'loop'; description: string; steps: EditorStep[] }
   | {
@@ -64,6 +66,7 @@ const STEP_TYPE_OPTIONS: Array<{ type: StepType; label: string; hint: string; ic
   { type: 'conditional', label: 'Conditional', hint: 'If/else logic', icon: FiGitBranch },
   { type: 'navigate', label: 'Navigate', hint: 'Open URL', icon: FiNavigation },
   { type: 'tab_navigate', label: 'Tab Navigate', hint: 'New tab', icon: FiExternalLink },
+  { type: 'switch_tab', label: 'Switch Tab', hint: 'Switch tab', icon: FiLayers },
   { type: 'save', label: 'Save', hint: 'Persist data', icon: FiSave },
 ];
 
@@ -82,6 +85,7 @@ const TYPE_COLORS: Record<StepType, { bg: string; border: string }> = {
   conditional: { bg: 'purple.50', border: 'purple.200' },
   navigate: { bg: 'green.50', border: 'green.200' },
   tab_navigate: { bg: 'green.50', border: 'green.200' },
+  switch_tab: { bg: 'teal.50', border: 'teal.200' },
   save: { bg: 'gray.50', border: 'gray.200' },
 };
 
@@ -135,6 +139,12 @@ function toEditorStep(step: ApiStep): EditorStep {
         type: 'save',
         description: step.description ?? '',
       };
+    case 'switch_tab':
+      return {
+        id,
+        type: 'switch_tab',
+        tabIndex: step.tabIndex ?? 0,
+      };
     case 'step':
     default:
       return {
@@ -176,6 +186,11 @@ function toApiStep(step: EditorStep): ApiStep {
         type: 'tab_navigate',
         url: step.url,
       };
+    case 'switch_tab':
+      return {
+        type: 'switch_tab',
+        tabIndex: step.tabIndex,
+      };
     case 'save':
       return {
         type: 'save',
@@ -208,6 +223,8 @@ function createNewStep(type: StepType): EditorStep {
       return { id: createId(), type: 'navigate', url: '' };
     case 'tab_navigate':
       return { id: createId(), type: 'tab_navigate', url: '' };
+    case 'switch_tab':
+      return { id: createId(), type: 'switch_tab', tabIndex: 0 };
     case 'save':
       return { id: createId(), type: 'save', description: '' };
     case 'step':
@@ -228,6 +245,8 @@ function createStepWithId(type: StepType, id: string): EditorStep {
       return { id, type: 'navigate', url: '' };
     case 'tab_navigate':
       return { id, type: 'tab_navigate', url: '' };
+    case 'switch_tab':
+      return { id, type: 'switch_tab', tabIndex: 0 };
     case 'save':
       return { id, type: 'save', description: '' };
     case 'step':
@@ -714,6 +733,21 @@ export function WorkflowStepsEditor({
               }
               bg="white"
               placeholder="https://example.com"
+            />
+          )}
+
+          {step.type === 'switch_tab' && (
+            <Input
+              type="number"
+              value={step.tabIndex}
+              onChange={(e) =>
+                updateStepAt(path, index, (current) => ({
+                  ...current,
+                  tabIndex: parseInt(e.target.value, 10) || 0,
+                }))
+              }
+              bg="white"
+              placeholder="Tab index"
             />
           )}
 

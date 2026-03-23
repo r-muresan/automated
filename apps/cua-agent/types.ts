@@ -9,6 +9,7 @@ export type Step =
   | ExtractStep
   | NavigateStep
   | TabNavigateStep
+  | SwitchTabStep
   | SaveStep;
 
 export interface NavigateStep {
@@ -19,6 +20,11 @@ export interface NavigateStep {
 export interface TabNavigateStep {
   type: 'tab_navigate';
   url: string;
+}
+
+export interface SwitchTabStep {
+  type: 'switch_tab';
+  tabIndex: number;
 }
 
 export interface SaveStep {
@@ -228,6 +234,7 @@ export interface OrchestratorOptions {
   browserbaseProjectId?: string;
   browserbaseContextId?: string;
   hyperbrowserProfileId?: string;
+  kernelProfileId?: string;
   /** CDP WebSocket URL to connect to an existing local browser session instead of Browserbase */
   localCdpUrl?: string;
   /** Optional external ScreenController to use instead of the default Hyperbrowser Computer Actions.

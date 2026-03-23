@@ -1,7 +1,6 @@
 import OpenAI from 'openai';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
-import { buildZodObjectFromMap, type ParsedSchema } from './schema';
 import { parseJsonFromText } from './common';
 import { buildDeterministicItemKey } from './item-key';
 
@@ -71,9 +70,8 @@ export async function extractFromVision(params: {
   model: string;
   screenshotDataUrl: string;
   dataExtractionGoal: string;
-  schema?: ParsedSchema | null;
 }): Promise<unknown> {
-  const { llmClient, model, screenshotDataUrl, dataExtractionGoal, schema } = params;
+  const { llmClient, model, screenshotDataUrl, dataExtractionGoal } = params;
 
   const prompt = `You are extracting structured information from a webpage screenshot.
 
@@ -81,25 +79,6 @@ Extraction goal:
 ${dataExtractionGoal}
 
 Return only JSON.`;
-
-  if (schema) {
-    const zodSchema = buildZodObjectFromMap(schema);
-    const response = await llmClient.chat.completions.parse({
-      model,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: screenshotDataUrl, detail: 'high' } },
-          ],
-        },
-      ],
-      response_format: zodResponseFormat(zodSchema, 'vision_extract_response'),
-    });
-
-    return response.choices[0]?.message?.parsed ?? {};
-  }
 
   const response = await llmClient.chat.completions.create({
     model,

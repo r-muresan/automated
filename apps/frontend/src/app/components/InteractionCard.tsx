@@ -13,7 +13,14 @@ interface InteractionCardProps {
 function getInteractionTitle(interaction: Interaction): string {
   // Handle new tab creation
   if (interaction.data?.type === 'new_tab') {
-    return 'Open new tab';
+    const tabIdx = interaction.data?.tabIndex;
+    return tabIdx != null ? `New Tab (tab index ${tabIdx})` : 'New Tab';
+  }
+
+  // Handle tab switch
+  if (interaction.data?.type === 'switch_tab') {
+    const tabIdx = interaction.data?.tabIndex;
+    return tabIdx != null ? `Switch to tab ${tabIdx}` : 'Switch tab';
   }
 
   // Handle URL bar navigation
@@ -26,7 +33,7 @@ function getInteractionTitle(interaction: Interaction): string {
     return `Navigate to ${interaction.element?.href || 'page'}`;
   }
 
-  // Handle tab switch interactions
+  // Handle tab navigation (fallback)
   if (interaction.type === 'tab_navigation') {
     const toUrl = interaction.data?.toUrl || interaction.element?.href;
     if (toUrl) {

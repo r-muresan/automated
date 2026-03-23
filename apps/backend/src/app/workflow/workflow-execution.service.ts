@@ -244,8 +244,10 @@ export class WorkflowExecutionService {
       await this.browserSessionService.assertBrowserMinutesRemaining(email);
     }
 
-    const userBrowserIdentity = await this.browserSessionService.getOrCreateUserBrowserIdentity(email);
+    const userBrowserIdentity =
+      await this.browserSessionService.getOrCreateUserBrowserIdentity(email);
 
+    const kernelProfileId = userBrowserIdentity?.kernelProfileId ?? undefined;
     const hyperbrowserProfileId = userBrowserIdentity?.hyperbrowserProfileId ?? undefined;
 
     let agentSteps = this.buildStepTree(workflow.steps);
@@ -308,6 +310,7 @@ export class WorkflowExecutionService {
 
     const localSessionId = this.workflowLocalSessions.get(workflowId);
     const orchestrator = new OrchestratorAgent({
+      kernelProfileId,
       hyperbrowserProfileId,
       localSessionId: localSessionId ?? undefined,
       onEvent: (event) => this.handleOrchestratorEvent(workflowId, event),
@@ -421,12 +424,23 @@ export class WorkflowExecutionService {
     const sessionId = currentState.sessionId ?? orchestrator?.getSessionId() ?? undefined;
 
     if (orchestrator) {
-      await orchestrator.abort();
+      try {
+        await orchestrator.abort();
+      } catch (err) {
+        console.error(`[WORKFLOW] Error aborting orchestrator for ${workflowId}:`, err);
+      }
       this.orchestrators.delete(workflowId);
     }
 
+    // Always try to stop the browser session via the backend provider as a
+    // safety net — even if orchestrator.abort() already deleted it, the
+    // provider handles 404s gracefully.
     if (sessionId) {
-      await this.browserSessionService.stopSession(sessionId);
+      await this.browserSessionService
+        .stopSession(sessionId)
+        .catch((err) =>
+          console.error(`[WORKFLOW] Failed to stop browser session ${sessionId}:`, err),
+        );
     }
 
     // Clean up local browser session
@@ -523,6 +537,7 @@ export class WorkflowExecutionService {
       url: string | null;
       dataSchema: string | null;
       condition: string | null;
+      tabIndex: number | null;
     }>,
   ): Step[] {
     const grouped = new Map<string | null, Array<(typeof steps)[number]>>();
@@ -557,6 +572,7 @@ export class WorkflowExecutionService {
       url: string | null;
       dataSchema: string | null;
       condition: string | null;
+      tabIndex: number | null;
     },
     buildBranch: (parentStepId: string, branch: 'main' | 'loop' | 'true' | 'false') => Step[],
   ): Step {
@@ -565,6 +581,8 @@ export class WorkflowExecutionService {
         return { type: 'navigate', url: step.url ?? 'about:blank' };
       case 'tab_navigate':
         return { type: 'tab_navigate', url: step.url ?? 'about:blank' };
+      case 'switch_tab':
+        return { type: 'switch_tab', tabIndex: step.tabIndex ?? 0 };
       case 'save':
         return { type: 'save', description: step.description ?? '' };
       case 'extract':

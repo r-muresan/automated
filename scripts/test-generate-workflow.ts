@@ -13,7 +13,7 @@ import { PrismaClient } from '../libs/prisma/generated/prisma/client';
 import { generateWorkflowFromUserParts } from '../apps/backend/src/app/workflow/workflow-generation.shared';
 import type { Step } from '../apps/cua-agent/types';
 
-const USER_ID = 2;
+const USER_ID = 1;
 
 const prisma = new PrismaClient();
 
@@ -159,6 +159,8 @@ async function main() {
       startingUrl,
     },
   });
+
+  console.dir(workflow.steps, { depth: 5 });
 
   await createWorkflowSteps(created.id, workflow.steps, null, 'main');
 

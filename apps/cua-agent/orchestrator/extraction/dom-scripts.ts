@@ -410,6 +410,68 @@ export function buildStructuralDiscoveryScript(): string {
           }
         }
 
+        // --- Phase 3: Class-based global discovery ---
+        // Find repeated elements with the same class(es) across the entire document,
+        // even if they are NOT siblings (e.g. same component in different sections).
+        const classGroups = {};
+        const allEls = doc.querySelectorAll('*');
+        for (const el of allEls) {
+          const tag = el.tagName?.toLowerCase() || '';
+          if (SKIP_TAGS.has(tag)) continue;
+          const cls = cleanClasses(el.className);
+          if (!cls) continue;
+          // Use full sorted class list as key to group identical elements
+          const sorted = cls.split(/\\s+/).sort().join('.');
+          const key = tag + '.' + sorted;
+          if (!classGroups[key]) classGroups[key] = [];
+          classGroups[key].push(el);
+        }
+
+        for (const [key, members] of Object.entries(classGroups)) {
+          if (members.length < MIN_REPEATING) continue;
+
+          // Build selector from first class (most human-readable)
+          const representative = members[0];
+          const tag = representative.tagName.toLowerCase();
+          const cls = cleanClasses(representative.className);
+          const classes = cls.split(/\\s+/);
+          // Use the most specific (longest) class name for the selector
+          const bestClass = classes.reduce((a, b) => a.length >= b.length ? a : b, '');
+          const selector = tag + '.' + CSS.escape(bestClass);
+
+          let count;
+          try { count = doc.querySelectorAll(selector).length; } catch { continue; }
+          if (count < MIN_REPEATING) continue;
+
+          // If selector matches way more than our group, try with two classes for specificity
+          let finalSelector = selector;
+          if (count > members.length * 2 && classes.length > 1) {
+            const twoClassSel = tag + '.' + CSS.escape(classes[0]) + '.' + CSS.escape(classes[1]);
+            try {
+              const twoCount = doc.querySelectorAll(twoClassSel).length;
+              if (twoCount >= MIN_REPEATING && twoCount <= count) {
+                finalSelector = twoClassSel;
+                count = twoCount;
+              }
+            } catch {}
+          }
+
+          const samples = members.slice(0, 10).map(m => getSampleText(m));
+          const nonEmptySamples = samples.filter(s => s.length > 0).length;
+          if (nonEmptySamples === 0) continue;
+
+          const hasLinks = members.slice(0, 10).some(m => m.querySelector('a[href]'));
+          const hasText = members.slice(0, 10).some(m => (m.innerText || '').trim().length > 10);
+          const countScore = Math.log2(count + 1);
+
+          candidates.push({
+            selector: finalSelector,
+            count,
+            score: countScore * (hasLinks ? 3 : 1) * (hasText ? 2 : 1) * 1.5,
+            sampleTexts: samples,
+          });
+        }
+
         return candidates;
       }
 

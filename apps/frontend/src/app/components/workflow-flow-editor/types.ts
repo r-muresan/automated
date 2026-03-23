@@ -3,6 +3,7 @@ import type { IconType } from 'react-icons';
 import {
   FiExternalLink,
   FiGitBranch,
+  FiLayers,
   FiMousePointer,
   FiNavigation,
   FiRepeat,
@@ -10,13 +11,14 @@ import {
   FiSearch,
 } from 'react-icons/fi';
 
-export type StepType = 'step' | 'extract' | 'loop' | 'conditional' | 'navigate' | 'tab_navigate' | 'save';
+export type StepType = 'step' | 'extract' | 'loop' | 'conditional' | 'navigate' | 'tab_navigate' | 'switch_tab' | 'save';
 
 export type EditorStep =
   | { id: string; type: 'step'; description: string }
   | { id: string; type: 'extract'; description: string; dataSchema?: string }
   | { id: string; type: 'navigate'; url: string }
   | { id: string; type: 'tab_navigate'; url: string }
+  | { id: string; type: 'switch_tab'; tabIndex: number }
   | { id: string; type: 'save'; description: string }
   | { id: string; type: 'loop'; description: string; steps: EditorStep[] }
   | {
@@ -38,6 +40,7 @@ export const STEP_TYPE_OPTIONS: Array<{ type: StepType; label: string; hint: str
   { type: 'conditional', label: 'Conditional', hint: 'If/else logic', icon: FiGitBranch },
   { type: 'navigate', label: 'Navigate', hint: 'Open URL', icon: FiNavigation },
   { type: 'tab_navigate', label: 'Tab Navigate', hint: 'New tab', icon: FiExternalLink },
+  { type: 'switch_tab', label: 'Switch Tab', hint: 'Change active tab', icon: FiLayers },
   { type: 'save', label: 'Save', hint: 'Persist data', icon: FiSave },
 ];
 
@@ -56,6 +59,7 @@ export const TYPE_COLORS: Record<StepType, { bg: string; border: string; accent:
   conditional: { bg: '#F4EEFF', border: '#DCCEF7', accent: '#7B4BD9' },
   navigate: { bg: '#EAF7EF', border: '#C3E8D1', accent: '#2E9A59' },
   tab_navigate: { bg: '#EAF7EF', border: '#C3E8D1', accent: '#2E9A59' },
+  switch_tab: { bg: '#EAF7EF', border: '#C3E8D1', accent: '#2E9A59' },
   save: { bg: '#F3F3F3', border: '#E4E4E4', accent: '#666666' },
 };
 
@@ -95,6 +99,8 @@ export function toEditorStep(step: ApiStep): EditorStep {
       return { id, type: 'navigate', url: step.url ?? '' };
     case 'tab_navigate':
       return { id, type: 'tab_navigate', url: step.url ?? '' };
+    case 'switch_tab':
+      return { id, type: 'switch_tab', tabIndex: (step as any).tabIndex ?? 0 };
     case 'save':
       return { id, type: 'save', description: step.description ?? '' };
     case 'step':
@@ -128,6 +134,8 @@ export function toApiStep(step: EditorStep): ApiStep {
       return { type: 'navigate', url: step.url };
     case 'tab_navigate':
       return { type: 'tab_navigate', url: step.url };
+    case 'switch_tab':
+      return { type: 'switch_tab', tabIndex: step.tabIndex };
     case 'save':
       return { type: 'save', description: step.description };
     case 'step':
@@ -149,6 +157,8 @@ export function createNewStep(type: StepType): EditorStep {
       return { id, type: 'navigate', url: '' };
     case 'tab_navigate':
       return { id, type: 'tab_navigate', url: '' };
+    case 'switch_tab':
+      return { id, type: 'switch_tab', tabIndex: 0 };
     case 'save':
       return { id, type: 'save', description: '' };
     case 'step':
@@ -163,6 +173,7 @@ export function changeStepType(step: EditorStep, nextType: StepType): EditorStep
   const description =
     'description' in step ? step.description : step.type === 'conditional' ? step.condition : '';
   const url = step.type === 'navigate' || step.type === 'tab_navigate' ? step.url : '';
+  const tabIndex = step.type === 'switch_tab' ? step.tabIndex : 0;
 
   const next = createNewStep(nextType);
   // Preserve the original id
@@ -173,6 +184,9 @@ export function changeStepType(step: EditorStep, nextType: StepType): EditorStep
   }
   if ('url' in next && url) {
     (next as { url: string }).url = url;
+  }
+  if (next.type === 'switch_tab') {
+    next.tabIndex = tabIndex;
   }
   if (next.type === 'conditional') {
     next.condition = step.type === 'conditional' ? step.condition : description;
@@ -197,5 +211,7 @@ export function getStepLabel(step: EditorStep): string {
     case 'navigate':
     case 'tab_navigate':
       return step.url || '(no URL)';
+    case 'switch_tab':
+      return `Tab ${step.tabIndex + 1}`;
   }
 }

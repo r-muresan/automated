@@ -48,6 +48,7 @@ export interface InteractionCallbacks {
   onTitleUpdate?: (title: string, pageId: string) => void;
   onFaviconUpdate?: (faviconUrl: string, pageId: string) => void;
   onNewTabDetected?: (targetId: string, url: string) => void;
+  onTabSwitched?: (targetId: string, url: string) => void;
   onWebSocketDisconnected?: () => void;
   onFileChooserOpened?: (pageId: string, mode: string, backendNodeId: number) => void;
   onDownloadCompleted?: (filename: string) => void;
@@ -94,6 +95,182 @@ const DEFAULT_CDP_WS_TEMPLATE = (sessionId: string) =>
   `wss://connect.browserbase.com/debug/${sessionId}/devtools/page/{pageId}`;
 const CDP_COMMAND_TIMEOUT_MS = 10_000;
 
+const CLICK_SNAPSHOT_CROP_RATIO = 0.4;
+const CLICK_SNAPSHOT_MARKER_RATIO = 0.02;
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/**
+ * Load a base64-encoded JPEG, crop around (clickX, clickY), draw a blue dot,
+ * and return the result as a data-URL.  Runs in the browser via an offscreen
+ * canvas – the same algorithm used by NoVNCViewer's `cropAndMark`.
+ */
+function cropAndMarkBase64(
+  base64Jpeg: string,
+  clickX: number,
+  clickY: number,
+): Promise<string | null> {
+  if (typeof document === 'undefined') return Promise.resolve(null);
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const sw = img.naturalWidth || img.width;
+      const sh = img.naturalHeight || img.height;
+      if (!sw || !sh) { resolve(null); return; }
+
+      const cw = Math.max(1, Math.round(sw * CLICK_SNAPSHOT_CROP_RATIO));
+      const ch = Math.max(1, Math.round(sh * CLICK_SNAPSHOT_CROP_RATIO));
+
+      const cx = clamp(clickX, 0, sw - 1);
+      const cy = clamp(clickY, 0, sh - 1);
+
+      let cropLeft = clamp(cx - cw / 2, 0, Math.max(0, sw - cw));
+      let cropTop = clamp(cy - ch / 2, 0, Math.max(0, sh - ch));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = cw;
+      canvas.height = ch;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(null); return; }
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, cw, ch);
+
+      const sl = clamp(cropLeft, 0, sw);
+      const st = clamp(cropTop, 0, sh);
+      const sr = clamp(cropLeft + cw, 0, sw);
+      const sb = clamp(cropTop + ch, 0, sh);
+      const dw = Math.max(0, sr - sl);
+      const dh = Math.max(0, sb - st);
+      if (dw > 0 && dh > 0) {
+        ctx.drawImage(img, sl, st, dw, dh, sl - cropLeft, st - cropTop, dw, dh);
+      }
+
+      const dotR = Math.max(3, Math.round(Math.min(cw, ch) * CLICK_SNAPSHOT_MARKER_RATIO));
+      const mx = clamp(cx - cropLeft, 0, cw);
+      const my = clamp(cy - cropTop, 0, ch);
+      ctx.fillStyle = 'rgba(37, 99, 235, 0.92)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.lineWidth = Math.max(2, Math.round(dotR * 0.45));
+      ctx.beginPath();
+      ctx.arc(mx, my, dotR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      resolve(canvas.toDataURL('image/jpeg', 0.88));
+    };
+    img.onerror = () => resolve(null);
+    img.src = `data:image/jpeg;base64,${base64Jpeg}`;
+  });
+}
+
+/**
+ * Script injected into remote browser pages via CDP to track click and keyboard
+ * interactions. Reports events back to the frontend via Runtime.addBinding.
+ */
+const INTERACTION_TRACKING_SCRIPT = `
+(function() {
+  if (window.__interactionTrackingInstalled) return;
+  window.__interactionTrackingInstalled = true;
+
+  var typingBuffer = { text: '', lastTimestamp: 0, id: '' };
+  var typingFlushTimeout = null;
+  var TYPING_BUFFER_MS = 3000;
+
+  function genId(prefix) {
+    return prefix + '-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+  }
+
+  function getElementInfo(el) {
+    if (!el || !el.tagName) return {};
+    var info = { tagName: el.tagName };
+    if (el.textContent) info.text = el.textContent.substring(0, 100).trim();
+    if (el.href) info.href = el.href;
+    if (el.id) info.selector = '#' + el.id;
+    else if (el.className && typeof el.className === 'string') info.selector = el.tagName.toLowerCase() + '.' + el.className.split(' ')[0];
+    return info;
+  }
+
+  function report(data) {
+    try {
+      if (typeof __reportInteraction === 'function') {
+        __reportInteraction(JSON.stringify(data));
+      }
+    } catch(e) {}
+  }
+
+  // Track clicks
+  document.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return;
+    // Flush any pending typing
+    if (typingBuffer.text && typingFlushTimeout) {
+      clearTimeout(typingFlushTimeout);
+      typingFlushTimeout = null;
+    }
+    typingBuffer = { text: '', lastTimestamp: 0, id: '' };
+
+    report({
+      type: 'click',
+      x: e.clientX,
+      y: e.clientY,
+      pageX: e.pageX,
+      pageY: e.pageY,
+      element: getElementInfo(e.target),
+      timestamp: Date.now()
+    });
+  }, true);
+
+  // Track keyboard input
+  document.addEventListener('keydown', function(e) {
+    var key = e.key;
+    if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].indexOf(key) !== -1) return;
+
+    var now = Date.now();
+
+    // Modifier combos as separate keypresses
+    if (e.ctrlKey || e.altKey || e.metaKey) {
+      var mods = [];
+      if (e.ctrlKey) mods.push('Ctrl');
+      if (e.altKey) mods.push('Alt');
+      if (e.metaKey) mods.push('Cmd');
+      mods.push(key.length === 1 ? key.toUpperCase() : key);
+      report({ type: 'keypress', combo: mods.join('+'), timestamp: now });
+      return;
+    }
+
+    // Backspace handling
+    if (key === 'Backspace') {
+      if (typingBuffer.text && now - typingBuffer.lastTimestamp < TYPING_BUFFER_MS) {
+        typingBuffer.text = typingBuffer.text.slice(0, -1);
+        typingBuffer.lastTimestamp = now;
+        report({ type: 'typing_update', id: typingBuffer.id, text: typingBuffer.text, timestamp: now });
+      }
+      return;
+    }
+
+    var ch = key.length === 1 ? key : '[' + key + ']';
+
+    if (typingBuffer.text && now - typingBuffer.lastTimestamp < TYPING_BUFFER_MS) {
+      typingBuffer.text += ch;
+      typingBuffer.lastTimestamp = now;
+      report({ type: 'typing_update', id: typingBuffer.id, text: typingBuffer.text, timestamp: now });
+    } else {
+      var id = genId('typing');
+      typingBuffer = { text: ch, lastTimestamp: now, id: id };
+      report({ type: 'typing', id: id, text: ch, timestamp: now });
+    }
+
+    // Reset flush timeout
+    if (typingFlushTimeout) clearTimeout(typingFlushTimeout);
+    typingFlushTimeout = setTimeout(function() {
+      typingBuffer = { text: '', lastTimestamp: 0, id: '' };
+      typingFlushTimeout = null;
+    }, TYPING_BUFFER_MS);
+  }, true);
+})();
+`;
+
 export function useBrowserCDP(
   sessionId: string | null,
   initialPageId?: string,
@@ -127,9 +304,17 @@ export function useBrowserCDP(
   const targetPageIdsBySessionRef = useRef<Map<string, string>>(new Map());
   const pendingTargetAttachmentRef = useRef<Map<string, Promise<string>>>(new Map());
   const knownPageIdsRef = useRef<Set<string>>(new Set());
+  const activeTargetIdRef = useRef<string | null>(null);
 
   // Throttling refs for interaction events
   const lastNavigationRefreshByPageRef = useRef<Map<string, number>>(new Map());
+  // Maps CDP typing IDs (from injected script) to interaction IDs (in our state)
+  const cdpTypingIdMapRef = useRef<Map<string, string>>(new Map());
+  // Timestamp of last recorded click – used to suppress link-click navigations
+  const lastClickTimestampRef = useRef<number>(0);
+  // Latest CDP screenshot for click annotation (base64 JPEG, updated every ~100ms)
+  const latestCdpScreenshotRef = useRef<string | null>(null);
+  const cdpScreenshotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Handler ref (set later, used in connectToPage)
   const addInteractionRef = useRef<
@@ -402,24 +587,30 @@ export function useBrowserCDP(
               const lastNavigationAt = lastNavigationRefreshByPageRef.current.get(pageId) || 0;
               if (now - lastNavigationAt > 1000) {
                 lastNavigationRefreshByPageRef.current.set(pageId, now);
-                addInteractionRef.current?.(
-                  'frame_navigation',
-                  {
-                    tagName: 'FRAME_NAVIGATION',
-                    text: `Navigated to ${frame.url}`,
-                    selector: frame.id,
-                    href: frame.url,
-                  },
-                  pageId,
-                  {
-                    url: frame.url,
-                    frameId: frame.id,
-                    name: frame.name,
-                    pageId,
-                  },
-                );
 
-                // Immediately notify with URL (title will come later)
+                // Only record navigation interaction if it wasn't caused by a
+                // link click (which is already recorded as a click interaction).
+                const msSinceLastClick = now - lastClickTimestampRef.current;
+                if (msSinceLastClick > 3000) {
+                  addInteractionRef.current?.(
+                    'frame_navigation',
+                    {
+                      tagName: 'FRAME_NAVIGATION',
+                      text: `Navigated to ${frame.url}`,
+                      selector: frame.id,
+                      href: frame.url,
+                    },
+                    pageId,
+                    {
+                      url: frame.url,
+                      frameId: frame.id,
+                      name: frame.name,
+                      pageId,
+                    },
+                  );
+                }
+
+                // Always notify URL/title/favicon updates regardless
                 if (callbacksRef.current?.onFrameNavigation) {
                   callbacksRef.current.onFrameNavigation(frame.url, frame.id, pageId);
                 }
@@ -619,23 +810,30 @@ export function useBrowserCDP(
                   lastNavigationRefreshByPageRef.current.get(targetPageId) || 0;
                 if (now - lastNavigationAt > 1000) {
                   lastNavigationRefreshByPageRef.current.set(targetPageId, now);
-                  addInteractionRef.current?.(
-                    'frame_navigation',
-                    {
-                      tagName: 'FRAME_NAVIGATION',
-                      text: `Navigated to ${frame.url}`,
-                      selector: frame.id,
-                      href: frame.url,
-                    },
-                    targetPageId,
-                    {
-                      url: frame.url,
-                      frameId: frame.id,
-                      name: frame.name,
-                      pageId: targetPageId,
-                    },
-                  );
 
+                  // Only record navigation interaction if it wasn't caused by a
+                  // link click (which is already recorded as a click interaction).
+                  const msSinceLastClick = now - lastClickTimestampRef.current;
+                  if (msSinceLastClick > 3000) {
+                    addInteractionRef.current?.(
+                      'frame_navigation',
+                      {
+                        tagName: 'FRAME_NAVIGATION',
+                        text: `Navigated to ${frame.url}`,
+                        selector: frame.id,
+                        href: frame.url,
+                      },
+                      targetPageId,
+                      {
+                        url: frame.url,
+                        frameId: frame.id,
+                        name: frame.name,
+                        pageId: targetPageId,
+                      },
+                    );
+                  }
+
+                  // Always notify URL/title/favicon updates regardless
                   if (callbacksRef.current?.onFrameNavigation) {
                     callbacksRef.current.onFrameNavigation(frame.url, frame.id, targetPageId);
                   }
@@ -661,6 +859,109 @@ export function useBrowserCDP(
               );
               if (backendNodeId != null) {
                 callbacksRef.current?.onFileChooserOpened?.(targetPageId, mode, backendNodeId);
+              }
+              return;
+            }
+
+            // Handle interaction tracking from injected script
+            if (
+              message.method === 'Runtime.bindingCalled' &&
+              (message.params as any)?.name === '__reportInteraction'
+            ) {
+              try {
+                const payload = JSON.parse((message.params as any).payload);
+                const now = payload.timestamp || Date.now();
+
+                // Detect tab switch: user interacted with a different page
+                if (
+                  activeTargetIdRef.current &&
+                  targetPageId !== activeTargetIdRef.current &&
+                  (payload.type === 'click' || payload.type === 'typing' || payload.type === 'keypress')
+                ) {
+                  console.log('[CDP] Tab switch detected via interaction on:', targetPageId);
+                  activeTargetIdRef.current = targetPageId;
+                  callbacksRef.current?.onTabSwitched?.(targetPageId, '');
+                }
+
+                if (payload.type === 'click') {
+                  const interactionId = `click-${now}-${Math.random().toString(36).substring(2, 9)}`;
+                  const interaction: Interaction = {
+                    id: interactionId,
+                    type: 'user_event',
+                    timestamp: now,
+                    pageId: targetPageId,
+                    element: {
+                      tagName: payload.element?.tagName || 'CLICK',
+                      text: payload.element?.text || `(${payload.x}, ${payload.y})`,
+                      selector: payload.element?.selector || 'coordinates',
+                      href: payload.element?.href,
+                    },
+                    data: { type: 'click', x: payload.x, y: payload.y },
+                  };
+                  console.log('[CDP] Interaction from remote page: click at', payload.x, payload.y);
+                  lastClickTimestampRef.current = now;
+                  setInteractions((prev) => [...prev, interaction]);
+
+                  // Attach cropped screenshot with blue dot asynchronously
+                  const cachedScreenshot = latestCdpScreenshotRef.current;
+                  if (cachedScreenshot) {
+                    cropAndMarkBase64(cachedScreenshot, payload.x, payload.y).then(
+                      (annotatedUrl) => {
+                        if (annotatedUrl) {
+                          setInteractions((prev) => {
+                            const idx = prev.findIndex((i) => i.id === interactionId);
+                            if (idx === -1) return prev;
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], screenshotUrl: annotatedUrl };
+                            return next;
+                          });
+                        }
+                      },
+                    );
+                  }
+                } else if (payload.type === 'typing') {
+                  const interactionId = `typing-${now}-${Math.random().toString(36).substring(2, 9)}`;
+                  cdpTypingIdMapRef.current.set(payload.id, interactionId);
+                  const interaction: Interaction = {
+                    id: interactionId,
+                    type: 'user_event',
+                    timestamp: now,
+                    pageId: targetPageId,
+                    element: { text: payload.text },
+                    data: { type: 'keydown' },
+                  };
+                  console.log('[CDP] Interaction from remote page: typing started');
+                  setInteractions((prev) => [...prev, interaction]);
+                } else if (payload.type === 'typing_update') {
+                  const mappedId = cdpTypingIdMapRef.current.get(payload.id);
+                  if (mappedId) {
+                    setInteractions((prev) => {
+                      const idx = prev.findIndex((i) => i.id === mappedId);
+                      if (idx === -1) return prev;
+                      const next = [...prev];
+                      next[idx] = {
+                        ...next[idx],
+                        timestamp: now,
+                        element: { ...next[idx].element, text: payload.text },
+                      };
+                      return next;
+                    });
+                  }
+                } else if (payload.type === 'keypress') {
+                  const interactionId = `keypress-${now}-${Math.random().toString(36).substring(2, 9)}`;
+                  const interaction: Interaction = {
+                    id: interactionId,
+                    type: 'user_event',
+                    timestamp: now,
+                    pageId: targetPageId,
+                    element: { tagName: 'KEYPRESS', text: payload.combo },
+                    data: { type: 'keypress', combo: payload.combo },
+                  };
+                  console.log('[CDP] Interaction from remote page: keypress', payload.combo);
+                  setInteractions((prev) => [...prev, interaction]);
+                }
+              } catch (err) {
+                console.warn('[CDP] Failed to parse interaction binding payload:', err);
               }
               return;
             }
@@ -710,6 +1011,7 @@ export function useBrowserCDP(
             const targetInfo = (message.params as any)?.targetInfo;
             if (targetInfo?.type === 'page' && !knownPageIdsRef.current.has(targetInfo.targetId)) {
               console.log('[CDP] New tab detected:', targetInfo.targetId, targetInfo.url);
+              activeTargetIdRef.current = targetInfo.targetId;
               if (callbacksRef.current?.onNewTabDetected) {
                 callbacksRef.current.onNewTabDetected(
                   targetInfo.targetId,
@@ -718,6 +1020,7 @@ export function useBrowserCDP(
               }
             }
           }
+
         } catch (e) {
           console.warn('[CDP] Failed to parse message:', e);
         }
@@ -726,12 +1029,7 @@ export function useBrowserCDP(
       // Note: connectToPage is called separately via ensurePageConnections
       // to avoid duplicate connections
     },
-    [
-      sessionId,
-      cdpWsUrlTemplate,
-      queryPageMetadata,
-      usesBrowserLevelCdp,
-    ],
+    [sessionId, cdpWsUrlTemplate, queryPageMetadata, usesBrowserLevelCdp],
   );
 
   const disconnect = useCallback(() => {
@@ -746,11 +1044,13 @@ export function useBrowserCDP(
       wsRef.current = null;
     }
     currentPageIdRef.current = null;
+    activeTargetIdRef.current = null;
     setState({ isConnected: false, error: null });
   }, []);
 
   useEffect(() => {
     if (sessionId && initialPageId) {
+      activeTargetIdRef.current = initialPageId;
       connect(initialPageId);
     } else if (!sessionId) {
       disconnect();
@@ -867,9 +1167,28 @@ export function useBrowserCDP(
           sendToAttachedTarget(attachedSessionId, 'Page.setInterceptFileChooserDialog', {
             enabled: true,
           }).catch((err) => console.warn('[CDP] Failed to enable file chooser interception:', err)),
+          // Enable Runtime domain for interaction tracking via injected scripts
+          sendToAttachedTarget(attachedSessionId, 'Runtime.enable').catch((err) =>
+            console.warn('[CDP] Failed to enable Runtime:', err),
+          ),
+          sendToAttachedTarget(attachedSessionId, 'Runtime.addBinding', {
+            name: '__reportInteraction',
+          }).catch((err) => console.warn('[CDP] Failed to add interaction binding:', err)),
+          sendToAttachedTarget(attachedSessionId, 'Page.addScriptToEvaluateOnNewDocument', {
+            source: INTERACTION_TRACKING_SCRIPT,
+          }).catch((err) =>
+            console.warn('[CDP] Failed to inject interaction tracking script:', err),
+          ),
         ];
 
         await Promise.all(setupPromises);
+
+        // Also inject the script into the current page (addScriptToEvaluateOnNewDocument only affects future navigations)
+        sendToAttachedTarget(attachedSessionId, 'Runtime.evaluate', {
+          expression: INTERACTION_TRACKING_SCRIPT,
+        }).catch((err) =>
+          console.warn('[CDP] Failed to evaluate interaction tracking script:', err),
+        );
 
         return attachedSessionId;
       })().finally(() => {
@@ -1018,6 +1337,10 @@ export function useBrowserCDP(
       eventType: interaction.data?.type,
       element: interaction.element?.tagName,
     });
+    // Track click timestamps so link-click navigations can be suppressed
+    if (interaction.data?.type === 'click') {
+      lastClickTimestampRef.current = interaction.timestamp || Date.now();
+    }
     setInteractions((prev) => [...prev, interaction]);
 
     if (callbacksRef.current?.onInteraction) {
@@ -1054,8 +1377,59 @@ export function useBrowserCDP(
       pendingTargetAttachmentRef.current.clear();
       lastNavigationRefreshByPageRef.current.clear();
       downloadGuidToFilenameRef.current.clear();
+      cdpTypingIdMapRef.current.clear();
+      latestCdpScreenshotRef.current = null;
+      if (cdpScreenshotIntervalRef.current) {
+        clearInterval(cdpScreenshotIntervalRef.current);
+        cdpScreenshotIntervalRef.current = null;
+      }
     }
   }, [sessionId]);
+
+  // Periodic CDP screenshot capture for click annotation (kernel/browser-level CDP only)
+  useEffect(() => {
+    if (!usesBrowserLevelCdp || !state.isConnected) {
+      if (cdpScreenshotIntervalRef.current) {
+        clearInterval(cdpScreenshotIntervalRef.current);
+        cdpScreenshotIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Capture a screenshot every 100ms, storing only the latest
+    let inFlight = false;
+    cdpScreenshotIntervalRef.current = setInterval(() => {
+      if (inFlight) return;
+      // Find any attached target session to capture from
+      const entries = Array.from(pageTargetSessionIdsRef.current.entries());
+      if (entries.length === 0) return;
+      const [, attachedSessionId] = entries[0];
+
+      inFlight = true;
+      sendToAttachedTarget<{ data?: string }>(attachedSessionId, 'Page.captureScreenshot', {
+        format: 'jpeg',
+        quality: 55,
+      })
+        .then((result) => {
+          if (result.data) {
+            latestCdpScreenshotRef.current = result.data;
+          }
+        })
+        .catch(() => {
+          // Silently ignore — page may be navigating
+        })
+        .finally(() => {
+          inFlight = false;
+        });
+    }, 100);
+
+    return () => {
+      if (cdpScreenshotIntervalRef.current) {
+        clearInterval(cdpScreenshotIntervalRef.current);
+        cdpScreenshotIntervalRef.current = null;
+      }
+    };
+  }, [usesBrowserLevelCdp, state.isConnected, sendToAttachedTarget]);
 
   return {
     ...state,

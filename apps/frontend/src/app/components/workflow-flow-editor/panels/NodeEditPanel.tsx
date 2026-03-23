@@ -298,6 +298,41 @@ export function NodeEditPanel({
           </div>
         )}
 
+        {step.type === 'switch_tab' && (
+          <div>
+            <label
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#5F5F5F',
+                display: 'block',
+                marginBottom: 6,
+              }}
+            >
+              Tab Number
+            </label>
+            <select
+              value={step.tabIndex + 1}
+              onChange={(e) => onUpdate((s) => ({ ...s, tabIndex: Number(e.target.value) - 1 }))}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid #E4E4E4',
+                borderRadius: 4,
+                fontSize: 13,
+                background: '#F7F7F7',
+                color: '#0C0C0C',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+              <option value={3}>3</option>
+            </select>
+          </div>
+        )}
+
         {step.type === 'loop' && (
           <div>
             <label
