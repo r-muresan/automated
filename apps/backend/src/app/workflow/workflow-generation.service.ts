@@ -116,8 +116,20 @@ export class WorkflowGenerationService {
   private buildUserParts(interactions: InteractionPayload[]): any[] {
     const userParts: any[] = [];
 
-    for (let i = 0; i < interactions.length; i++) {
-      const interaction = interactions[i];
+    // Filter out frame_navigation events that immediately follow a new_tab
+    // (these are just the new tab page loading, e.g. chrome://newtab -> start.duckduckgo.com)
+    const filtered = interactions.filter((interaction, i) => {
+      if (interaction.type === 'frame_navigation' && i > 0) {
+        const prev = interactions[i - 1];
+        if (prev.type === 'tab_navigation' && prev.data?.type === 'new_tab') {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    for (let i = 0; i < filtered.length; i++) {
+      const interaction = filtered[i];
       const parts: string[] = [];
       parts.push(`Step ${i + 1}:`);
 
@@ -140,6 +152,12 @@ export class WorkflowGenerationService {
       } else if (interaction.type === 'frame_navigation') {
         parts.push(`  Type: Navigate`);
         parts.push(`  URL: ${interaction.data?.url || interaction.element?.href || 'unknown'}`);
+      } else if (interaction.type === 'tab_navigation' && interaction.data?.type === 'new_tab') {
+        const tabIdx = interaction.data?.tabIndex;
+        parts.push(`  Type: New Tab${tabIdx != null ? ` (tab index ${tabIdx})` : ''}`);
+      } else if (interaction.type === 'tab_navigation' && interaction.data?.type === 'switch_tab') {
+        const tabIdx = interaction.data?.tabIndex;
+        parts.push(`  Type: Switch Tabs to index ${tabIdx ?? 'unknown'}`);
       } else if (interaction.type === 'tab_navigation') {
         parts.push(`  Type: Tab Navigation`);
         if (interaction.data?.url) parts.push(`  URL: ${interaction.data.url}`);

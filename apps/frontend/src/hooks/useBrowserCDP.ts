@@ -48,6 +48,7 @@ export interface InteractionCallbacks {
   onTitleUpdate?: (title: string, pageId: string) => void;
   onFaviconUpdate?: (faviconUrl: string, pageId: string) => void;
   onNewTabDetected?: (targetId: string, url: string) => void;
+  onTabSwitched?: (targetId: string, url: string) => void;
   onWebSocketDisconnected?: () => void;
   onFileChooserOpened?: (pageId: string, mode: string, backendNodeId: number) => void;
   onDownloadCompleted?: (filename: string) => void;
@@ -303,6 +304,7 @@ export function useBrowserCDP(
   const targetPageIdsBySessionRef = useRef<Map<string, string>>(new Map());
   const pendingTargetAttachmentRef = useRef<Map<string, Promise<string>>>(new Map());
   const knownPageIdsRef = useRef<Set<string>>(new Set());
+  const activeTargetIdRef = useRef<string | null>(null);
 
   // Throttling refs for interaction events
   const lastNavigationRefreshByPageRef = useRef<Map<string, number>>(new Map());
@@ -870,6 +872,17 @@ export function useBrowserCDP(
                 const payload = JSON.parse((message.params as any).payload);
                 const now = payload.timestamp || Date.now();
 
+                // Detect tab switch: user interacted with a different page
+                if (
+                  activeTargetIdRef.current &&
+                  targetPageId !== activeTargetIdRef.current &&
+                  (payload.type === 'click' || payload.type === 'typing' || payload.type === 'keypress')
+                ) {
+                  console.log('[CDP] Tab switch detected via interaction on:', targetPageId);
+                  activeTargetIdRef.current = targetPageId;
+                  callbacksRef.current?.onTabSwitched?.(targetPageId, '');
+                }
+
                 if (payload.type === 'click') {
                   const interactionId = `click-${now}-${Math.random().toString(36).substring(2, 9)}`;
                   const interaction: Interaction = {
@@ -998,6 +1011,7 @@ export function useBrowserCDP(
             const targetInfo = (message.params as any)?.targetInfo;
             if (targetInfo?.type === 'page' && !knownPageIdsRef.current.has(targetInfo.targetId)) {
               console.log('[CDP] New tab detected:', targetInfo.targetId, targetInfo.url);
+              activeTargetIdRef.current = targetInfo.targetId;
               if (callbacksRef.current?.onNewTabDetected) {
                 callbacksRef.current.onNewTabDetected(
                   targetInfo.targetId,
@@ -1006,6 +1020,7 @@ export function useBrowserCDP(
               }
             }
           }
+
         } catch (e) {
           console.warn('[CDP] Failed to parse message:', e);
         }
@@ -1029,11 +1044,13 @@ export function useBrowserCDP(
       wsRef.current = null;
     }
     currentPageIdRef.current = null;
+    activeTargetIdRef.current = null;
     setState({ isConnected: false, error: null });
   }, []);
 
   useEffect(() => {
     if (sessionId && initialPageId) {
+      activeTargetIdRef.current = initialPageId;
       connect(initialPageId);
     } else if (!sessionId) {
       disconnect();

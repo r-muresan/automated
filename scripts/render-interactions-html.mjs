@@ -71,6 +71,14 @@ function interactionTitle(interaction) {
   if (interaction.data?.type === 'keypress') {
     return `Press ${interaction.data?.combo || interaction.element?.text || 'keys'}`;
   }
+  if (interaction.data?.type === 'new_tab') {
+    const tabIdx = interaction.data?.tabIndex;
+    return tabIdx != null ? `New Tab (tab index ${tabIdx})` : 'New Tab';
+  }
+  if (interaction.data?.type === 'switch_tab') {
+    const tabIdx = interaction.data?.tabIndex;
+    return tabIdx != null ? `Switch to tab ${tabIdx}` : 'Switch tab';
+  }
   if (interaction.type === 'tab_navigation') {
     return interaction.element?.text || 'Tab navigation';
   }

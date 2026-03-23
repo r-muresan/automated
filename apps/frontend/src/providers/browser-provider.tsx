@@ -82,6 +82,7 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   const vncViewerRef = useRef<NoVNCViewerHandle | null>(null);
   const [fileChooserState, setFileChooserState] = useState<FileChooserState | null>(null);
 
+  const pagesRef = useRef<BrowserPage[]>([]);
   const recreateSessionRef = useRef<(() => Promise<boolean>) | null>(null);
   const addInteractionRef = useRef<
     | ((
@@ -103,6 +104,9 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     pingSessionRef.current = pingSessionMutation;
   }, [pingSessionMutation]);
+
+  // Keep pagesRef in sync for use in callbacks
+  pagesRef.current = pages;
 
   const firstPageId = pages.find((page) => !page.isSkeleton)?.id;
 
@@ -167,23 +171,14 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
         );
       },
       onNewTabDetected: (targetId: string, url: string) => {
-        addInteractionRef.current?.(
-          'tab_navigation',
-          {
-            tagName: 'NEW_TAB',
-            text: 'Open new tab',
-            href: url,
-          },
-          targetId,
-          { type: 'new_tab', url },
-        );
-
         let nextIndex = -1;
+        let nonSkeletonCount = -1;
         setPages((prev) => {
           if (prev.some((page) => page.id === targetId)) {
             return prev;
           }
 
+          nonSkeletonCount = prev.filter((p) => !p.isSkeleton).length;
           nextIndex = prev.length;
           return [
             ...prev,
@@ -195,8 +190,43 @@ export function BrowserProvider({ children }: { children: ReactNode }) {
           ];
         });
 
+        // Use the count of non-skeleton pages as the tab index for the new tab
+        const tabIndex = nonSkeletonCount !== -1 ? nonSkeletonCount : undefined;
+        addInteractionRef.current?.(
+          'tab_navigation',
+          {
+            tagName: 'NEW_TAB',
+            text: 'Open new tab',
+            href: url,
+          },
+          targetId,
+          { type: 'new_tab', url, tabIndex },
+        );
+
         if (nextIndex !== -1) {
           setActivePageIndex(nextIndex);
+        }
+      },
+      onTabSwitched: (targetId: string, url: string) => {
+        const allPages = pagesRef.current;
+        const pageArrayIndex = allPages.findIndex((page) => page.id === targetId);
+        // Compute tab index among non-skeleton pages
+        const nonSkeletonPages = allPages.filter((p) => !p.isSkeleton);
+        const tabIndex = nonSkeletonPages.findIndex((page) => page.id === targetId);
+
+        addInteractionRef.current?.(
+          'tab_navigation',
+          {
+            tagName: 'SWITCH_TAB',
+            text: `Switch to tab ${tabIndex !== -1 ? tabIndex : '?'}`,
+            href: url,
+          },
+          targetId,
+          { type: 'switch_tab', tabIndex: tabIndex !== -1 ? tabIndex : undefined, url },
+        );
+
+        if (pageArrayIndex !== -1) {
+          setActivePageIndex(pageArrayIndex);
         }
       },
       onWebSocketDisconnected: () => {

@@ -16,6 +16,32 @@ const DEFAULT_INITIAL_PAGE_URL = 'https://duckduckgo.com';
 const DEFAULT_INITIAL_PAGE_TITLE = 'DuckDuckGo';
 const KERNEL_DOWNLOAD_PATH = '/tmp/downloads';
 
+const WINDOWS_PLATFORM = 'Win32';
+
+function buildWindowsUserAgent(chromeVersion: string): string {
+  return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+}
+
+function buildWindowsAppVersion(chromeVersion: string): string {
+  return `5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+}
+
+function buildBrands(majorVersion: string) {
+  return [
+    { brand: 'Chromium', version: majorVersion },
+    { brand: 'Google Chrome', version: majorVersion },
+    { brand: 'Not/A)Brand', version: '24' },
+  ];
+}
+
+function buildFullVersionList(fullVersion: string) {
+  return [
+    { brand: 'Chromium', version: fullVersion },
+    { brand: 'Google Chrome', version: fullVersion },
+    { brand: 'Not/A)Brand', version: '24.0.0.0' },
+  ];
+}
+
 @Injectable()
 export class KernelBrowserProvider extends BrowserProvider {
   private readonly apiKey = process.env.KERNEL_API_KEY;
@@ -179,9 +205,8 @@ export class KernelBrowserProvider extends BrowserProvider {
       console.log(`[KernelBrowserProvider] Initializing session ${sessionId}...`);
 
       const browser = await chromium.connectOverCDP(cdpWsUrl);
-      // Skip CDP interactions (enableDownloadBehavior, getTargetId) to reduce
-      // bot-detection fingerprinting. Downloads and target IDs are non-essential
-      // for the Kernel iframe-based flow.
+
+      // await this.spoofUserAgent(browser);
 
       const defaultContext = browser.contexts()[0];
       if (!defaultContext) {
@@ -196,6 +221,8 @@ export class KernelBrowserProvider extends BrowserProvider {
       if (existingPages.length > 1) {
         await Promise.all(existingPages.slice(1).map((p) => p.close().catch(() => {})));
       }
+
+      // await this.warmUpProfile(page);
 
       page.goto(DEFAULT_INITIAL_PAGE_URL, { waitUntil: 'commit' }).catch(() => {});
 
@@ -259,6 +286,184 @@ export class KernelBrowserProvider extends BrowserProvider {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Warm up the browser by visiting common sites to build up
+   * cookies/history/localStorage so the profile looks like a real user.
+   */
+  private async warmUpProfile(page: import('playwright-core').Page): Promise<void> {
+    const warmUpUrls = [
+      'https://www.google.com',
+      'https://www.wikipedia.org',
+      'https://www.weather.com',
+      'https://www.reddit.com',
+      'https://www.youtube.com',
+    ];
+
+    console.log('[KernelBrowserProvider] Warming up profile...');
+
+    const context = page.context();
+    await Promise.all(
+      warmUpUrls.map(async (url) => {
+        const p = await context.newPage();
+        try {
+          await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 });
+        } catch {
+        } finally {
+          await p.close().catch(() => {});
+        }
+      }),
+    );
+
+    console.log('[KernelBrowserProvider] Profile warmed up successfully');
+  }
+
+  /**
+   * Spoof the browser user agent to appear as a Windows machine via CDP.
+   * Uses per-page CDP sessions for Network.setUserAgentOverride (with Client Hints)
+   * and Page.addScriptToEvaluateOnNewDocument for navigator JS overrides.
+   * Also hooks into context 'page' events to apply to future pages.
+   */
+  private async spoofUserAgent(browser: Browser): Promise<void> {
+    try {
+      const defaultContext = browser.contexts()[0];
+      if (!defaultContext) return;
+
+      // Detect the real Chrome version from the browser so we don't mismatch
+      let chromeFullVersion = '145.0.0.0';
+      const pages = defaultContext.pages();
+      if (pages.length > 0) {
+        const realUA: string = await pages[0].evaluate(() => navigator.userAgent).catch(() => '');
+        const match = realUA.match(/Chrome\/([\d.]+)/);
+        if (match) chromeFullVersion = match[1];
+      } else {
+        const ver = browser.version();
+        if (ver) chromeFullVersion = ver;
+      }
+      const chromeMajor = chromeFullVersion.split('.')[0];
+
+      // Apply to all existing pages
+      for (const page of defaultContext.pages()) {
+        await this.spoofPage(defaultContext, page, chromeFullVersion, chromeMajor);
+      }
+
+      // Apply to all future pages
+      defaultContext.on('page', (page) => {
+        this.spoofPage(defaultContext, page, chromeFullVersion, chromeMajor).catch((err) =>
+          console.error('[KernelBrowserProvider] Failed to spoof new page UA:', err),
+        );
+      });
+
+      console.log(
+        `[KernelBrowserProvider] User agent spoofed to Windows (Chrome/${chromeFullVersion})`,
+      );
+    } catch (error) {
+      console.error('[KernelBrowserProvider] Failed to spoof user agent:', error);
+    }
+  }
+
+  /**
+   * Apply user agent spoofing to a single page via its CDP session.
+   */
+  private async spoofPage(
+    context: import('playwright-core').BrowserContext,
+    page: import('playwright-core').Page,
+    chromeFullVersion: string,
+    chromeMajor: string,
+  ): Promise<void> {
+    const cdpSession = await context.newCDPSession(page);
+    const windowsUA = buildWindowsUserAgent(chromeFullVersion);
+    const windowsAppVersion = buildWindowsAppVersion(chromeFullVersion);
+
+    // Override HTTP User-Agent header + Client Hints (userAgentData)
+    await cdpSession.send('Network.setUserAgentOverride', {
+      userAgent: windowsUA,
+      platform: WINDOWS_PLATFORM,
+      userAgentMetadata: {
+        brands: buildBrands(chromeMajor),
+        fullVersionList: buildFullVersionList(chromeFullVersion),
+        platform: 'Windows',
+        platformVersion: '10.0.0',
+        architecture: 'x86',
+        model: '',
+        mobile: false,
+        bitness: '64',
+        wow64: false,
+        fullVersion: chromeFullVersion,
+      },
+    });
+
+    // Override navigator JS properties on the prototype (not the instance)
+    // so fingerprinting tools like CreepJS don't detect own-property overrides.
+    // Also make getters look like native code via toString spoofing.
+    await cdpSession.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `
+        (function() {
+          const spoofedUA = '${windowsUA}';
+          const spoofedPlatform = '${WINDOWS_PLATFORM}';
+          const spoofedAppVersion = '${windowsAppVersion}';
+
+          // Helper: define a getter on the prototype that looks native
+          function nativeDefine(proto, prop, value) {
+            const getter = function() { return value; };
+            // Make toString() return "function get userAgent() { [native code] }" etc.
+            getter.toString = function() { return 'function get ' + prop + '() { [native code] }'; };
+            Object.defineProperty(getter, 'name', { value: 'get ' + prop, configurable: true });
+            Object.defineProperty(proto, prop, {
+              get: getter,
+              configurable: true,
+              enumerable: true,
+            });
+          }
+
+          nativeDefine(Navigator.prototype, 'userAgent', spoofedUA);
+          nativeDefine(Navigator.prototype, 'platform', spoofedPlatform);
+          nativeDefine(Navigator.prototype, 'appVersion', spoofedAppVersion);
+          nativeDefine(Navigator.prototype, 'oscpu', undefined);
+
+          // Override userAgentData on NavigatorUAData prototype
+          if (navigator.userAgentData) {
+            const brands = ${JSON.stringify(buildBrands(chromeMajor))};
+            const fullVersionList = ${JSON.stringify(buildFullVersionList(chromeFullVersion))};
+            const highEntropyData = {
+              brands: brands,
+              mobile: false,
+              platform: 'Windows',
+              platformVersion: '10.0.0',
+              architecture: 'x86',
+              bitness: '64',
+              model: '',
+              uaFullVersion: '${chromeFullVersion}',
+              fullVersionList: fullVersionList,
+              wow64: false,
+            };
+
+            const uaData = navigator.userAgentData;
+            const proto = Object.getPrototypeOf(uaData);
+
+            // Override brands
+            nativeDefine(proto, 'brands', brands);
+            nativeDefine(proto, 'mobile', false);
+            nativeDefine(proto, 'platform', 'Windows');
+
+            // Override getHighEntropyValues
+            const origGHEV = proto.getHighEntropyValues;
+            proto.getHighEntropyValues = function(hints) {
+              return Promise.resolve(highEntropyData);
+            };
+            proto.getHighEntropyValues.toString = function() { return 'function getHighEntropyValues() { [native code] }'; };
+            Object.defineProperty(proto.getHighEntropyValues, 'name', { value: 'getHighEntropyValues', configurable: true });
+
+            // Override toJSON
+            proto.toJSON = function() {
+              return { brands: brands, mobile: false, platform: 'Windows' };
+            };
+            proto.toJSON.toString = function() { return 'function toJSON() { [native code] }'; };
+          }
+        })();
+      `,
+    });
   }
 
   private requireClient(): Kernel {

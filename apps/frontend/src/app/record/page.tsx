@@ -946,7 +946,7 @@ export default function NewWorkflow() {
         </Box>
       </Box>
 
-      <RecordingGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
+      <RecordingGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} isBrowserLoading={isLoading} />
 
       <MicrophoneSwitchModal
         isOpen={showMicSwitchModal}

@@ -120,30 +120,22 @@ export async function initKernelSession(
         width: screenSize.width,
         height: screenSize.height,
       },
-      profile: kernelProfileId
-        ? { id: kernelProfileId, save_changes: true }
-        : undefined,
+      profile: kernelProfileId ? { id: kernelProfileId, save_changes: true } : undefined,
     });
 
     // Hide the browser cursor
     session.kernelClient.browsers.computer
       .setCursorVisibility(kernelBrowser.session_id, { hidden: true })
-      .catch((err) =>
-        console.warn('[ORCHESTRATOR] Failed to hide Kernel cursor:', err),
-      );
+      .catch((err) => console.warn('[ORCHESTRATOR] Failed to hide Kernel cursor:', err));
 
     // Start a replay recording
     session.kernelClient.browsers.replays
       .start(kernelBrowser.session_id)
       .then((replay) => {
-        console.log(
-          `[ORCHESTRATOR] Started Kernel recording: replayId=${replay.replay_id}`,
-        );
+        console.log(`[ORCHESTRATOR] Started Kernel recording: replayId=${replay.replay_id}`);
         session.kernelReplayId = replay.replay_id;
       })
-      .catch((err) =>
-        console.warn('[ORCHESTRATOR] Failed to start Kernel recording:', err),
-      );
+      .catch((err) => console.warn('[ORCHESTRATOR] Failed to start Kernel recording:', err));
 
     ctx.stagehand = new Stagehand({
       env: 'LOCAL',
@@ -290,7 +282,8 @@ export async function initHyperbrowserSession(
 }
 
 export async function closeSession(ctx: OrchestratorContext, session: SessionState): Promise<void> {
-  const sessionId = session.kernelSessionId ?? session.hyperbrowserSessionId ?? session.activeSessionId;
+  const sessionId =
+    session.kernelSessionId ?? session.hyperbrowserSessionId ?? session.activeSessionId;
   const isLocal = !!ctx.options.localCdpUrl;
   ctx.sessionFiles.reset();
 
@@ -309,13 +302,14 @@ export async function closeSession(ctx: OrchestratorContext, session: SessionSta
       if (session.kernelReplayId) {
         await session.kernelClient.browsers.replays
           .stop(session.kernelReplayId, { id: session.kernelSessionId })
-          .catch((err) =>
-            console.warn('[ORCHESTRATOR] Failed to stop Kernel recording:', err),
-          );
+          .catch((err) => console.warn('[ORCHESTRATOR] Failed to stop Kernel recording:', err));
         session.kernelReplayId = null;
       }
       await session.kernelClient.browsers.deleteByID(session.kernelSessionId).catch((error) => {
-        console.warn(`[ORCHESTRATOR] Failed to delete Kernel session ${session.kernelSessionId}:`, error);
+        console.warn(
+          `[ORCHESTRATOR] Failed to delete Kernel session ${session.kernelSessionId}:`,
+          error,
+        );
       });
     } else if (session.hyperbrowserClient) {
       await session.hyperbrowserClient.sessions.stop(sessionId).catch((error) => {

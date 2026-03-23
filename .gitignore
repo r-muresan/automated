@@ -61,3 +61,4 @@ apps/frontend/tsconfig.tsbuildinfo
 libs/prisma/prisma/.generated
 settings.json
 loop-items.json
+

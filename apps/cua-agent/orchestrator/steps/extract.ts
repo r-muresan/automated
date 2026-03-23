@@ -4,6 +4,44 @@ import { getSpreadsheetProvider } from '../agent-tools';
 import { extractWithSharedStrategy, parseSchemaMap } from '../extraction';
 import { waitForPageReady } from '../page-ready';
 
+function toStringValue(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (v === null || v === undefined) return 'null';
+  return JSON.stringify(v);
+}
+
+function flattenToStringMap(output: unknown): Record<string, string> {
+  if (!output || typeof output !== 'object' || Array.isArray(output)) return {};
+  return Object.fromEntries(
+    Object.entries(output as Record<string, unknown>).map(([k, v]) => [k, toStringValue(v)]),
+  );
+}
+
+function extractExpandedItems(output: unknown): Record<string, string>[] | null {
+  if (!output || typeof output !== 'object' || Array.isArray(output)) return null;
+  const entries = Object.entries(output as Record<string, unknown>);
+  if (entries.length !== 1) return null;
+  const [, value] = entries[0];
+  if (!Array.isArray(value) || value.length === 0) return null;
+  if (!value.every((v) => v && typeof v === 'object' && !Array.isArray(v))) return null;
+  return value.map((item: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(item).map(([k, v]) => [k, toStringValue(v)])),
+  );
+}
+
+function mergeIntoGlobalState(
+  globalState: { source: string; items: Record<string, string>[] }[],
+  source: string,
+  items: Record<string, string>[],
+): void {
+  const existing = globalState.find((entry) => entry.source === source);
+  if (existing) {
+    existing.items.push(...items);
+  } else {
+    globalState.push({ source, items });
+  }
+}
+
 export async function executeExtractStep(
   ctx: OrchestratorContext,
   step: ExtractStep,
@@ -60,74 +98,17 @@ export async function executeExtractStep(
       source += ` (loop item ${context.itemIndex ?? '?'}: ${JSON.stringify(context.item)})`;
     }
 
-    // Check if the output is an object with a single key whose value is an array of objects.
-    // In that case, expand the array items directly into globalState instead of stringifying.
-    let expandedItems: Record<string, string>[] | null = null;
-    if (output && typeof output === 'object' && !Array.isArray(output)) {
-      const entries = Object.entries(output);
-      if (entries.length === 1) {
-        const [, value] = entries[0];
-        if (
-          Array.isArray(value) &&
-          value.length > 0 &&
-          value.every((v) => v && typeof v === 'object' && !Array.isArray(v))
-        ) {
-          expandedItems = value.map((item: Record<string, unknown>) => {
-            const row: Record<string, string> = {};
-            for (const [k, v] of Object.entries(item)) {
-              if (typeof v === 'string') row[k] = v;
-              else if (v === null || v === undefined) row[k] = 'null';
-              else row[k] = JSON.stringify(v);
-            }
-            return row;
-          });
-        }
-      }
-    }
+    const expandedItems = extractExpandedItems(output);
+    const items = expandedItems ?? [flattenToStringMap(output)];
+    const nonEmpty = expandedItems ? items : items.filter((m) => Object.keys(m).length > 0);
 
-    if (expandedItems && expandedItems.length > 0) {
-      // Store each array element as a separate item in globalState
-      const existing = ctx.globalState.find(
-        (entry: any) => entry.source === source,
-      );
-      if (existing) {
-        existing.items.push(...expandedItems);
-      } else {
-        ctx.globalState.push({ source, items: expandedItems });
-      }
-
+    if (nonEmpty.length > 0) {
+      mergeIntoGlobalState(ctx.globalState, source, nonEmpty);
       console.log(
-        `[ORCHESTRATOR] Extracted ${expandedItems.length} items (expanded array, saved to global state)`,
+        expandedItems
+          ? `[ORCHESTRATOR] Extracted ${nonEmpty.length} items (expanded array, saved to global state)`
+          : `[ORCHESTRATOR] Extracted variables (saved to global state): ${JSON.stringify(nonEmpty[0])}`,
       );
-    } else {
-      // Fallback: flatten all values to strings and store as a single item
-      const map: Record<string, string> = {};
-      if (output && typeof output === 'object' && !Array.isArray(output)) {
-        for (const [key, value] of Object.entries(output)) {
-          if (typeof value === 'string') {
-            map[key] = value;
-          } else if (value === null || value === undefined) {
-            map[key] = 'null';
-          } else {
-            map[key] = JSON.stringify(value);
-          }
-        }
-      }
-
-      if (Object.keys(map).length > 0) {
-        const existing = ctx.globalState.find(
-          (entry: any) => entry.source === source,
-        );
-        if (existing) {
-          existing.items.push({ ...map });
-        } else {
-          ctx.globalState.push({ source, items: [{ ...map }] });
-        }
-
-        console.log(
-          `[ORCHESTRATOR] Extracted variables (saved to global state): ${JSON.stringify(map)}`,
-        );
-      }
     }
 
     ctx.stepResults.push({

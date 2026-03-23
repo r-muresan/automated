@@ -1,8 +1,8 @@
 'use client';
 
-import { Dialog, Button, Text, VStack, Portal } from '@chakra-ui/react';
+import { Dialog, Button, Text, VStack, Portal, Spinner, HStack } from '@chakra-ui/react';
 
-export function RecordingGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export function RecordingGuideModal({ isOpen, onClose, isBrowserLoading }: { isOpen: boolean; onClose: () => void; isBrowserLoading?: boolean }) {
   return (
     <Dialog.Root lazyMount open={isOpen} closeOnInteractOutside={false}>
       <Portal>
@@ -38,8 +38,16 @@ export function RecordingGuideModal({ isOpen, onClose }: { isOpen: boolean; onCl
                 size="sm"
                 px={6}
                 width="full"
+                disabled={isBrowserLoading}
               >
-                Got it
+                {isBrowserLoading ? (
+                  <HStack gap={2}>
+                    <Spinner size="sm" />
+                    <Text>Loading Browser...</Text>
+                  </HStack>
+                ) : (
+                  'Got it'
+                )}
               </Button>
             </Dialog.Footer>
           </Dialog.Content>
