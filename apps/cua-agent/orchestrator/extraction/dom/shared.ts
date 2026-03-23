@@ -25,50 +25,13 @@ export const extractionStrategySchema = z.object({
     .union([z.record(z.string(), z.unknown()), z.string()])
     .nullable()
     .describe('Extracted data object (required when strategy is "direct")'),
+  targetItemCount: z
+    .number()
+    .int()
+    .positive()
+    .nullable()
+    .describe(
+      'If the extraction goal specifies a specific number of items (e.g. "first 6 stocks", "top 10 results"), return that number here. Null if no specific count is mentioned.',
+    ),
 });
 
-export function stripCacheStatus<T extends Record<string, unknown>>(value: T): T {
-  if (!value || typeof value !== 'object') return value;
-  if (!Object.prototype.hasOwnProperty.call(value, 'cacheStatus')) return value;
-
-  const { cacheStatus: _cacheStatus, ...rest } = value;
-  return rest as T;
-}
-
-export function isTransientExtractionError(error: unknown): boolean {
-  const message = String((error as Error)?.message ?? '').toLowerCase();
-  return (
-    message.includes('no object generated') ||
-    message.includes('could not parse the response') ||
-    message.includes('resource exhausted') ||
-    message.includes('rate limit') ||
-    message.includes('429') ||
-    message.includes('json error injected into sse stream')
-  );
-}
-
-export async function withDomExtractionRetry<T>(
-  operationName: string,
-  operation: () => Promise<T>,
-): Promise<T> {
-  const maxAttempts = 3;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      return await operation();
-    } catch (error) {
-      const retryable = isTransientExtractionError(error) && attempt < maxAttempts;
-      if (!retryable) {
-        throw error;
-      }
-
-      const delayMs = 300 * Math.pow(2, attempt - 1);
-      console.warn(
-        `[EXTRACTION] ${operationName} transient failure; retrying (${attempt}/${maxAttempts}) in ${delayMs}ms: ${(error as Error).message}`,
-      );
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
-  }
-
-  throw new Error(`[EXTRACTION] ${operationName} failed after retries`);
-}

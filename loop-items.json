@@ -1,62 +1,98 @@
 [
   {
     "index": 1,
-    "text": "TSLA\nTesla Inc\n$379.91\n+$11.95\n3.25%\nadd_circle_outline",
-    "tagName": "li",
-    "href": "https://www.google.com/finance/quote/TSLA:NASDAQ"
+    "symbol": "CCL",
+    "company": "Carnival Corp",
+    "article_title": null,
+    "source": null,
+    "url": null
   },
   {
     "index": 2,
-    "text": "BABA\nAlibaba Group Holding Ltd - ADR\n$126.15\n+$3.72\n3.04%\nadd_circle_outline",
-    "tagName": "li",
-    "href": "https://www.google.com/finance/quote/BABA:NYSE"
+    "symbol": "TSLA",
+    "company": "Tesla Inc",
+    "article_title": null,
+    "source": null,
+    "url": null
   },
   {
     "index": 3,
-    "text": "F\nFord Motor Co\n$11.86\n+$0.34\n2.95%\nadd_circle_outline",
-    "tagName": "li",
-    "href": "https://www.google.com/finance/quote/F:NYSE"
+    "symbol": "BABA",
+    "company": "Alibaba Group Holding Ltd - ADR",
+    "article_title": null,
+    "source": null,
+    "url": null
   },
   {
     "index": 4,
-    "text": "AMZN\nAmazon.com Inc\n$210.83\n+$5.46\n2.66%\nadd_circle_outline",
-    "tagName": "li",
-    "href": "https://www.google.com/finance/quote/AMZN:NASDAQ"
+    "symbol": "AMZN",
+    "company": "Amazon.com Inc",
+    "article_title": null,
+    "source": null,
+    "url": null
   },
   {
     "index": 5,
-    "text": "NVDA\nNVIDIA Corp\nWhy Broadcom Stock Popped Today\nYahoo Finance • 2 hours ago\n$176.17\n1.87%\nadd_circle_outline",
-    "tagName": "li",
-    "href": "https://www.google.com/finance/quote/NVDA:NASDAQ"
+    "symbol": "F",
+    "company": "Ford Motor Co",
+    "article_title": null,
+    "source": null,
+    "url": null
   },
   {
     "index": 6,
-    "text": "SMCI\nSuper Micro Computer Inc\nThe Super Micro Computer Co-Founder Faces New Chip Smuggling Charges. Does That Actually Matter for SMCI Stock?\nYahoo Finance • 3 hours ago\n$22.02\n7.26%\nadd_circle_outline",
-    "tagName": "li",
-    "href": "https://www.google.com/finance/quote/SMCI:NASDAQ"
+    "symbol": "DIS",
+    "company": "Walt Disney Co",
+    "article_title": null,
+    "source": null,
+    "url": null
   },
   {
     "index": 7,
-    "text": "NVD\nGraniteShares 2x Short NVDA Daily ETF\n$7.51\n3.90%\nadd_circle_outline",
-    "tagName": "li",
-    "href": "https://www.google.com/finance/quote/NVD:NASDAQ"
+    "symbol": "NVDA",
+    "company": "NVIDIA Corp",
+    "article_title": "Why Broadcom Stock Popped Today",
+    "source": "Yahoo Finance",
+    "url": "https://finance.yahoo.com/markets/stocks/articles/why-broadcom-stock-popped-today-155708548.html"
   },
   {
     "index": 8,
-    "text": "QQQ\nInvesco QQQ Trust, Series 1\nQQQ: Bullish Asymmetric Reward-to-Risk Here\nZacks Investment Research • 2 hours ago\n$589.69\n1.44%\nadd_circle_outline",
-    "tagName": "li",
-    "href": "https://www.google.com/finance/quote/QQQ:NASDAQ"
+    "symbol": "CDE",
+    "company": "Coeur Mining, Inc",
+    "article_title": null,
+    "source": null,
+    "url": null
   },
   {
     "index": 9,
-    "text": "ONDS\nOndas Inc\nOndas Inc. Reports Record Fourth Quarter and Full Year 2025 Financial Results: Expects Outsized Growth in 2026 Driven by Execution at OAS, Accelerated Strategic Growth Program and Strong Global Demand for Autonomous Systems\nOndas Holdings • 6 hours ago\n$10.76\n6.75%\nadd_circle_outline",
-    "tagName": "li",
-    "href": "https://www.google.com/finance/quote/ONDS:NASDAQ"
+    "symbol": "SMCI",
+    "company": "Super Micro Computer Inc",
+    "article_title": "Super Micro: Ignore Bad Optics (NASDAQ:SMCI)",
+    "source": "Seeking Alpha",
+    "url": "https://seekingalpha.com/article/4884787-super-micro-ignore-bad-optics"
   },
   {
     "index": 10,
-    "text": "AAL\nAmerican Airlines Group Inc\nAmerican Airlines stock (AAL) rises as oil falls after Trump delays strikes on Iranian power plants\nTechStock² • 1 hour ago\n$10.91\n4.60%\nadd_circle_outline",
-    "tagName": "li",
-    "href": "https://www.google.com/finance/quote/AAL:NASDAQ"
+    "symbol": "NVD",
+    "company": "GraniteShares 2x Short NVDA Daily ETF",
+    "article_title": null,
+    "source": null,
+    "url": null
+  },
+  {
+    "index": 11,
+    "symbol": "ONDS",
+    "company": "Ondas Inc",
+    "article_title": "Ondas Inc. Reports Record Fourth Quarter and Full Year 2025 Financial Results: Expects Outsized Growth in 2026 Driven by Execution at OAS, Accelerated Strategic Growth Program and Strong Global Demand for Autonomous Systems",
+    "source": "Ondas Holdings",
+    "url": "https://ir.ondas.com/press-releases/detail/296/ondas-inc-reports-record-fourth-quarter-and-full-year-2025"
+  },
+  {
+    "index": 12,
+    "symbol": "QQQ",
+    "company": "Invesco QQQ Trust, Series 1",
+    "article_title": "Stock Market Review Today: SPY, QQQ Rebound as Trump Teases U.S.-Iran Deal; Oil Plummets 10%",
+    "source": "TipRanks",
+    "url": "https://www.tipranks.com/news/stock-market-review-today-spy-qqq-rebound-as-trump-teases-u-s-iran-deal-oil-plummets-10"
   }
 ]

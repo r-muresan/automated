@@ -9,6 +9,12 @@ import type { ExtractedElement } from './shared';
 import { extractionStrategySchema } from './shared';
 import { handleDirectExtraction } from './extract-direct';
 
+export interface SelectorExtractionResult {
+  data: unknown;
+  chosenSelector: string | null;
+  targetItemCount: number | null;
+}
+
 /**
  * Selector-based DOM extraction: asks an LLM to either return a CSS selector
  * for elements containing the target data (preferred), or to return the data
@@ -21,7 +27,7 @@ export async function extractWithSelector(params: {
   dataExtractionGoal: string;
   truncatedOutline: string;
   candidatesSection: string;
-}): Promise<unknown | null> {
+}): Promise<SelectorExtractionResult | null> {
   const { page, llmClient, model, dataExtractionGoal, truncatedOutline, candidatesSection } =
     params;
 
@@ -42,7 +48,9 @@ Choose a strategy:
 2. **direct**: Return the extracted data directly from the DOM outline above. Use this ONLY when no candidate selector is relevant (e.g., the data is spread across unrelated parts of the page) or when no candidates are listed.
 
 When using "selector", set the "selector" field to one of the candidate selectors above and leave "data" as null.
-When using "direct", set the "data" field and leave "selector" as null.`;
+When using "direct", set the "data" field and leave "selector" as null.
+
+Additionally, if the extraction goal mentions a specific number of items to collect (e.g. "first 6 stocks", "top 10 results", "3 cheapest flights"), set "targetItemCount" to that number. If no specific count is mentioned, set it to null.`;
 
   const strategyResponse = await llmClient.chat.completions.parse({
     model,
@@ -56,7 +64,11 @@ When using "direct", set the "data" field and leave "selector" as null.`;
   console.log(parsed);
 
   if (parsed.strategy === 'direct') {
-    return handleDirectExtraction(parsed);
+    return {
+      data: handleDirectExtraction(parsed),
+      chosenSelector: null,
+      targetItemCount: parsed.targetItemCount ?? null,
+    };
   }
 
   if (!parsed.selector) {
@@ -80,16 +92,49 @@ When using "direct", set the "data" field and leave "selector" as null.`;
     `[EXTRACTION] DOM selector strategy: "${parsed.selector}" matched ${elements.length} element(s)`,
   );
 
-  return mapElements({
+  const data = await mapElements({
     elements,
     chosenSelector,
     llmClient,
     model,
     dataExtractionGoal,
   });
+
+  return { data, chosenSelector, targetItemCount: parsed.targetItemCount ?? null };
 }
 
-async function mapElements(params: {
+/**
+ * Extract data using a known selector (skips LLM strategy decision).
+ * Used for pagination pages where the selector was already discovered.
+ */
+export async function extractWithKnownSelector(params: {
+  page: EvaluatablePage;
+  llmClient: OpenAI;
+  model: string;
+  dataExtractionGoal: string;
+  selector: string;
+}): Promise<unknown | null> {
+  const { page, llmClient, model, dataExtractionGoal, selector } = params;
+
+  const elements = await page.evaluate<ExtractedElement[]>(buildElementExtractionScript(selector));
+
+  if (elements.length === 0) {
+    console.warn(`[EXTRACTION] Known selector "${selector}" matched 0 elements`);
+    return null;
+  }
+
+  console.log(`[EXTRACTION] Known selector "${selector}" matched ${elements.length} element(s)`);
+
+  return mapElements({
+    elements,
+    chosenSelector: selector,
+    llmClient,
+    model,
+    dataExtractionGoal,
+  });
+}
+
+export async function mapElements(params: {
   elements: ExtractedElement[];
   chosenSelector: string;
   llmClient: OpenAI;
@@ -104,7 +149,6 @@ async function mapElements(params: {
   }
 
   // Multiple elements: let the LLM decide the schema per item
-  const itemSchema = z.object({}).passthrough();
   const arraySchema = z.object({ items: z.array(z.record(z.string(), z.unknown())) });
 
   const BATCH_SIZE = 30;
@@ -113,7 +157,10 @@ async function mapElements(params: {
   for (let i = 0; i < elements.length; i += BATCH_SIZE) {
     const batch = elements.slice(i, i + BATCH_SIZE);
     const elementsSummary = batch
-      .map((el, j) => `Element ${i + j + 1} (${el.tagName}): ${el.innerText || el.textContent}`)
+      .map(
+        (el, j) =>
+          `El ${i + j + 1} (${el.tagName}): ${el.innerText || el.textContent} (${el.href})`,
+      )
       .join('\n');
 
     const mappingPrompt = `Extract structured data from these DOM elements. Each element represents one item — return one object per element.
@@ -121,7 +168,9 @@ async function mapElements(params: {
 Extraction goal: ${dataExtractionGoal}
 
 Elements found via selector "${chosenSelector}":
+###
 ${elementsSummary}
+###
 
 Return a JSON object with an "items" array, where each entry is one extracted item. Choose appropriate field names based on the data (e.g. "name", "description", "url", etc.). There should be exactly ${batch.length} items in the array, one per element.`;
 

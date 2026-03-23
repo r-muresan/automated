@@ -5,7 +5,10 @@ import {
   buildDomOutlineScript,
   type CandidateSelector,
 } from '../dom-scripts';
-import { extractWithSelector } from './extract-selector';
+import { extractWithSelector, type SelectorExtractionResult } from './extract-selector';
+
+export type { SelectorExtractionResult } from './extract-selector';
+export { extractWithKnownSelector, mapElements } from './extract-selector';
 
 /**
  * DOM extraction: gathers the DOM outline and structural candidates,
@@ -17,7 +20,7 @@ export async function extractDom(params: {
   llmClient: OpenAI;
   model: string;
   dataExtractionGoal: string;
-}): Promise<unknown | null> {
+}): Promise<SelectorExtractionResult | null> {
   const { stagehand, llmClient, model, dataExtractionGoal } = params;
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
 

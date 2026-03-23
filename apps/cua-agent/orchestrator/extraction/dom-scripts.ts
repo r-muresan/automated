@@ -634,39 +634,3 @@ export function buildElementExtractionScript(selector: string): string {
   `;
 }
 
-/**
- * Builds a script that counts elements matching a selector, checking main doc + iframes.
- */
-export function buildSelectorCountScript(selector: string): string {
-  const selectorJson = JSON.stringify(selector);
-  return `
-    (() => {
-      // Try main document first
-      let count = document.querySelectorAll(${selectorJson}).length;
-      if (count > 0) return count;
-
-      // Try same-origin iframes
-      try {
-        for (const iframe of document.querySelectorAll('iframe')) {
-          try {
-            if (iframe.contentDocument) {
-              count = iframe.contentDocument.querySelectorAll(${selectorJson}).length;
-              if (count > 0) return count;
-              // Nested iframes
-              for (const nested of iframe.contentDocument.querySelectorAll('iframe')) {
-                try {
-                  if (nested.contentDocument) {
-                    count = nested.contentDocument.querySelectorAll(${selectorJson}).length;
-                    if (count > 0) return count;
-                  }
-                } catch (e) {}
-              }
-            }
-          } catch (e) {}
-        }
-      } catch (e) {}
-
-      return 0;
-    })()
-  `;
-}

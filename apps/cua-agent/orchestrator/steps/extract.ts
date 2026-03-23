@@ -19,19 +19,6 @@ function extractExpandedItems(output: unknown): Record<string, unknown>[] | null
   return value.map((item: Record<string, unknown>) => ({ ...item }));
 }
 
-function mergeIntoGlobalState(
-  globalState: { source: string; items: Record<string, unknown>[] }[],
-  source: string,
-  items: Record<string, unknown>[],
-): void {
-  const existing = globalState.find((entry) => entry.source === source);
-  if (existing) {
-    existing.items.push(...items);
-  } else {
-    globalState.push({ source, items });
-  }
-}
-
 export async function executeExtractStep(
   ctx: OrchestratorContext,
   step: ExtractStep,
@@ -79,18 +66,18 @@ export async function executeExtractStep(
 
     const output = result.scraped_data;
 
-    // Build source label: step description + loop context if any
-    let source = step.description;
-    if (context?.item != null) {
-      source += ` (loop item ${context.itemIndex ?? '?'}: ${JSON.stringify(context.item)})`;
-    }
-
     const expandedItems = extractExpandedItems(output);
     const items = expandedItems ?? [flattenToMap(output)];
     const nonEmpty = expandedItems ? items : items.filter((m) => Object.keys(m).length > 0);
 
     if (nonEmpty.length > 0) {
-      mergeIntoGlobalState(ctx.globalState, source, nonEmpty);
+      ctx.globalState.push({
+        step: step.description,
+        ...(context?.item
+          ? { stepIteration: context.item, stepIterationIndex: context.itemIndex }
+          : {}),
+        items,
+      });
       console.log(
         expandedItems
           ? `[ORCHESTRATOR] Extracted ${nonEmpty.length} items (expanded array, saved to global state)`

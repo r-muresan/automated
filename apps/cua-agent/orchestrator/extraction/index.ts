@@ -1,29 +1,22 @@
 export {
-  buildJsonSchemaFromMap,
-  buildZodObjectFromMap,
-  normalizeLoopItems,
-  parseSchemaMap,
-  validateAndFillExtractionResult,
-  type ParsedSchema,
-} from './schema';
-export {
-  checkForMoreItemsFromVision,
-  capturePageScreenshot,
   extractWithSharedStrategy,
+} from './extract';
+export {
   type ExtractOutput,
   type ExtractionMode,
-  type PaginationCheck,
-  type ExtractionItem,
-} from './engine';
-export {
-  buildLoopItemFromDownloadedFile,
-  buildLoopItemsFromDownloadedFilesPrompt,
-  normalizeDownloadedFileLoopSelection,
-} from './files';
-export {
-  resolveCollector,
-  type LoopCollectionMode,
-  type ResolvedCollector,
   type CollectedItem,
   type ItemCollector,
-} from './loop';
+  type LoopCollectionMode,
+  type ResolvedCollector,
+} from './types';
+export {
+  checkForMoreItemsFromVision,
+  type PaginationCheck,
+  type ExtractionItem,
+} from './vision';
+export {
+  capturePageScreenshot,
+} from './common';
+export {
+  resolveCollector,
+} from './collect';
