@@ -2,7 +2,15 @@
 
 import { Dialog, Button, Text, VStack, Portal, Spinner, HStack } from '@chakra-ui/react';
 
-export function RecordingGuideModal({ isOpen, onClose, isBrowserLoading }: { isOpen: boolean; onClose: () => void; isBrowserLoading?: boolean }) {
+export function RecordingGuideModal({
+  isOpen,
+  onClose,
+  isBrowserLoading,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  isBrowserLoading?: boolean;
+}) {
   return (
     <Dialog.Root lazyMount open={isOpen} closeOnInteractOutside={false}>
       <Portal>
@@ -22,15 +30,15 @@ export function RecordingGuideModal({ isOpen, onClose, isBrowserLoading }: { isO
                   How to record a workflow
                 </Text>
 
-                <Text fontSize="sm" color="app.muted" lineHeight="tall">
+                <Text fontSize="md" lineHeight="tall">
                   Use the browser below and walk through your task while narrating each step out
-                  loud. When you're done, click "Stop Recording" and we'll turn it into a reusable
-                  workflow.
+                  loud. When you're ready press "Start Recording" in the top right corner. When
+                  you're done, click "Stop Recording".
                 </Text>
               </VStack>
             </Dialog.Body>
 
-            <Dialog.Footer p={6} pt={2}>
+            <Dialog.Footer p={6} pb={4} pt={2}>
               <Button
                 bg="app.primary"
                 color="app.onPrimary"
