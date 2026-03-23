@@ -1,98 +1,98 @@
 [
   {
     "index": 1,
-    "symbol": "CCL",
-    "company": "Carnival Corp",
-    "article_title": null,
+    "symbol": "TSLA",
+    "name": "Tesla Inc",
+    "latest_news": null,
     "source": null,
-    "url": null
+    "link": null
   },
   {
     "index": 2,
-    "symbol": "TSLA",
-    "company": "Tesla Inc",
-    "article_title": null,
+    "symbol": "BABA",
+    "name": "Alibaba Group Holding Ltd - ADR",
+    "latest_news": null,
     "source": null,
-    "url": null
+    "link": null
   },
   {
     "index": 3,
-    "symbol": "BABA",
-    "company": "Alibaba Group Holding Ltd - ADR",
-    "article_title": null,
+    "symbol": "AMZN",
+    "name": "Amazon.com Inc",
+    "latest_news": null,
     "source": null,
-    "url": null
+    "link": null
   },
   {
     "index": 4,
-    "symbol": "AMZN",
-    "company": "Amazon.com Inc",
-    "article_title": null,
+    "symbol": "F",
+    "name": "Ford Motor Co",
+    "latest_news": null,
     "source": null,
-    "url": null
+    "link": null
   },
   {
     "index": 5,
-    "symbol": "F",
-    "company": "Ford Motor Co",
-    "article_title": null,
+    "symbol": "BA",
+    "name": "Boeing Co",
+    "latest_news": null,
     "source": null,
-    "url": null
+    "link": null
   },
   {
     "index": 6,
-    "symbol": "DIS",
-    "company": "Walt Disney Co",
-    "article_title": null,
+    "symbol": "NXST",
+    "name": "Nexstar Media Group Inc",
+    "latest_news": null,
     "source": null,
-    "url": null
+    "link": null
   },
   {
     "index": 7,
     "symbol": "NVDA",
-    "company": "NVIDIA Corp",
-    "article_title": "Why Broadcom Stock Popped Today",
-    "source": "Yahoo Finance",
-    "url": "https://finance.yahoo.com/markets/stocks/articles/why-broadcom-stock-popped-today-155708548.html"
+    "name": "NVIDIA Corp",
+    "latest_news": "Why Broadcom Stock Popped Today",
+    "source": "Yahoo Finance • 6 hours ago",
+    "link": "https://finance.yahoo.com/markets/stocks/articles/why-broadcom-stock-popped-today-155708548.html"
   },
   {
     "index": 8,
     "symbol": "CDE",
-    "company": "Coeur Mining, Inc",
-    "article_title": null,
-    "source": null,
-    "url": null
+    "name": "Coeur Mining, Inc",
+    "latest_news": "Coeur Mining stock rises as New Gold deal boosts 2026 output, $750 million buyback",
+    "source": "TechStock² • 1 hour ago",
+    "link": "https://ts2.tech/en/coeur-mining-stock-rises-as-new-gold-deal-boosts-2026-output-750-million-buyback/"
   },
   {
     "index": 9,
     "symbol": "SMCI",
-    "company": "Super Micro Computer Inc",
-    "article_title": "Super Micro: Ignore Bad Optics (NASDAQ:SMCI)",
-    "source": "Seeking Alpha",
-    "url": "https://seekingalpha.com/article/4884787-super-micro-ignore-bad-optics"
+    "name": "Super Micro Computer Inc",
+    "latest_news": "Super Micro Computer Jumps 5% Monday: What the Federal Charges Mean for SMCI Investors",
+    "source": "24/7 Wall St. • 6 hours ago",
+    "link": "https://247wallst.com/investing/2026/03/23/super-micro-computer-jumps-5-monday-what-the-federal-charges-mean-for-smci-investors/"
   },
   {
     "index": 10,
     "symbol": "NVD",
-    "company": "GraniteShares 2x Short NVDA Daily ETF",
-    "article_title": null,
+    "name": "GraniteShares 2x Short NVDA Daily ETF",
+    "latest_news": null,
     "source": null,
-    "url": null
+    "link": null
   },
   {
     "index": 11,
     "symbol": "ONDS",
-    "company": "Ondas Inc",
-    "article_title": "Ondas Inc. Reports Record Fourth Quarter and Full Year 2025 Financial Results: Expects Outsized Growth in 2026 Driven by Execution at OAS, Accelerated Strategic Growth Program and Strong Global Demand for Autonomous Systems",
-    "source": "Ondas Holdings",
-    "url": "https://ir.ondas.com/press-releases/detail/296/ondas-inc-reports-record-fourth-quarter-and-full-year-2025"
+    "name": "Ondas Inc",
+    "latest_news": "Why Palantir’s Autonomous Drone Partner Is Rallying on Earnings Despite Iran War Peace Talks",
+    "source": "Barron's • 1 hour ago",
+    "link": "https://www.barrons.com/articles/ondas-palantirs-autonomous-drone-earnings-4c1c5062"
   },
   {
     "index": 12,
     "symbol": "QQQ",
-    "company": "Invesco QQQ Trust, Series 1",
-    "article_title": "Stock Market Review Today: SPY, QQQ Rebound as Trump Teases U.S.-Iran Deal; Oil Plummets 10%",
-    "source": "TipRanks",
-    "url": "https://www.tipranks.com/news/stock-market-review-today-spy-qqq-rebound-as-trump-teases-u-s-iran-deal-oil-plummets-10"
+    "name": "Invesco QQQ Trust, Series 1",
+    "latest_news": "Invesco QQQ (NASDAQ:QQQ) Shares Up 1% After Dividend Announcement",
+    "source": "MarketBeat • 1 hour ago",
+    "link": "https://www.marketbeat.com/instant-alerts/invesco-qqq-nasdaqqqq-shares-up-1-after-dividend-announcement-2026-03-23/"
   }
 ]

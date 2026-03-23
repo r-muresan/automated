@@ -393,7 +393,16 @@ export function buildStructuralDiscoveryScript(): string {
               if (first[i] === last[i]) prefix += first[i];
               else break;
             }
-            if (prefix.length > 1 && prefix.includes('/')) {
+            // Trim prefix to the last '/' boundary so we don't get partial path segments
+            const lastSlash = prefix.lastIndexOf('/');
+            if (lastSlash >= 0) prefix = prefix.slice(0, lastSlash + 1);
+
+            // Reject overly generic prefixes like './', '/', '../', 'http://host/', 'https://'
+            // Require at least one meaningful path segment after the origin/scheme
+            const stripped = prefix.replace(/^(\\.?\\.?\\/|https?:\\/\\/[^\\/]*\\/?)/, '');
+            const isSpecific = stripped.length > 0 && stripped !== '/';
+
+            if (isSpecific && prefix.length > 1 && prefix.includes('/')) {
               const hrefSelector = 'a[href^="' + prefix + '"]';
               let count;
               try { count = doc.querySelectorAll(hrefSelector).length; } catch { continue; }
@@ -513,7 +522,7 @@ export function buildStructuralDiscoveryScript(): string {
 
       // Sort by score descending, return top 50
       deduped.sort((a, b) => b.score - a.score);
-      return deduped.slice(0, 20).map(c => ({
+      return deduped.slice(0, 10).map(c => ({
         selector: c.selector,
         count: c.count,
         sampleTexts: c.sampleTexts,
@@ -633,4 +642,3 @@ export function buildElementExtractionScript(selector: string): string {
     })()
   `;
 }
-
