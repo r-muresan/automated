@@ -57,6 +57,7 @@ export async function executeExtractStep(
       stagehand: ctx.stagehand,
       llmClient: ctx.openai,
       model: ctx.resolveModels().extract,
+      agentModel: ctx.resolveModels().agent,
       dataExtractionGoal: contextualInstruction,
       context,
       globalState: ctx.globalState,

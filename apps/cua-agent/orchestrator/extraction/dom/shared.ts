@@ -35,3 +35,23 @@ export const extractionStrategySchema = z.object({
     ),
 });
 
+export const coordinateExtractionSchema = z.object({
+  strategy: z
+    .enum(['coordinate', 'direct'])
+    .describe(
+      '"coordinate" to point at example elements on the page (preferred for repeating items), "direct" to return extracted data immediately',
+    ),
+  data: z
+    .union([z.record(z.string(), z.unknown()), z.string()])
+    .nullable()
+    .describe('Extracted data object (required when strategy is "direct", null when "coordinate")'),
+  targetItemCount: z
+    .number()
+    .int()
+    .positive()
+    .nullable()
+    .describe(
+      'If the extraction goal specifies a specific number of items (e.g. "first 6 stocks", "top 10 results"), return that number here. Null if no specific count is mentioned.',
+    ),
+});
+

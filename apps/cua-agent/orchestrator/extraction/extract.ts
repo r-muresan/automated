@@ -11,11 +11,12 @@ export async function extractWithSharedStrategy(params: {
   stagehand: Stagehand;
   llmClient: OpenAI;
   model: string;
+  agentModel: string;
   dataExtractionGoal: string;
   context?: LoopContext;
   globalState?: any[];
 }): Promise<ExtractOutput> {
-  const { stagehand, llmClient, model, dataExtractionGoal, context, globalState } = params;
+  const { stagehand, llmClient, model, agentModel, dataExtractionGoal, context, globalState } = params;
 
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
   const activeUrl = page?.url?.() ?? '';
@@ -34,7 +35,7 @@ export async function extractWithSharedStrategy(params: {
       ? `${contextualGoal}\n\nPreviously collected data:\n${JSON.stringify(globalState, null, 2)}`
       : contextualGoal;
 
-  const shared = { stagehand, llmClient, model, dataExtractionGoal: goalWithMemory };
+  const shared = { stagehand, llmClient, model, agentModel, dataExtractionGoal: goalWithMemory };
 
   // Build ordered list of strategies
   const strategies: (UnifiedExtractor | null)[] = [

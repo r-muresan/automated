@@ -1,14 +1,14 @@
 import type { z } from 'zod';
-import type { extractionStrategySchema } from './shared';
+import type { coordinateExtractionSchema } from './shared';
 
-type ExtractionStrategy = z.infer<typeof extractionStrategySchema>;
+type CoordinateExtraction = z.infer<typeof coordinateExtractionSchema>;
 
 /**
  * Handle the "direct" extraction strategy where the LLM returns
- * data directly from the DOM outline without using a CSS selector.
+ * data directly from the screenshot without using coordinates.
  */
-export function handleDirectExtraction(parsed: ExtractionStrategy): unknown {
-  console.log('[EXTRACTION] DOM selector strategy: model chose direct extraction');
+export function handleDirectExtraction(parsed: CoordinateExtraction): unknown {
+  console.log('[EXTRACTION] DOM strategy: model chose direct extraction');
   console.log(parsed.data);
 
   if (typeof parsed.data === 'string') {

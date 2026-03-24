@@ -27,9 +27,33 @@ import {
   lettersToColumnNumber,
   parseCellAddress,
 } from './shared-utils';
+import type { Protocol } from 'devtools-protocol';
 
 function isBridgeError(result: BridgeRunResult): result is Extract<BridgeRunResult, { ok: false }> {
   return 'error' in result;
+}
+
+/**
+ * Detect whether the remote browser is running on macOS.
+ * process.platform reflects the Node.js host, NOT the browser.
+ */
+const browserPlatformCache = new WeakMap<CdpPageLike, 'mac' | 'other'>();
+async function isBrowserMac(page: CdpPageLike): Promise<boolean> {
+  const cached = browserPlatformCache.get(page);
+  if (cached) return cached === 'mac';
+  try {
+    const res = await page.sendCDP<Protocol.Runtime.EvaluateResponse>('Runtime.evaluate', {
+      expression: 'navigator.platform',
+      returnByValue: true,
+    });
+    const platform = typeof res.result?.value === 'string' ? res.result.value.toLowerCase() : '';
+    const isMac = platform.includes('mac');
+    browserPlatformCache.set(page, isMac ? 'mac' : 'other');
+    return isMac;
+  } catch {
+    browserPlatformCache.set(page, 'other');
+    return false;
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -353,7 +377,8 @@ async function readRangeViaClipboard(
   console.timeEnd(`${label}:activateRange`);
   if ('error' in activated) return { ok: false, error: activated.error };
 
-  const keyCombo = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
+  const browserMac = await isBrowserMac(page);
+  const keyCombo = browserMac ? 'Meta+C' : 'Control+C';
   console.time(`${label}:keyPress(copy)`);
   try {
     await page.keyPress(keyCombo);
@@ -479,7 +504,8 @@ async function writeRangeViaClipboard(
     };
   }
 
-  const keyCombo = process.platform === 'darwin' ? 'Meta+V' : 'Control+V';
+  const browserMacPaste = await isBrowserMac(page);
+  const keyCombo = browserMacPaste ? 'Meta+V' : 'Control+V';
   console.time(`${label}:keyPress(paste)`);
   try {
     await page.keyPress(keyCombo);

@@ -142,6 +142,7 @@ export async function executeLoopStep(
       stagehand: deps.stagehand,
       llmClient: deps.openai,
       model: deps.models.extract,
+      agentModel: deps.models.agent,
       description: loopPlan.query,
       downloadedFiles: deps.getDownloadedFiles(),
     });

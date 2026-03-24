@@ -15,13 +15,14 @@ export async function resolveCollector(params: {
   stagehand: Stagehand;
   llmClient: OpenAI;
   model: string;
+  agentModel: string;
   description: string;
   downloadedFiles?: DownloadedSessionFile[];
 }): Promise<ResolvedCollector | null> {
-  const { stagehand, llmClient, model, description } = params;
+  const { stagehand, llmClient, model, agentModel, description } = params;
   const downloadedFiles = params.downloadedFiles ?? [];
 
-  const shared = { stagehand, llmClient, model, dataExtractionGoal: description };
+  const shared = { stagehand, llmClient, model, agentModel, dataExtractionGoal: description };
 
   const strategies: (UnifiedExtractor | null)[] = [
     createSpreadsheetStrategy(shared),
@@ -41,9 +42,7 @@ export async function resolveCollector(params: {
       continue;
     }
 
-    console.log(
-      `[LOOP-COLLECT] Using ${strategy.name}: ${firstPage.length} items on first page`,
-    );
+    console.log(`[LOOP-COLLECT] Using ${strategy.name}: ${firstPage.length} items on first page`);
 
     return {
       mode: strategy.name as ResolvedCollector['mode'],

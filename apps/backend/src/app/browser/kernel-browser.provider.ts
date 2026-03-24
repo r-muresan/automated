@@ -224,6 +224,12 @@ export class KernelBrowserProvider extends BrowserProvider {
 
       // await this.warmUpProfile(page);
 
+      // Get the real CDP target ID for this page (required for frontend CDP attachment)
+      const cdpSession = await page.context().newCDPSession(page);
+      const { targetInfo } = await cdpSession.send('Target.getTargetInfo');
+      cdpSession.detach();
+      const tabId = targetInfo.targetId;
+
       page.goto(DEFAULT_INITIAL_PAGE_URL, { waitUntil: 'commit' }).catch(() => {});
 
       const liveViewUrl = this.sessionLiveViewUrls.get(sessionId);
@@ -232,7 +238,7 @@ export class KernelBrowserProvider extends BrowserProvider {
       return {
         pages: [
           {
-            id: 'page-0',
+            id: tabId,
             url: DEFAULT_INITIAL_PAGE_URL,
             title: DEFAULT_INITIAL_PAGE_TITLE,
           },

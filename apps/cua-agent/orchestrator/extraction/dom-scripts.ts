@@ -100,8 +100,12 @@ export function buildStructuralDiscoveryScript(): string {
         const role = el.getAttribute('role');
         const cls = cleanClasses(el.className);
 
-        // Prefer role-based selectors for semantic elements
+        // Prefer role-based selectors for semantic elements, but include class for specificity
         if (role && ['row', 'listitem', 'option', 'tab', 'treeitem', 'gridcell', 'menuitem'].includes(role)) {
+          if (cls) {
+            const first = cls.split(/\\s+/)[0];
+            return tag + '.' + CSS.escape(first) + '[role="' + role + '"]';
+          }
           return '[role="' + role + '"]';
         }
 
@@ -116,12 +120,17 @@ export function buildStructuralDiscoveryScript(): string {
       function buildParentSelector(parent) {
         if (parent.id) return '#' + CSS.escape(parent.id);
         const role = parent.getAttribute('role');
+        const cls = cleanClasses(parent.className);
+        const tag = parent.tagName.toLowerCase();
         if (role && ['table', 'grid', 'list', 'rowgroup', 'tablist', 'tree', 'menu', 'listbox'].includes(role)) {
+          if (cls) {
+            const firstClass = cls.split(/\\s+/)[0];
+            return tag + '.' + CSS.escape(firstClass) + '[role="' + role + '"]';
+          }
           return '[role="' + role + '"]';
         }
-        const cls = cleanClasses(parent.className);
         if (cls) {
-          return parent.tagName.toLowerCase() + '.' + cls.split(/\\s+/)[0];
+          return tag + '.' + cls.split(/\\s+/)[0];
         }
         return '';
       }
@@ -553,9 +562,21 @@ export function buildDomOutlineScript(): string {
         const rawHref = el.getAttribute('href') || '';
         const href = rawHref ? '[href="' + rawHref.slice(0, 60) + '"]' : '';
 
+        // Collect direct text node content (text that belongs to this element, not its children)
         let text = '';
-        if (el.childNodes.length === 1 && el.childNodes[0].nodeType === 3) {
-          const t = el.childNodes[0].textContent?.trim() ?? '';
+        const directTexts = [];
+        for (let i = 0; i < el.childNodes.length; i++) {
+          if (el.childNodes[i].nodeType === 3) {
+            const t = el.childNodes[i].textContent?.trim();
+            if (t) directTexts.push(t);
+          }
+        }
+        if (directTexts.length > 0) {
+          const joined = directTexts.join(' ').slice(0, MAX_TEXT);
+          text = ' "' + joined + (directTexts.join(' ').length > MAX_TEXT ? '...' : '') + '"';
+        } else if (el.children.length === 0) {
+          // Leaf element with no child elements — show its textContent
+          const t = (el.textContent || '').trim();
           if (t.length > 0) text = ' "' + t.slice(0, MAX_TEXT) + (t.length > MAX_TEXT ? '...' : '') + '"';
         }
 
@@ -591,6 +612,282 @@ export function buildDomOutlineScript(): string {
       } catch (e) {}
 
       return result;
+    })()
+  `;
+}
+
+export interface ElementFromPointResult {
+  selector: string;
+  matchCount: number;
+  element: {
+    textContent: string;
+    innerText: string;
+    tagName: string;
+    id: string;
+    href: string;
+    outerHTML: string;
+  };
+}
+
+/**
+ * Given (x, y) pixel coordinates, finds the DOM element at that point,
+ * walks up to find the repeating-item container, and derives a CSS selector
+ * that matches all similar siblings.
+ */
+export function buildElementFromPointScript(x: number, y: number): string {
+  return `
+    (() => {
+      const MAX_TEXT = 500;
+      const MAX_HTML = 1000;
+
+      const SKIP_TAGS = new Set([
+        'script', 'style', 'noscript', 'link', 'meta', 'br', 'hr',
+        'svg', 'path', 'symbol', 'use', 'defs', 'clippath', 'g', 'circle', 'rect', 'line', 'polygon', 'polyline', 'ellipse',
+        'template', 'slot',
+      ]);
+
+      const JUNK_CLASSES = new Set(['undefined', 'null', 'false', 'true', 'none']);
+
+      function cleanClasses(raw) {
+        if (typeof raw !== 'string') return '';
+        return raw.trim().split(/\\s+/).filter(c => c && !JUNK_CLASSES.has(c)).join(' ');
+      }
+
+      function getSignature(el) {
+        const tag = el.tagName?.toLowerCase() || '';
+        if (SKIP_TAGS.has(tag)) return '__skip__';
+        const cls = cleanClasses(el.className).split(/\\s+/).sort().join(' ');
+        const role = el.getAttribute('role') || '';
+        return [tag, cls, role].filter(Boolean).join('|');
+      }
+
+      function buildSelector(el) {
+        const tag = el.tagName?.toLowerCase() || '';
+        const role = el.getAttribute('role');
+        const cls = cleanClasses(el.className);
+        if (role && ['row', 'listitem', 'option', 'tab', 'treeitem', 'gridcell', 'menuitem'].includes(role)) {
+          // Include class alongside role for specificity
+          if (cls) {
+            const first = cls.split(/\\s+/)[0];
+            return tag + '.' + CSS.escape(first) + '[role="' + role + '"]';
+          }
+          return '[role="' + role + '"]';
+        }
+        if (cls) {
+          const first = cls.split(/\\s+/)[0];
+          return tag + '.' + first;
+        }
+        if (role) return tag + '[role="' + role + '"]';
+        return tag;
+      }
+
+      function buildParentSelector(parent) {
+        if (parent.id) return '#' + CSS.escape(parent.id);
+        const role = parent.getAttribute('role');
+        const cls = cleanClasses(parent.className);
+        const tag = parent.tagName.toLowerCase();
+        if (role && ['table', 'grid', 'list', 'rowgroup', 'tablist', 'tree', 'menu', 'listbox'].includes(role)) {
+          // Include class alongside role for specificity
+          if (cls) {
+            const firstClass = cls.split(/\\s+/)[0];
+            return tag + '.' + CSS.escape(firstClass) + '[role="' + role + '"]';
+          }
+          return '[role="' + role + '"]';
+        }
+        if (cls) {
+          return tag + '.' + cls.split(/\\s+/)[0];
+        }
+        return '';
+      }
+
+      // Try to refine a selector that matches too many elements
+      function refineSelector(bestMatch, doc) {
+        const el = bestMatch.element;
+        const parent = el.parentElement;
+        if (!parent) return;
+
+        const siblingCount = bestMatch.siblingCount;
+        // If selector matches roughly the right count, no refinement needed
+        if (bestMatch.matchCount <= siblingCount * 1.5) return;
+
+        const parentSel = buildParentSelector(parent);
+
+        // Strategy 1: Try different child class combinations for more specificity
+        const cls = cleanClasses(el.className);
+        if (cls) {
+          const classes = cls.split(/\\s+/);
+          if (classes.length > 1) {
+            const role = el.getAttribute('role');
+            const tag = el.tagName.toLowerCase();
+            let bestRefinedSelector = bestMatch.selector;
+            let bestRefinedCount = bestMatch.matchCount;
+
+            // Try each individual class
+            for (const c of classes) {
+              let childSel = tag + '.' + CSS.escape(c);
+              if (role) childSel += '[role="' + role + '"]';
+              const candidateSelector = parentSel ? parentSel + ' > ' + childSel : childSel;
+              try {
+                const count = doc.querySelectorAll(candidateSelector).length;
+                if (count >= 2 && count < bestRefinedCount) {
+                  bestRefinedSelector = candidateSelector;
+                  bestRefinedCount = count;
+                }
+              } catch {}
+            }
+
+            // Try pairs of classes
+            for (let i = 0; i < classes.length && i < 5; i++) {
+              for (let j = i + 1; j < classes.length && j < 5; j++) {
+                let childSel = tag + '.' + CSS.escape(classes[i]) + '.' + CSS.escape(classes[j]);
+                if (role) childSel += '[role="' + role + '"]';
+                const candidateSelector = parentSel ? parentSel + ' > ' + childSel : childSel;
+                try {
+                  const count = doc.querySelectorAll(candidateSelector).length;
+                  if (count >= 2 && count < bestRefinedCount) {
+                    bestRefinedSelector = candidateSelector;
+                    bestRefinedCount = count;
+                  }
+                } catch {}
+              }
+            }
+
+            if (bestRefinedSelector !== bestMatch.selector) {
+              bestMatch.selector = bestRefinedSelector;
+              bestMatch.matchCount = bestRefinedCount;
+            }
+          }
+        }
+
+        // Strategy 2: Scope with nearest ancestor that has an ID
+        if (bestMatch.matchCount > siblingCount * 1.5) {
+          let ancestor = parent.parentElement;
+          for (let i = 0; i < 5 && ancestor && ancestor !== doc.body; i++) {
+            if (ancestor.id) {
+              const scopedSelector = '#' + CSS.escape(ancestor.id) + ' ' + bestMatch.selector;
+              try {
+                const count = doc.querySelectorAll(scopedSelector).length;
+                if (count >= 2 && count < bestMatch.matchCount) {
+                  bestMatch.selector = scopedSelector;
+                  bestMatch.matchCount = count;
+                  break;
+                }
+              } catch {}
+            }
+            ancestor = ancestor.parentElement;
+          }
+        }
+
+        // Strategy 3: Scope with nearest ancestor that has a unique class
+        if (bestMatch.matchCount > siblingCount * 1.5) {
+          let ancestor = parent.parentElement;
+          for (let i = 0; i < 5 && ancestor && ancestor !== doc.body; i++) {
+            const aCls = cleanClasses(ancestor.className);
+            if (aCls) {
+              const aTag = ancestor.tagName.toLowerCase();
+              const aFirstClass = aCls.split(/\\s+/)[0];
+              const ancestorSel = aTag + '.' + CSS.escape(aFirstClass);
+              const scopedSelector = ancestorSel + ' ' + bestMatch.selector;
+              try {
+                const count = doc.querySelectorAll(scopedSelector).length;
+                if (count >= 2 && count < bestMatch.matchCount) {
+                  bestMatch.selector = scopedSelector;
+                  bestMatch.matchCount = count;
+                  break;
+                }
+              } catch {}
+            }
+            ancestor = ancestor.parentElement;
+          }
+        }
+      }
+
+      // Coordinates are pre-converted to CSS pixels by the caller
+      const px = ${x};
+      const py = ${y};
+
+      // Try main document first, then iframes
+      let hitEl = document.elementFromPoint(px, py);
+
+      // If we hit an iframe, try inside it
+      if (hitEl && hitEl.tagName?.toLowerCase() === 'iframe') {
+        try {
+          const iframeDoc = hitEl.contentDocument;
+          if (iframeDoc) {
+            const rect = hitEl.getBoundingClientRect();
+            const innerX = px - rect.left;
+            const innerY = py - rect.top;
+            const innerHit = iframeDoc.elementFromPoint(innerX, innerY);
+            if (innerHit) hitEl = innerHit;
+          }
+        } catch (e) {}
+      }
+
+      if (!hitEl) return null;
+
+      // Walk up from the hit element to find a repeating container pattern
+      let current = hitEl;
+      let bestMatch = null;
+      const MIN_SIBLINGS = 2;
+
+      for (let depth = 0; depth < 15 && current && current !== document.body && current !== document.documentElement; depth++) {
+        const parent = current.parentElement;
+        if (!parent) break;
+
+        const children = Array.from(parent.children);
+        if (children.length >= MIN_SIBLINGS) {
+          const currentSig = getSignature(current);
+          if (currentSig !== '__skip__') {
+            const matchingSiblings = children.filter(c => getSignature(c) === currentSig);
+            if (matchingSiblings.length >= MIN_SIBLINGS) {
+              const childSel = buildSelector(current);
+              const parentSel = buildParentSelector(parent);
+              const fullSelector = parentSel ? parentSel + ' > ' + childSel : childSel;
+
+              // Verify the selector matches in the document
+              let matchCount;
+              const doc = current.ownerDocument || document;
+              try {
+                matchCount = doc.querySelectorAll(fullSelector).length;
+              } catch { matchCount = 0; }
+
+              if (matchCount >= MIN_SIBLINGS) {
+                // Prefer deeper matches (more specific) but also consider count
+                // Keep walking up — a higher ancestor might capture a better group
+                bestMatch = {
+                  selector: fullSelector,
+                  matchCount,
+                  element: current,
+                  depth,
+                  siblingCount: matchingSiblings.length,
+                };
+              }
+            }
+          }
+        }
+
+        current = parent;
+      }
+
+      if (!bestMatch) return null;
+
+      // Refine the selector if it matches too many elements
+      const refDoc = bestMatch.element.ownerDocument || document;
+      refineSelector(bestMatch, refDoc);
+
+      const el = bestMatch.element;
+      return {
+        selector: bestMatch.selector,
+        matchCount: bestMatch.matchCount,
+        element: {
+          textContent: (el.textContent || '').trim().slice(0, MAX_TEXT),
+          innerText: (el.innerText || '').trim().slice(0, MAX_TEXT),
+          tagName: el.tagName?.toLowerCase() || '',
+          id: el.id || '',
+          href: el.href || el.querySelector('a')?.href || '',
+          outerHTML: el.outerHTML.slice(0, MAX_HTML),
+        },
+      };
     })()
   `;
 }

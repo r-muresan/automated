@@ -11,9 +11,10 @@ export function createDomStrategy(params: {
   stagehand: Stagehand;
   llmClient: OpenAI;
   model: string;
+  agentModel: string;
   dataExtractionGoal: string;
 }): UnifiedExtractor {
-  const { stagehand, llmClient, model, dataExtractionGoal } = params;
+  const { stagehand, llmClient, model, agentModel, dataExtractionGoal } = params;
 
   let cachedSelector: string | null = null;
   let discoveryDone = false;
@@ -24,7 +25,7 @@ export function createDomStrategy(params: {
   function toCollectedItems(data: unknown): CollectedItem[] {
     const items: CollectedItem[] = [];
 
-    // Handle { items: [...] } format from mapElements
+    // Handle { items: [...] } format from structureElements
     let rawItems: unknown[];
     if (data && typeof data === 'object' && 'items' in data && Array.isArray((data as any).items)) {
       rawItems = (data as any).items;
@@ -62,6 +63,7 @@ export function createDomStrategy(params: {
         stagehand,
         llmClient,
         model,
+        agentModel,
         dataExtractionGoal,
       });
       if (result == null) return null;
@@ -87,6 +89,7 @@ export function createDomStrategy(params: {
           stagehand,
           llmClient,
           model,
+          agentModel,
           dataExtractionGoal,
         });
 
