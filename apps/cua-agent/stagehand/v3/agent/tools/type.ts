@@ -102,6 +102,8 @@ export const typeTool = (
           await screenController.typeText(actualText);
           await v3.syncActivePageFromFocus();
         } else {
+          // Select all existing text so typing replaces it instead of appending
+          await page.keyPress("ControlOrMeta+a");
           const shouldBulkType = actualText.length > 20;
           await page.type(actualText, shouldBulkType ? { bulk: true } : undefined);
         }

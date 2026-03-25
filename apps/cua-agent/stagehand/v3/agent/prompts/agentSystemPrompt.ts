@@ -1,5 +1,127 @@
 import type { AgentToolMode, Variables } from '../../types/public/agent.js';
 
+type SpreadsheetProvider = 'google_sheets' | 'excel_web';
+
+function parseUrl(url: string): URL | null {
+  try {
+    return new URL(url);
+  } catch {
+    return null;
+  }
+}
+
+function getSpreadsheetProvider(url: string): SpreadsheetProvider | null {
+  const parsed = parseUrl(url);
+  if (!parsed) return null;
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname;
+
+  // Google Sheets
+  if (
+    (host === 'docs.google.com' || host === 'sheets.google.com') &&
+    /^\/spreadsheets\/d\/[^/]+(?:\/|$)/i.test(path)
+  ) {
+    return 'google_sheets';
+  }
+
+  // Excel Web
+  const isExcelHost =
+    host === 'excel.office.com' ||
+    host === 'excel.officeapps.live.com' ||
+    /^excel\\.[a-z0-9.-]*officeapps\\.live\\.com$/i.test(host) ||
+    host === 'excel.cloud.microsoft' ||
+    host === 'office.live.com' ||
+    host === 'www.office.com' ||
+    host === 'onedrive.live.com' ||
+    host === 'office.com';
+  if (isExcelHost) {
+    const query = parsed.search.toLowerCase();
+    const hash = parsed.hash.toLowerCase();
+    const lowerPath = path.toLowerCase();
+    const workbookParamKeys = [
+      'docid',
+      'resid',
+      'id',
+      'file',
+      'wopisrc',
+      'itemid',
+      'driveid',
+      'sourcedoc',
+    ];
+    const hasWorkbookQueryParam = workbookParamKeys.some(
+      (key) => parsed.searchParams.has(key) || query.includes(`${key}=`),
+    );
+    const hasWorkbookHashParam = workbookParamKeys.some((key) => hash.includes(`${key}=`));
+    const hasWorkbookPathMarker =
+      /^\/open\/(onedrive|sharepoint)\//.test(lowerPath) ||
+      /^\/x\//.test(lowerPath) ||
+      lowerPath.includes('xlviewer') ||
+      lowerPath.includes('/workbook');
+    if (hasWorkbookQueryParam || hasWorkbookHashParam || hasWorkbookPathMarker) {
+      return 'excel_web';
+    }
+  }
+
+  return null;
+}
+
+function buildSpreadsheetInstructions(provider: SpreadsheetProvider): string {
+  const toolPrefix = provider === 'google_sheets' ? 'spreadsheet' : 'excel';
+  const appName = provider === 'google_sheets' ? 'Google Sheets' : 'Excel';
+  return [
+    `You are currently on a ${appName} spreadsheet. Use the spreadsheet tools over manual browser interactions for reading, writing, and navigating cells:`,
+    `- Use \`${toolPrefix}_read_cell\` or \`${toolPrefix}_read_sheet\` to read data instead of trying to visually parse the spreadsheet.`,
+    `- Use \`${toolPrefix}_write_cells\` to write data instead of clicking on cells and typing.`,
+    `- Use \`${toolPrefix}_select_cell\` to navigate to a specific cell.`,
+  ].join('\n');
+}
+
+const MAX_GLOBAL_STATE_CHARS = 10_000;
+const MAX_ENTRY_VALUE_CHARS = 200;
+
+/**
+ * Truncate individual values in global state entries that are very long,
+ * then truncate the overall JSON if still too large.
+ */
+function truncateGlobalStateForPrompt(globalState: any[]): string {
+  if (!globalState || globalState.length === 0) return '';
+
+  // Deep clone and truncate individual values
+  const clone: any[] = JSON.parse(JSON.stringify(globalState));
+  for (const entry of clone) {
+    if (!entry?.items?.length) continue;
+    for (const item of entry.items) {
+      if (!item || typeof item !== 'object') continue;
+      for (const [key, value] of Object.entries(item)) {
+        if (typeof value === 'string' && value.length > MAX_ENTRY_VALUE_CHARS) {
+          (item as Record<string, string>)[key] =
+            value.slice(0, MAX_ENTRY_VALUE_CHARS) + '… (truncated)';
+        }
+      }
+    }
+  }
+
+  const json = JSON.stringify(clone, null, 2);
+  if (json.length <= MAX_GLOBAL_STATE_CHARS) return json;
+
+  // Progressively trim items from the last entry backwards
+  for (let i = clone.length - 1; i >= 0; i--) {
+    const entry = clone[i];
+    if (!entry?.items?.length) continue;
+    while (entry.items.length > 0) {
+      entry.items.pop();
+      const attempt = JSON.stringify(clone, null, 2);
+      if (attempt.length <= MAX_GLOBAL_STATE_CHARS) {
+        entry.items.push({ _truncated: 'remaining items omitted to fit context' });
+        return JSON.stringify(clone, null, 2);
+      }
+    }
+    clone.splice(i, 1);
+  }
+
+  return JSON.stringify([{ _truncated: 'data too large, all entries omitted' }], null, 2);
+}
+
 export interface AgentSystemPromptOptions {
   url: string;
   executionInstruction: string;
@@ -11,6 +133,8 @@ export interface AgentSystemPromptOptions {
   excludeTools?: string[];
   /** Variables available to the agent for use in act/type tools */
   variables?: Variables;
+  /** Previously collected data from earlier workflow steps */
+  globalState?: any[];
 }
 
 /**
@@ -63,11 +187,15 @@ function buildToolsSection(
       description: 'Fill out a form using coordinates',
     },
     { name: 'think', description: 'Think about the task' },
-    { name: 'extract', description: 'Extract structured data' },
     { name: 'goto', description: 'Navigate to a URL' },
     { name: 'wait', description: 'Wait for a specified time' },
     { name: 'navback', description: 'Navigate back in browser history' },
     { name: 'scroll', description: 'Scroll the page x pixels up or down' },
+    {
+      name: 'request_user_credentials',
+      description:
+        "Request user credentials when encountering a login, 2FA, CAPTCHA, passkey, or any credential gate that requires the user's secrets. Only use as a last resort when you cannot proceed on your own.",
+    },
   ];
 
   const domTools: ToolDefinition[] = [
@@ -86,11 +214,15 @@ function buildToolsSection(
     { name: 'keys', description: 'Press a keyboard key' },
     { name: 'fillForm', description: 'Fill out a form' },
     { name: 'think', description: 'Think about the task' },
-    { name: 'extract', description: 'Extract structured data' },
     { name: 'goto', description: 'Navigate to a URL' },
     { name: 'wait', description: 'Wait for a specified time' },
     { name: 'navback', description: 'Navigate back in browser history' },
     { name: 'scroll', description: 'Scroll the page x pixels up or down' },
+    {
+      name: 'request_user_credentials',
+      description:
+        "Request user credentials when encountering a login, 2FA, CAPTCHA, passkey, or any credential gate that requires the user's secrets. Only use as a last resort when you cannot proceed on your own.",
+    },
   ];
 
   const baseTools = isHybridMode ? hybridTools : domTools;
@@ -113,15 +245,7 @@ function buildToolsSection(
 }
 
 export function buildAgentSystemPrompt(options: AgentSystemPromptOptions): string {
-  const {
-    url,
-    executionInstruction,
-    mode,
-    systemInstructions,
-    isBrowserbase = true,
-    excludeTools,
-    variables,
-  } = options;
+  const { url, executionInstruction, mode, systemInstructions, excludeTools, variables, globalState } = options;
   const localeDate = new Date().toLocaleDateString();
   const isoDate = new Date().toISOString();
   const cdata = (text: string) => `<![CDATA[${text}]]>`;
@@ -152,7 +276,6 @@ export function buildAgentSystemPrompt(options: AgentSystemPromptOptions): strin
   const strategySection = strategyItems.join('\n    ');
 
   const commonStrategyItems = `
-    <item>CRITICAL: Use extract ONLY when the task explicitly requires structured data output (e.g., "get job listings", "extract product details"). For reading page content or understanding elements, always use ${isHybridMode ? 'screenshot or ariaTree' : 'ariaTree'} instead - it's faster and more reliable.</item>
     <item>Keep actions atomic and verify outcomes before proceeding.</item>
     <item>For each action, keep reasoning minimal: one short sentence only when necessary.</item>
     <item>When you need to input text that could be entered character-by-character or through multiple separate inputs, prefer using the keys tool to type the entire sequence at once. This is more efficient for scenarios like verification codes split across multiple fields, or when virtual keyboards are present but direct typing would be faster.</item>
@@ -189,12 +312,25 @@ export function buildAgentSystemPrompt(options: AgentSystemPromptOptions): strin
     </step_1>
   </page_understanding_protocol>`;
 
-  // Roadblocks section only shown when running on Browserbase (has captcha solver)
-  const roadblocksSection = isBrowserbase
-    ? `<roadblocks>
-    <note>captchas, popups, etc.</note>
+  const roadblocksSection = `<roadblocks>
+    <note>captchas, popups, logins, etc.</note>
     <captcha>If you see a captcha, use the wait tool. It will automatically be solved by our internal solver.</captcha>
-  </roadblocks>`
+    <credentials>If you hit a login, 2FA, passkey, or any credential gate that requires the user's secrets, call the request_user_credentials tool with a concise reason and wait. Only use this as a last resort when you cannot proceed on your own.</credentials>
+  </roadblocks>`;
+
+  // Detect spreadsheet provider from the URL
+  const spreadsheetProvider = getSpreadsheetProvider(url);
+  const spreadsheetSection = spreadsheetProvider
+    ? `\n  <spreadsheet>\n    ${buildSpreadsheetInstructions(spreadsheetProvider)}\n  </spreadsheet>`
+    : '';
+
+  // Build collected data section from global state
+  const globalStateJson = truncateGlobalStateForPrompt(globalState ?? []);
+  const collectedDataSection = globalStateJson
+    ? `\n  <collectedData>
+    <note>The following data has been collected by earlier steps in this workflow. Use it as context when completing your task.</note>
+    <data>${cdata(globalStateJson)}</data>
+  </collectedData>`
     : '';
 
   // Build customInstructions block only if provided
@@ -232,8 +368,8 @@ export function buildAgentSystemPrompt(options: AgentSystemPromptOptions): strin
     <note>You may think the date is different due to knowledge cutoff, but this is the actual date.</note>
   </task>
   <page>
-    <startingUrl>you are starting your task on this url: ${url}</startingUrl>
-  </page>
+    <startingUrl>you are starting your task on this url: ${url}</startingUrl>${spreadsheetProvider ? `\n    <note>The current page is a ${spreadsheetProvider === 'google_sheets' ? 'Google Sheets' : 'Excel Web'} spreadsheet. Prefer spreadsheet tools over manual browser interactions.</note>` : ''}
+  </page>${spreadsheetSection}
   <mindset>
     <note>Be very intentional about your action. The initial instruction is very important, and slight variations of the actual goal can lead to failures.</note>
     <importantNote>If something fails to meet a single condition of the task, move on from it rather than seeing if it meets other criteria. We only care that it meets all of it</importantNote>
@@ -255,7 +391,7 @@ export function buildAgentSystemPrompt(options: AgentSystemPromptOptions): strin
     ${commonStrategyItems}
   </strategy>
   ${roadblocksSection}
-  ${variablesSection}
+  ${variablesSection}${collectedDataSection}
 </system>`;
 }
 

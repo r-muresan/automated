@@ -6,7 +6,6 @@ import { navBackTool } from "./navback.js";
 import { ariaTreeTool } from "./ariaTree.js";
 import { fillFormTool } from "./fillform.js";
 import { scrollTool, scrollVisionTool } from "./scroll.js";
-import { extractTool } from "./extract.js";
 import { clickTool } from "./click.js";
 import { typeTool } from "./type.js";
 import { dragAndDropTool } from "./dragAndDrop.js";
@@ -105,7 +104,6 @@ export function createAgentTools(v3: V3, options?: V3AgentToolOptions) {
     click: clickTool(v3, provider, modelId, interactionSync),
     clickAndHold: clickAndHoldTool(v3, provider, modelId),
     dragAndDrop: dragAndDropTool(v3, provider, modelId),
-    extract: extractTool(v3, executionModel),
     fillForm: fillFormTool(v3, executionModel, variables),
     fillFormVision: fillFormVisionTool(v3, provider, variables, modelId, interactionSync),
     goto: gotoTool(v3),
@@ -138,7 +136,6 @@ export type AgentToolTypesMap = {
   click: ReturnType<typeof clickTool>;
   clickAndHold: ReturnType<typeof clickAndHoldTool>;
   dragAndDrop: ReturnType<typeof dragAndDropTool>;
-  extract: ReturnType<typeof extractTool>;
   fillForm: ReturnType<typeof fillFormTool>;
   fillFormVision: ReturnType<typeof fillFormVisionTool>;
   goto: ReturnType<typeof gotoTool>;

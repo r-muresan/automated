@@ -76,12 +76,6 @@ export async function executeConditionalStep(
     const describeStepInstruction = (s: ConditionalStep) => `Conditional: ${s.condition}`;
 
     const agent = ctx.stagehand.agent({
-      systemPrompt: buildSystemPrompt(
-        ctx.globalState,
-        ctx.sessionFiles.getDownloadedFiles(),
-        context,
-        ctx.getActivePageUrl(),
-      ),
       tools: createBrowserTabTools(ctx.stagehand, {
         onRequestCredentials: (request) =>
           ctx.requestCredentialHandoff(request, step, index, describeStepInstruction(step)),
@@ -89,6 +83,7 @@ export async function executeConditionalStep(
       stream: false,
       mode: 'hybrid',
       interactionSync: ctx.sessionFiles.createAgentInteractionSync(),
+      globalState: ctx.globalState,
     });
 
     try {
@@ -100,7 +95,10 @@ export async function executeConditionalStep(
           instruction: conditionInstruction,
           maxSteps: 10,
           callbacks: {
-            prepareStep: ctx.buildPrepareStepForActiveTools(`executeConditionalStep:${index}`, context),
+            prepareStep: ctx.buildPrepareStepForActiveTools(
+              `executeConditionalStep:${index}`,
+              context,
+            ),
           },
           output: z.object({
             conditionMet: z.boolean().describe('Whether the condition is met'),

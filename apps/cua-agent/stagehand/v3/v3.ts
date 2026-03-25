@@ -1801,6 +1801,7 @@ export class V3 {
       tools,
       options?.mode,
       options?.interactionSync,
+      options?.globalState,
     );
 
     const resolvedOptions: AgentExecuteOptions | AgentStreamExecuteOptions =

@@ -36,7 +36,6 @@ import {
   getSpreadsheetProvider,
   type CredentialHandoffRequest,
 } from './agent-tools';
-import { buildSystemPrompt } from './system-prompt';
 import { executeLoopStep, type LoopDeps } from './steps/loop';
 
 dotenv.config();
@@ -97,18 +96,6 @@ export class OrchestratorAgent {
     return async ({ stepNumber, messages }: { stepNumber?: number; messages?: any[] } = {}) => {
       const activeUrl = this.getActivePageUrl();
       const activeTools = buildHybridActiveToolsForUrl(activeUrl);
-
-      // Dynamically update the system prompt when the URL changes
-      // (e.g. agent navigates to a spreadsheet mid-execution)
-      if (messages && messages.length > 0 && messages[0]?.role === 'system') {
-        const updatedPrompt = buildSystemPrompt(
-          this.globalState,
-          this.sessionFiles.getDownloadedFiles(),
-          context,
-          activeUrl,
-        );
-        messages[0].content = updatedPrompt;
-      }
 
       return { activeTools };
     };
@@ -347,7 +334,7 @@ export class OrchestratorAgent {
 
       try {
         if (step.type === 'step') {
-          await executeSingleStep(ctx, step.description, context, index, step);
+          await executeSingleStep(ctx, step, context, index);
         } else if (step.type === 'loop') {
           await executeLoopStep(this.buildLoopDeps(step, index), step, index);
         } else if (step.type === 'conditional') {
