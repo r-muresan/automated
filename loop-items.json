@@ -1,37 +1,222 @@
 [
   {
     "index": 1,
-    "duration": "12:07",
-    "title": "Why Are 96,000,000 Black Balls on This Reservoir?",
-    "views": "110M views",
-    "age": "6 years ago"
+    "company_name": "Walmart",
+    "website": "http://www.walmart.com",
+    "industry": "General Merchandisers",
+    "headquarters": "Bentonville, AR, USA",
+    "employee_count": "2300000",
+    "revenue_usd_millions": "485873",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=Walmart",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
   },
   {
     "index": 2,
-    "duration": "20:06",
-    "title": "These are the asteroids to worry about",
-    "views": "80M views",
-    "age": "5 years ago"
+    "company_name": "Berkshire Hathaway",
+    "website": "http://www.berkshirehathaway.com",
+    "industry": "Insurance: Property and Casualty (Stock)",
+    "headquarters": "Omaha, NE, USA",
+    "employee_count": "367700",
+    "revenue_usd_millions": "223604",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=Berkshire%20Hathaway",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
   },
   {
     "index": 3,
-    "duration": "12:02",
-    "title": "World's Lightest Solid!",
-    "views": "61M views",
-    "age": "6 years ago"
+    "company_name": "Apple",
+    "website": "http://www.apple.com",
+    "industry": "Computers, Office Equipment",
+    "headquarters": "Cupertino, CA, USA",
+    "employee_count": "116000",
+    "revenue_usd_millions": "215639",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=Apple",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
   },
   {
     "index": 4,
-    "duration": "3:01",
-    "title": "Backspin Basketball Flies Off Dam",
-    "views": "60M views",
-    "age": "10 years ago"
+    "company_name": "Exxon Mobil",
+    "website": "http://www.exxonmobil.com",
+    "industry": "Petroleum Refining",
+    "headquarters": "Irving, TX, USA",
+    "employee_count": "72700",
+    "revenue_usd_millions": "205004",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=Exxon%20Mobil",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
   },
   {
     "index": 5,
-    "duration": "33:45",
-    "title": "Why It Was Almost Impossible to Make the Blue LED",
-    "views": "48M views",
-    "age": "2 years ago"
+    "company_name": "McKesson",
+    "website": "http://www.mckesson.com",
+    "industry": "Wholesalers: Health Care",
+    "headquarters": "San Francisco, CA, USA",
+    "employee_count": "68000",
+    "revenue_usd_millions": "192487",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=McKesson",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 6,
+    "company_name": "UnitedHealth Group",
+    "website": "http://www.unitedhealthgroup.com",
+    "industry": "Health Care: Insurance and Managed Care",
+    "headquarters": "Minnetonka, MN, USA",
+    "employee_count": "230000",
+    "revenue_usd_millions": "184840",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=UnitedHealth%20Group",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 7,
+    "company_name": "CVS Health",
+    "website": "http://www.cvshealth.com",
+    "industry": "Health Care: Pharmacy and Other Services",
+    "headquarters": "Woonsocket, RI, USA",
+    "employee_count": "204000",
+    "revenue_usd_millions": "177526",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=CVS%20Health",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 8,
+    "company_name": "General Motors",
+    "website": "http://www.gm.com",
+    "industry": "Motor Vehicles and Parts",
+    "headquarters": "Detroit, MI, USA",
+    "employee_count": "225000",
+    "revenue_usd_millions": "166380",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=General%20Motors",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 9,
+    "company_name": "AT&T",
+    "website": "http://www.att.com",
+    "industry": "Telecommunications",
+    "headquarters": "Dallas, TX, USA",
+    "employee_count": "268540",
+    "revenue_usd_millions": "163786",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=AT%26T",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 10,
+    "company_name": "Ford Motor",
+    "website": "http://www.ford.com",
+    "industry": "Motor Vehicles and Parts",
+    "headquarters": "Dearborn, MI, USA",
+    "employee_count": "201000",
+    "revenue_usd_millions": "151800",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=Ford%20Motor",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 11,
+    "company_name": "AmerisourceBergen",
+    "website": "http://www.amerisourcebergen.com",
+    "industry": "Wholesalers: Health Care",
+    "headquarters": "Chesterbrook, PA, USA",
+    "employee_count": "18500",
+    "revenue_usd_millions": "146850",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=AmerisourceBergen",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 12,
+    "company_name": "Amazon.com",
+    "website": "http://www.amazon.com",
+    "industry": "Internet Services and Retailing",
+    "headquarters": "Seattle, WA, USA",
+    "employee_count": "341400",
+    "revenue_usd_millions": "135987",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=Amazon.com",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 13,
+    "company_name": "General Electric",
+    "website": "http://www.ge.com",
+    "industry": "Industrial Machinery",
+    "headquarters": "Boston, MA, USA",
+    "employee_count": "295000",
+    "revenue_usd_millions": "126661",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=General%20Electric",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 14,
+    "company_name": "Verizon",
+    "website": "http://www.verizon.com",
+    "industry": "Telecommunications",
+    "headquarters": "New York, NY, USA",
+    "employee_count": "160900",
+    "revenue_usd_millions": "125980",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=Verizon",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 15,
+    "company_name": "Cardinal Health",
+    "website": "http://www.cardinalhealth.com",
+    "industry": "Wholesalers: Health Care",
+    "headquarters": "Dublin, OH, USA",
+    "employee_count": "37300",
+    "revenue_usd_millions": "121546",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=Cardinal%20Health",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 16,
+    "company_name": "Costco",
+    "website": "http://www.costco.com",
+    "industry": "General Merchandisers",
+    "headquarters": "Issaquah, WA, USA",
+    "employee_count": "172000",
+    "revenue_usd_millions": "118719",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=Costco",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 17,
+    "company_name": "Walgreens Boots Alliance",
+    "website": "http://www.walgreensbootsalliance.com",
+    "industry": "Food and Drug Stores",
+    "headquarters": "Deerfield, IL, USA",
+    "employee_count": "300000",
+    "revenue_usd_millions": "117351",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=Walgreens%20Boots%20Alliance",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 18,
+    "company_name": "Kroger",
+    "website": "http://www.thekrogerco.com",
+    "industry": "Food and Drug Stores",
+    "headquarters": "Cincinnati, OH, USA",
+    "employee_count": "443000",
+    "revenue_usd_millions": "115337",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=Kroger",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 19,
+    "company_name": "Chevron",
+    "website": "http://www.chevron.com",
+    "industry": "Petroleum Refining",
+    "headquarters": "San Ramon, CA, USA",
+    "employee_count": "55200",
+    "revenue_usd_millions": "107567",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=Chevron",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
+  },
+  {
+    "index": 20,
+    "company_name": "Fannie Mae",
+    "website": "http://www.fanniemae.com",
+    "industry": "Diversified Financials",
+    "headquarters": "Washington, DC, USA",
+    "employee_count": "7000",
+    "revenue_usd_millions": "107162",
+    "linkedin_url": "https://www.linkedin.com/search/results/companies/?keywords=Fannie%20Mae",
+    "source": "https://raw.githubusercontent.com/Redislabs-Solution-Architects/redisearch_demo_and_preso/master/fortune500.csv"
   }
 ]

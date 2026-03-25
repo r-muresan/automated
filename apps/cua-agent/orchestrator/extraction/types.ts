@@ -42,16 +42,26 @@ export interface UnifiedExtractor {
   targetItemCount: number | null;
 }
 
+/** Remove keys whose value is null or undefined. */
+export function stripNullKeys(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v != null) result[k] = v;
+  }
+  return result;
+}
+
 export function deduplicateRawItems(rawItems: Array<Record<string, unknown>>): CollectedItem[] {
   const seen = new Set<string>();
   const items: CollectedItem[] = [];
 
   for (const raw of rawItems) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
-    const fingerprint = buildDeterministicItemKey(raw);
+    const cleaned = stripNullKeys(raw);
+    const fingerprint = buildDeterministicItemKey(cleaned);
     if (seen.has(fingerprint)) continue;
     seen.add(fingerprint);
-    items.push({ fingerprint, data: raw });
+    items.push({ fingerprint, data: cleaned });
   }
 
   return items;

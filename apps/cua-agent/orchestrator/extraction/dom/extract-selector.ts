@@ -9,7 +9,7 @@ import type { Stagehand } from '../../../stagehand/v3';
 import {
   buildElementExtractionScript,
   buildElementFromPointScript,
-  buildDomOutlineScript,
+  buildPageTextSummaryScript,
   type ElementFromPointResult,
 } from '../dom-scripts';
 import { capturePageScreenshot } from '../common';
@@ -60,7 +60,7 @@ function formatScrollPosition(pos: ScrollPosition): string {
   return `[Scroll position: ${pos.percentScrolled}% | viewport ${pos.viewportHeight}px | page height ${pos.scrollHeight}px | ${pos.remainingBelow}px remaining below]`;
 }
 
-const MAX_DOM_OUTLINE_CHARS = 8000;
+const MAX_PAGE_TEXT_CHARS = 8000;
 
 const DOT_COLORS: [number, number, number][] = [
   [255, 0, 0], // red
@@ -145,19 +145,30 @@ export async function extractWithCoordinates(params: {
 
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
 
+  // Capture a text summary of the page for the strategy decision
+  const MAX_STRATEGY_TEXT_CHARS = 15_000;
+  const pageTextRaw = await page.evaluate<string>(buildPageTextSummaryScript());
+  const pageTextForStrategy =
+    pageTextRaw.length > MAX_STRATEGY_TEXT_CHARS
+      ? pageTextRaw.slice(0, MAX_STRATEGY_TEXT_CHARS) + '\n... (truncated)'
+      : pageTextRaw;
+
   // Step 1: Strategy decision (extract model)
-  const prompt = `You are extracting data from a web page. Look at this screenshot.
+  const prompt = `You are extracting data from a web page. Look at the screenshot AND the page text summary below.
 
 Extraction goal: ${dataExtractionGoal}
 
 Choose a strategy:
 1. **coordinate** (STRONGLY preferred): If the page contains repeating elements (lists, tables, cards, rows, etc.) that match the extraction goal, choose this. We will automatically find the elements.
-2. **direct**: Return the extracted data directly from what you see in the screenshot. Use this ONLY when the data is NOT in repeating elements (e.g., a single value, scattered data across unrelated parts of the page).
+2. **direct**: Return the extracted data directly from what you see in the screenshot and page text. Use this ONLY when the data is NOT in repeating elements (e.g., a single value, scattered data across unrelated parts of the page).
 
 When using "coordinate", leave "data" as null.
-When using "direct", set the "data" field with the extracted information.
+When using "direct", set the "data" field with the extracted information. Use BOTH the screenshot and page text summary to extract accurate data — the text summary often contains content that is hard to read in the screenshot.
 
-Additionally, if the extraction goal mentions a specific number of items to collect (e.g. "first 6 stocks", "top 10 results", "3 cheapest flights"), set "targetItemCount" to that number. If no specific count is mentioned, set it to null.`;
+Additionally, if the extraction goal mentions a specific number of items to collect (e.g. "first 6 stocks", "top 10 results", "3 cheapest flights"), set "targetItemCount" to that number. If no specific count is mentioned, set it to null.
+
+Page text summary:
+${pageTextForStrategy}`;
 
   const strategyResponse = await llmClient.chat.completions.parse({
     model,
@@ -325,8 +336,46 @@ const COORDINATE_AGENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'scroll_to_text',
+      description:
+        'Scroll the page to an element containing the given text. The system will find the element, scroll it into view, and automatically record its coordinates. Use this to navigate to specific content you can see in the DOM outline.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: {
+            type: 'string',
+            description:
+              'The text content to search for. Matches elements containing this text (case-insensitive, partial match).',
+          },
+        },
+        required: ['text'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'scroll_to_selector',
+      description:
+        'Scroll the page to an element matching the given CSS selector. The system will find the element, scroll it into view, and automatically record its coordinates. Use this when you can identify the right selector from the DOM outline.',
+      parameters: {
+        type: 'object',
+        properties: {
+          selector: {
+            type: 'string',
+            description: 'A CSS selector that matches the target element.',
+          },
+        },
+        required: ['selector'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'scroll_down',
-      description: 'Scroll the page down to see more content below.',
+      description:
+        'Scroll the page down by roughly one viewport height. Use this to explore more content below the current view.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -334,7 +383,8 @@ const COORDINATE_AGENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'scroll_up',
-      description: 'Scroll the page up to see content above.',
+      description:
+        'Scroll the page up by roughly one viewport height. Use this to go back to content above the current view.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -351,7 +401,7 @@ const COORDINATE_AGENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'select_coordinates',
       description:
-        'Select the (x, y) coordinates of example elements visible on the current screen. Call this for EVERY group of repeating elements you can see. You can call this multiple times as you scroll — coordinates accumulate. ONE example per group is enough.',
+        'Select the (x, y) coordinates of example elements visible on the current screen. Call this for EVERY group of repeating elements you can see. You can call this multiple times — coordinates accumulate. ONE example per group is enough.',
       parameters: {
         type: 'object',
         properties: {
@@ -378,7 +428,7 @@ const COORDINATE_AGENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'done',
       description:
-        'Call this when you have finished selecting coordinates for ALL groups of elements on the page. You should scroll through the entire page first to find all groups before calling done.',
+        'Call this when you have finished selecting coordinates for ALL groups of elements on the page. You should use scroll_to_text or scroll_to_selector to find all groups before calling done.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -417,25 +467,25 @@ async function runCoordinateAgent(params: {
     ? 'Coordinates should be in 0-1 range (normalized to viewport width/height).'
     : 'Coordinates should be in pixel values.';
 
-  // Capture compressed DOM outline and scroll position for context
-  const [domOutline, scrollPos] = await Promise.all([
-    page.evaluate<string>(buildDomOutlineScript()),
+  // Capture page text summary and scroll position for context
+  const [pageTextSummary, scrollPos] = await Promise.all([
+    page.evaluate<string>(buildPageTextSummaryScript()),
     page.evaluate<ScrollPosition>(SCROLL_POSITION_SCRIPT),
   ]);
 
   console.log({
-    domOutlineLength: domOutline.length,
+    pageTextSummaryLength: pageTextSummary.length,
   });
 
-  fs.writeFile('dom-outline.txt', domOutline);
+  fs.writeFile('dom-outline.txt', pageTextSummary);
 
-  const truncatedOutline =
-    domOutline.length > MAX_DOM_OUTLINE_CHARS
-      ? domOutline.slice(0, MAX_DOM_OUTLINE_CHARS) + '\n... (truncated)'
-      : domOutline;
+  const truncatedPageText =
+    pageTextSummary.length > MAX_PAGE_TEXT_CHARS
+      ? pageTextSummary.slice(0, MAX_PAGE_TEXT_CHARS) + '\n... (truncated)'
+      : pageTextSummary;
 
   console.log(
-    `[EXTRACTION] Coordinate agent context: DOM outline ${domOutline.length} chars (truncated to ${truncatedOutline.length}), scroll ${scrollPos.percentScrolled}%, page height ${scrollPos.scrollHeight}px`,
+    `[EXTRACTION] Coordinate agent context: page text ${pageTextSummary.length} chars (truncated to ${truncatedPageText.length}), scroll ${scrollPos.percentScrolled}%, page height ${scrollPos.scrollHeight}px`,
   );
 
   // Accumulate all coordinates across multiple select_coordinates calls
@@ -449,19 +499,24 @@ async function runCoordinateAgent(params: {
 
 IMPORTANT: A page may have MULTIPLE distinct groups of elements (e.g. "Top Stories" cards, "Opinion" cards, "Related News" cards). You must find ALL of them, not just the first group you see.
 
-You are given a compressed DOM outline of the page. Use it to:
+You are given a text summary of the page content. Use it to:
 - Understand the full page structure and where repeating elements are likely located
-- Know how far you need to scroll (check the scroll position metadata)
-- Decide when to stop — if scroll position shows you're near the bottom and the DOM outline shows no more relevant sections below, call done
+- Identify text content to scroll to specific elements
+- Decide when to stop — if the text summary shows no more relevant sections, call done
+
+You have these tools to find elements:
+1. **scroll_to_text** — scroll to an element containing specific text you see in the page summary. The system will automatically find and record its coordinates.
+2. **scroll_to_selector** — scroll to an element matching a CSS selector. The system will automatically find and record its coordinates.
+3. **scroll_down** / **scroll_up** — scroll the page down or up by one viewport height. Use these to explore the page when you need to see more content without targeting a specific element.
+4. **select_coordinates** — manually select coordinates of elements already visible on the current screenshot. Use this for elements you can see right now without scrolling.
 
 Workflow:
-1. Look at the current screenshot and call select_coordinates for all groups of elements visible
-2. Check the scroll position — if there's significant content below, scroll down
-3. If you find more groups, call select_coordinates again for the new ones
-4. Keep scrolling until you've seen the entire page OR the scroll position shows you're at/near the bottom
-5. Call done when you've covered all groups
+1. Look at the current screenshot and use select_coordinates for any groups of elements already visible
+2. Study the page text summary to find more groups of repeating elements elsewhere on the page
+3. Use scroll_to_text or scroll_to_selector to navigate to those groups — the system will automatically record coordinates
+4. Call done when you've covered all groups
 
-For each group, you only need ONE example coordinate — we will automatically find all similar elements in that group. ${coordNote}`,
+For each group, you only need ONE example element — we will automatically find all similar elements in that group. ${coordNote}`,
     },
     {
       role: 'user',
@@ -472,9 +527,9 @@ For each group, you only need ONE example coordinate — we will automatically f
 
 ${formatScrollPosition(scrollPos)}
 
-Compressed DOM outline of the page:
+Page text summary:
 \`\`\`
-${truncatedOutline}
+${truncatedPageText}
 \`\`\`
 
 Here is the current page screenshot. Select coordinates for all visible groups, then scroll to find more.`,
@@ -585,13 +640,69 @@ Here is the current page screenshot. Select coordinates for all visible groups, 
         continue;
       }
 
-      if (name === 'scroll_down') {
-        const scrollResult = await page.evaluate<{ scrolled: boolean }>(`(() => {
-          const el = document.scrollingElement || document.documentElement;
-          const before = el.scrollTop;
-          el.scrollBy(0, window.innerHeight * 0.8);
-          return { scrolled: el.scrollTop > before };
-        })()`);
+      if (name === 'scroll_to_text') {
+        const searchText = (args.text as string) || '';
+        if (!searchText) {
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: 'Error: no text provided. Please provide the text to scroll to.',
+          });
+          continue;
+        }
+
+        const scrollToTextScript = (text: string) => `(() => {
+          const searchText = ${JSON.stringify(text)}.toLowerCase();
+          // Walk the DOM to find elements containing this text
+          const walker = document.createTreeWalker(
+            document.body,
+            NodeFilter.SHOW_ELEMENT,
+            null,
+          );
+          let bestMatch = null;
+          let bestLen = Infinity;
+          let node;
+          while ((node = walker.nextNode())) {
+            const el = node;
+            // Skip invisible elements
+            if (!el.offsetParent && el.tagName !== 'BODY' && el.tagName !== 'HTML') continue;
+            const text = (el.textContent || '').toLowerCase();
+            if (text.includes(searchText) && text.length < bestLen) {
+              // Prefer the most specific (smallest) element containing the text
+              bestMatch = el;
+              bestLen = text.length;
+            }
+          }
+          if (!bestMatch) return null;
+          bestMatch.scrollIntoView({ block: 'center', behavior: 'instant' });
+          // Find a target element with actual visible dimensions
+          let target = bestMatch;
+          let rect = target.getBoundingClientRect();
+          if (rect.width < 1 || rect.height < 1) {
+            // Element has no visual dimensions — try first visible descendant
+            for (const child of target.querySelectorAll('*')) {
+              const cr = child.getBoundingClientRect();
+              if (cr.width > 0 && cr.height > 0) { target = child; rect = cr; break; }
+            }
+          }
+          if (rect.width < 1 || rect.height < 1) return null;
+          return {
+            x: Math.round(rect.left + rect.width / 2),
+            y: Math.round(rect.top + rect.height / 2),
+            found: true,
+            tagName: target.tagName,
+            textPreview: (target.textContent || '').slice(0, 100),
+          };
+        })()`;
+
+        const result = await page.evaluate<{
+          x: number;
+          y: number;
+          found: boolean;
+          tagName: string;
+          textPreview: string;
+        } | null>(scrollToTextScript(searchText));
+
         await new Promise((r) => setTimeout(r, SCROLL_SETTLE_MS));
 
         const [newScreenshot, newScrollPos] = await Promise.all([
@@ -601,29 +712,101 @@ Here is the current page screenshot. Select coordinates for all visible groups, 
         latestScreenshot = newScreenshot;
         currentScrollTop = newScrollPos.scrollTop;
         const scrollInfo = formatScrollPosition(newScrollPos);
-        messages.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: [
-            {
-              type: 'text',
-              text: scrollResult.scrolled
-                ? `Scrolled down. ${scrollInfo}\nSelect coordinates for any new groups you see.`
-                : `Already at the bottom of the page. ${scrollInfo}\nCall done if you have selected all groups.`,
-            },
-            { type: 'image_url', image_url: { url: newScreenshot, detail: 'high' } },
-          ] as any,
-        });
+
+        if (result) {
+          // Auto-record the coordinate
+          const coord = { x: result.x, y: result.y, scrollTop: currentScrollTop };
+          allCoordinates.push(coord);
+          selectCallCount++;
+
+          saveDebugCoordinateImage(
+            latestScreenshot,
+            [coord],
+            `scroll-text-${selectCallCount}`,
+          ).catch(() => {});
+
+          console.log(
+            `[EXTRACTION] scroll_to_text("${searchText}") → found <${result.tagName}> at (${result.x}, ${result.y}), scrollTop=${currentScrollTop}. Total coordinates: ${allCoordinates.length}`,
+          );
+
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: [
+              {
+                type: 'text',
+                text: `Found element <${result.tagName}> containing "${result.textPreview.slice(0, 50)}". Scrolled into view and recorded coordinates (${result.x}, ${result.y}). Total coordinates: ${allCoordinates.length}. ${scrollInfo}`,
+              },
+              { type: 'image_url', image_url: { url: newScreenshot, detail: 'high' } },
+            ] as any,
+          });
+        } else {
+          console.warn(`[EXTRACTION] scroll_to_text("${searchText}") → no element found`);
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: [
+              {
+                type: 'text',
+                text: `No element found containing "${searchText}". Try a different text or use scroll_to_selector instead. ${scrollInfo}`,
+              },
+              { type: 'image_url', image_url: { url: newScreenshot, detail: 'high' } },
+            ] as any,
+          });
+        }
         continue;
       }
 
-      if (name === 'scroll_up') {
-        const scrollResult = await page.evaluate<{ scrolled: boolean }>(`(() => {
-          const el = document.scrollingElement || document.documentElement;
-          const before = el.scrollTop;
-          el.scrollBy(0, -window.innerHeight * 0.8);
-          return { scrolled: el.scrollTop < before };
-        })()`);
+      if (name === 'scroll_to_selector') {
+        const selector = (args.selector as string) || '';
+        if (!selector) {
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: 'Error: no selector provided. Please provide a CSS selector.',
+          });
+          continue;
+        }
+
+        const scrollToSelectorScript = (sel: string) => `(() => {
+          try {
+            const el = document.querySelector(${JSON.stringify(sel)});
+            if (!el) return null;
+            el.scrollIntoView({ block: 'center', behavior: 'instant' });
+            // Find a target element with actual visible dimensions
+            let target = el;
+            let rect = target.getBoundingClientRect();
+            if (rect.width < 1 || rect.height < 1) {
+              for (const child of el.querySelectorAll('*')) {
+                const cr = child.getBoundingClientRect();
+                if (cr.width > 0 && cr.height > 0) { target = child; rect = cr; break; }
+              }
+            }
+            if (rect.width < 1 || rect.height < 1) return null;
+            return {
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2),
+              found: true,
+              tagName: target.tagName,
+              textPreview: (target.textContent || '').slice(0, 100),
+            };
+          } catch (e) {
+            return { error: e.message };
+          }
+        })()`;
+
+        const result = await page.evaluate<
+          | {
+              x: number;
+              y: number;
+              found: boolean;
+              tagName: string;
+              textPreview: string;
+            }
+          | { error: string }
+          | null
+        >(scrollToSelectorScript(selector));
+
         await new Promise((r) => setTimeout(r, SCROLL_SETTLE_MS));
 
         const [newScreenshot, newScrollPos] = await Promise.all([
@@ -633,15 +816,84 @@ Here is the current page screenshot. Select coordinates for all visible groups, 
         latestScreenshot = newScreenshot;
         currentScrollTop = newScrollPos.scrollTop;
         const scrollInfo = formatScrollPosition(newScrollPos);
+
+        if (result && 'error' in result) {
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: `Invalid selector "${selector}": ${result.error}. Please fix the selector syntax.`,
+          });
+          continue;
+        }
+
+        if (result && 'found' in result) {
+          // Auto-record the coordinate
+          const coord = { x: result.x, y: result.y, scrollTop: currentScrollTop };
+          allCoordinates.push(coord);
+          selectCallCount++;
+
+          saveDebugCoordinateImage(
+            latestScreenshot,
+            [coord],
+            `scroll-selector-${selectCallCount}`,
+          ).catch(() => {});
+
+          console.log(
+            `[EXTRACTION] scroll_to_selector("${selector}") → found <${result.tagName}> at (${result.x}, ${result.y}), scrollTop=${currentScrollTop}. Total coordinates: ${allCoordinates.length}`,
+          );
+
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: [
+              {
+                type: 'text',
+                text: `Found element <${result.tagName}> matching "${selector}". Scrolled into view and recorded coordinates (${result.x}, ${result.y}). Total coordinates: ${allCoordinates.length}. ${scrollInfo}`,
+              },
+              { type: 'image_url', image_url: { url: newScreenshot, detail: 'high' } },
+            ] as any,
+          });
+        } else {
+          console.warn(`[EXTRACTION] scroll_to_selector("${selector}") → no element found`);
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: [
+              {
+                type: 'text',
+                text: `No element found matching selector "${selector}". Check the DOM outline and try a different selector. ${scrollInfo}`,
+              },
+              { type: 'image_url', image_url: { url: newScreenshot, detail: 'high' } },
+            ] as any,
+          });
+        }
+        continue;
+      }
+
+      if (name === 'scroll_down' || name === 'scroll_up') {
+        const direction = name === 'scroll_down' ? 1 : -1;
+        await page.evaluate(`window.scrollBy({ top: ${direction} * Math.round(window.innerHeight * 0.8), behavior: 'instant' })`);
+        await new Promise((r) => setTimeout(r, SCROLL_SETTLE_MS));
+
+        const [newScreenshot, newScrollPos] = await Promise.all([
+          capturePageScreenshot(stagehand),
+          page.evaluate<ScrollPosition>(SCROLL_POSITION_SCRIPT),
+        ]);
+        latestScreenshot = newScreenshot;
+        currentScrollTop = newScrollPos.scrollTop;
+        const scrollInfo = formatScrollPosition(newScrollPos);
+
+        console.log(
+          `[EXTRACTION] ${name} → scrollTop=${currentScrollTop}, ${scrollInfo}`,
+        );
+
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
           content: [
             {
               type: 'text',
-              text: scrollResult.scrolled
-                ? `Scrolled up. ${scrollInfo}`
-                : `Already at the top of the page. ${scrollInfo}`,
+              text: `Scrolled ${name === 'scroll_down' ? 'down' : 'up'}. ${scrollInfo}`,
             },
             { type: 'image_url', image_url: { url: newScreenshot, detail: 'high' } },
           ] as any,
@@ -673,6 +925,10 @@ Here is the current page screenshot. Select coordinates for all visible groups, 
 
     if (doneSignaled) break;
   }
+
+  // Restore scroll position to where it was before the coordinate agent ran
+  await page.evaluate(`window.scrollTo({ top: ${scrollPos.scrollTop}, behavior: 'instant' })`);
+  await new Promise((r) => setTimeout(r, SCROLL_SETTLE_MS));
 
   if (allCoordinates.length > 0) {
     console.log(
@@ -787,11 +1043,8 @@ You have two options for extracting data:
 
 IMPORTANT: Each element is a PLAIN JavaScript object (NOT a DOM node). You CANNOT use DOM methods like querySelector, getElementsByClassName, children, closest, etc. The available fields on each element are:
 - el.innerText: string (the visible text, may contain newlines)
-- el.textContent: string (all text content)
-- el.tagName: string (e.g. "DIV", "A")
 - el.id: string
 - el.href: string (the link URL, if any)
-- el.outerHTML: string (the raw HTML of the element - use regex or string methods to parse this if you need sub-element data)
 
 The function receives an \`elements\` argument (array of these plain objects) and must return an array of item objects.
 

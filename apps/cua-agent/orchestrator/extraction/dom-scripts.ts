@@ -540,70 +540,109 @@ export function buildStructuralDiscoveryScript(): string {
   `;
 }
 
-export function buildDomOutlineScript(): string {
+export function buildPageTextSummaryScript(): string {
   return `
     (() => {
       const MAX_DEPTH = 8;
       const MAX_CHILDREN = 30;
-      const MAX_TEXT = 60;
+      const MAX_TEXT = 80;
+      const SKIP_TAGS = new Set(['script', 'style', 'noscript', 'svg', 'path', 'meta', 'link', 'br', 'hr']);
+      const SECTION_TAGS = new Set(['header', 'nav', 'main', 'section', 'article', 'aside', 'footer', 'form', 'table', 'thead', 'tbody', 'tr', 'ul', 'ol', 'dl']);
+      const HEADING_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
 
-      function outline(el, depth) {
+      function summarize(el, depth) {
         if (depth > MAX_DEPTH) return '';
         const tag = el.tagName?.toLowerCase();
         if (!tag) return '';
-        if (['script', 'style', 'noscript', 'svg', 'path'].includes(tag)) return '';
-
-        const id = el.id ? '#' + el.id : '';
-        const cls = el.className && typeof el.className === 'string'
-          ? '.' + el.className.trim().split(/\\s+/).slice(0, 3).join('.')
-          : '';
-        const role = el.getAttribute('role') ? '[role=' + el.getAttribute('role') + ']' : '';
-
-        const rawHref = el.getAttribute('href') || '';
-        const href = rawHref ? '[href="' + rawHref.slice(0, 60) + '"]' : '';
-
-        // Collect direct text node content (text that belongs to this element, not its children)
-        let text = '';
-        const directTexts = [];
-        for (let i = 0; i < el.childNodes.length; i++) {
-          if (el.childNodes[i].nodeType === 3) {
-            const t = el.childNodes[i].textContent?.trim();
-            if (t) directTexts.push(t);
-          }
-        }
-        if (directTexts.length > 0) {
-          const joined = directTexts.join(' ').slice(0, MAX_TEXT);
-          text = ' "' + joined + (directTexts.join(' ').length > MAX_TEXT ? '...' : '') + '"';
-        } else if (el.children.length === 0) {
-          // Leaf element with no child elements — show its textContent
-          const t = (el.textContent || '').trim();
-          if (t.length > 0) text = ' "' + t.slice(0, MAX_TEXT) + (t.length > MAX_TEXT ? '...' : '') + '"';
-        }
+        if (SKIP_TAGS.has(tag)) return '';
 
         const indent = '  '.repeat(depth);
-        let result = indent + '<' + tag + id + cls + role + href + '>' + text + '\\n';
+        let result = '';
 
+        // For section-level elements, emit a structural label
+        if (SECTION_TAGS.has(tag)) {
+          const role = el.getAttribute('role') || '';
+          const ariaLabel = el.getAttribute('aria-label') || '';
+          const label = ariaLabel || role || tag;
+          result += indent + '[' + label + ']\\n';
+        }
+
+        // For headings, emit the text prominently
+        if (HEADING_TAGS.has(tag)) {
+          const t = (el.textContent || '').trim().slice(0, MAX_TEXT);
+          if (t) result += indent + '## ' + t + '\\n';
+          return result;
+        }
+
+        // For links, show text + URL
+        if (tag === 'a') {
+          const t = (el.textContent || '').trim().slice(0, MAX_TEXT);
+          const href = el.getAttribute('href') || '';
+          if (t) {
+            result += indent + t + (href ? ' (' + href.slice(0, 60) + ')' : '') + '\\n';
+          }
+          return result;
+        }
+
+        // For buttons, show label
+        if (tag === 'button' || (el.getAttribute('role') === 'button')) {
+          const t = (el.textContent || '').trim().slice(0, MAX_TEXT);
+          if (t) result += indent + '[button: ' + t + ']\\n';
+          return result;
+        }
+
+        // For inputs, show type and placeholder/value
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+          const type = el.getAttribute('type') || tag;
+          const placeholder = el.getAttribute('placeholder') || '';
+          const label = el.getAttribute('aria-label') || '';
+          result += indent + '[input:' + type + (label ? ' "' + label + '"' : '') + (placeholder ? ' placeholder="' + placeholder + '"' : '') + ']\\n';
+          return result;
+        }
+
+        // For images with alt text
+        if (tag === 'img') {
+          const alt = el.getAttribute('alt') || '';
+          if (alt) result += indent + '[image: ' + alt.slice(0, MAX_TEXT) + ']\\n';
+          return result;
+        }
+
+        // For table cells and list items, show text content directly
+        if (tag === 'td' || tag === 'th' || tag === 'li' || tag === 'dt' || tag === 'dd') {
+          const t = (el.textContent || '').trim().slice(0, MAX_TEXT);
+          if (t) result += indent + (tag === 'th' ? '**' + t + '**' : t) + '\\n';
+          return result;
+        }
+
+        // For leaf elements (no children), emit text
+        if (el.children.length === 0) {
+          const t = (el.textContent || '').trim().slice(0, MAX_TEXT);
+          if (t) result += indent + t + '\\n';
+          return result;
+        }
+
+        // Recurse into children
         const children = Array.from(el.children).slice(0, MAX_CHILDREN);
         for (const child of children) {
-          result += outline(child, depth + 1);
+          result += summarize(child, SECTION_TAGS.has(tag) ? depth + 1 : depth);
         }
         if (el.children.length > MAX_CHILDREN) {
-          result += indent + '  <!-- +' + (el.children.length - MAX_CHILDREN) + ' more -->\\n';
+          result += indent + '  ... +' + (el.children.length - MAX_CHILDREN) + ' more items\\n';
         }
         return result;
       }
 
-      let result = outline(document.body, 0);
+      let result = summarize(document.body, 0);
 
-      // Also outline same-origin iframe content
+      // Also summarize same-origin iframe content
       try {
         const iframes = document.querySelectorAll('iframe');
         for (const iframe of iframes) {
           try {
             if (iframe.contentDocument && iframe.contentDocument.body) {
               const iframeId = iframe.id || iframe.name || iframe.src?.slice(0, 60) || 'iframe';
-              result += '\\n<!-- IFRAME: ' + iframeId + ' -->\\n';
-              result += outline(iframe.contentDocument.body, 0);
+              result += '\\n--- IFRAME: ' + iframeId + ' ---\\n';
+              result += summarize(iframe.contentDocument.body, 0);
             }
           } catch (e) {
             // Cross-origin iframe

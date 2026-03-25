@@ -4,6 +4,7 @@ import { extractDom, extractWithKnownSelector } from '../dom';
 import { buildDeterministicItemKey } from '../item-key';
 import { scrollPageDown, tryClickPaginationButton } from '../pagination';
 import type { UnifiedExtractor, ExtractOutput, CollectedItem } from '../types';
+import { stripNullKeys } from '../types';
 
 const MAX_SCROLL_ATTEMPTS = 3;
 
@@ -42,7 +43,7 @@ export function createDomStrategy(params: {
 
     for (const raw of rawItems) {
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
-      const record = raw as Record<string, unknown>;
+      const record = stripNullKeys(raw as Record<string, unknown>);
       const fingerprint = buildDeterministicItemKey(record);
       if (knownFingerprints.has(fingerprint)) continue;
       knownFingerprints.add(fingerprint);

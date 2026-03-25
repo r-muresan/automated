@@ -14,6 +14,52 @@ import { waitAndCaptureScreenshot } from "../utils/screenshotHandler.js";
 
 type ActivePage = Awaited<ReturnType<V3["context"]["awaitActivePage"]>>;
 
+async function scrollToTextOnPage(
+  page: ActivePage,
+  text: string,
+): Promise<{ success: boolean; message: string }> {
+  return page.mainFrame().evaluate<
+    { success: boolean; message: string },
+    { searchText: string }
+  >(
+    ({ searchText }) => {
+      // Use TreeWalker to find text nodes containing the search text
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+        {
+          acceptNode(node) {
+            if (
+              node.textContent &&
+              node.textContent.toLowerCase().includes(searchText.toLowerCase())
+            ) {
+              return NodeFilter.FILTER_ACCEPT;
+            }
+            return NodeFilter.FILTER_REJECT;
+          },
+        },
+      );
+
+      const textNode = walker.nextNode();
+      if (!textNode || !textNode.parentElement) {
+        return {
+          success: false,
+          message: `Text "${searchText}" not found on the page`,
+        };
+      }
+
+      const element = textNode.parentElement;
+      element.scrollIntoView({ behavior: "instant", block: "center", inline: "nearest" });
+
+      return {
+        success: true,
+        message: `Scrolled to text "${searchText}"`,
+      };
+    },
+    { searchText: text },
+  );
+}
+
 async function getScrollContainerHeightAtPoint(
   page: ActivePage,
   x: number,
@@ -89,14 +135,16 @@ async function getScrollContainerHeightAtPoint(
 export const scrollTool = (v3: V3) =>
   tool({
     description:
-      "Scroll the page up or down by a percentage of the active scroll container height. Default is 80%, and what should be typically used for general page scrolling",
+      "Scroll the page up or down by a percentage of the active scroll container height (default 80%), or scroll directly to specific text on the page. When 'text' is provided, the page scrolls to bring that text into view and 'direction'/'percentage' are ignored.",
     inputSchema: z.object({
-      direction: z.enum(["up", "down"]),
+      direction: z.enum(["up", "down"]).optional().describe("Scroll direction. Required unless 'text' is provided."),
       percentage: z.number().min(1).max(200).optional(),
+      text: z.string().optional().describe("Text to scroll to. When provided, scrolls the page so this text is visible in the viewport."),
     }),
     execute: async ({
       direction,
       percentage = 80,
+      text,
     }): Promise<ScrollToolResult> => {
       v3.logger({
         category: "agent",
@@ -104,13 +152,40 @@ export const scrollTool = (v3: V3) =>
         level: 1,
         auxiliary: {
           arguments: {
-            value: JSON.stringify({ direction, percentage }),
+            value: JSON.stringify({ direction, percentage, text }),
             type: "object",
           },
         },
       });
 
       const page = await v3.context.awaitActivePage();
+
+      // Scroll to text mode
+      if (text) {
+        const result = await scrollToTextOnPage(page, text);
+
+        v3.recordAgentReplayStep({
+          type: "scroll",
+          deltaX: 0,
+          deltaY: 0,
+          anchor: { x: 0, y: 0 },
+        });
+
+        return {
+          success: result.success,
+          message: result.message,
+          scrolledPixels: 0,
+        };
+      }
+
+      // Percentage scroll mode (original behavior)
+      if (!direction) {
+        return {
+          success: false,
+          message: "Either 'direction' or 'text' must be provided",
+          scrolledPixels: 0,
+        };
+      }
 
       const { w, h } = await page.mainFrame().evaluate<{
         w: number;
@@ -165,21 +240,59 @@ export const scrollVisionTool = (v3: V3, provider?: string, modelId?: string) =>
       : "Only use coordinates for scrolling inside a nested scrollable element - provide (x, y) within that element";
 
     return tool({
-    description: `Scroll the page up or down. For general page scrolling, no coordinates needed. Only provide coordinates when scrolling inside a nested scrollable element (e.g., a dropdown menu, modal with overflow, or scrollable sidebar). Default is 80%, and what should be typically used for general page scrolling`,
+    description: `Scroll the page up or down, or scroll directly to specific text on the page. For general page scrolling, no coordinates needed. Only provide coordinates when scrolling inside a nested scrollable element (e.g., a dropdown menu, modal with overflow, or scrollable sidebar). Default is 80%. When 'text' is provided, the page scrolls to bring that text into view and 'direction'/'percentage'/'coordinates' are ignored.`,
     inputSchema: z.object({
-      direction: z.enum(["up", "down"]),
+      direction: z.enum(["up", "down"]).optional().describe("Scroll direction. Required unless 'text' is provided."),
       coordinates: z
         .array(coordinateSchema)
         .optional()
         .describe(coordinateDescription),
       percentage: z.number().min(1).max(200).optional(),
+      text: z.string().optional().describe("Text to scroll to. When provided, scrolls the page so this text is visible in the viewport."),
     }),
     execute: async ({
       direction,
       coordinates,
       percentage = 80,
+      text,
     }): Promise<ScrollVisionToolResult> => {
       const page = await v3.context.awaitActivePage();
+
+      // Scroll to text mode
+      if (text) {
+        v3.logger({
+          category: "agent",
+          message: `Agent calling tool: scroll`,
+          level: 1,
+          auxiliary: {
+            arguments: {
+              value: JSON.stringify({ text }),
+              type: "object",
+            },
+          },
+        });
+
+        const result = await scrollToTextOnPage(page, text);
+        const screenshotBase64 = await waitAndCaptureScreenshot(v3, page, 100);
+
+        return {
+          success: result.success,
+          message: result.message,
+          scrolledPixels: 0,
+          screenshotBase64,
+        };
+      }
+
+      // Percentage scroll mode (original behavior)
+      if (!direction) {
+        const screenshotBase64 = await waitAndCaptureScreenshot(v3, page, 100);
+        return {
+          success: false,
+          message: "Either 'direction' or 'text' must be provided",
+          scrolledPixels: 0,
+          screenshotBase64,
+        };
+      }
 
       const { w, h } = await page.mainFrame().evaluate<{
         w: number;
