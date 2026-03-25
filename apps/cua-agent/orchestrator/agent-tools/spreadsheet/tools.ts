@@ -329,20 +329,33 @@ async function activateRange(
       ? activation.value.activeSelectionA1
       : undefined;
 
-  if (activation.value.nameBoxStillFocused === true) {
+  // The bridge focused the Name Box and selected its text. Now type the range
+  // reference and press Enter via CDP so Excel Web processes real input events.
+  if (activation.value.needsCdpInput === true) {
+    const rangePart =
+      typeof activation.value.rangePart === 'string'
+        ? activation.value.rangePart
+        : rangeA1;
     try {
+      // Select all existing text in the Name Box and type over it.
+      await page.keyPress('Control+A');
+      await sleep(50);
+      // Type the range reference using CDP insertText for reliable input.
+      await page.sendCDP('Input.insertText', { text: rangePart });
+      await sleep(50);
       await page.keyPress('Enter');
     } catch (error: any) {
       return {
         ok: false,
         error: spreadsheetToolError(
           'UNSUPPORTED_PROVIDER_STATE',
-          error?.message ?? `Failed to confirm range activation for ${rangeA1}.`,
+          error?.message ?? `Failed to type range ${rangeA1} into Name Box via CDP.`,
           { rangeA1 },
         ),
       };
     }
-    await sleep(90);
+    // Wait for Excel to navigate to the range and move focus to the grid.
+    await sleep(300);
 
     const metadata = await bridgeResult(page, 'getSelectionMetadata');
     if ('error' in metadata) return { ok: false, error: metadata.error };
@@ -352,6 +365,9 @@ async function activateRange(
     if (typeof metadata.value.activeSelectionA1 === 'string') {
       activeSelectionA1 = metadata.value.activeSelectionA1;
     }
+
+    // Final safety: if the Name Box still has focus, blur it.
+    await bridgeResult(page, 'blurNameBox');
   }
 
   console.timeEnd(`activateRange(${rangeA1})`);

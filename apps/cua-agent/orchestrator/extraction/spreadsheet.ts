@@ -86,15 +86,11 @@ function resolveSampledRangeA1(activeSelectionA1: string, activeSheetName: strin
     return buildWindowRangeA1(activeSheetName, 1);
   }
 
-  const { sheetName, rangePart } = splitRangeReference(trimmedSelection);
-  const [leftCell] = rangePart.split(':', 1);
-  const parsedCell = parseCellAddress(leftCell ?? '');
-  if (!parsedCell) {
-    return buildWindowRangeA1(activeSheetName, 1);
-  }
-
+  // Extract sheet name from selection if present, but always start from row 1
+  // to ensure we capture headers and all data regardless of cursor position.
+  const { sheetName } = splitRangeReference(trimmedSelection);
   const targetSheet = sheetName || activeSheetName;
-  return buildWindowRangeA1(targetSheet, parsedCell.row);
+  return buildWindowRangeA1(targetSheet, 1);
 }
 
 async function bridgeCall(
@@ -189,7 +185,8 @@ async function readRangeViaApi(
     console.log(
       `[SPREADSHEET_EXTRACT] excel-graph-read:start sheet="${sheetName || '(active)'}" range="${rangeOnly}"`,
     );
-    const result = await readRangeViaExcelGraph(page, sheetName, rangeOnly);
+    const result = await readRangeViaExcelGraph(page, sheetName, rangeA1);
+
     if (result.ok) {
       const { rows, cols } = gridDimensions(result.values);
       console.log(

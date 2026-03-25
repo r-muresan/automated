@@ -242,7 +242,9 @@ Additionally, if the extraction goal mentions a specific number of items to coll
     // Convert from screenshot pixel space to CSS pixel space
     const cssX = Math.round(coord.x / screenshotScale);
     const cssY = Math.round(coord.y / screenshotScale);
-    console.log(`[EXTRACTION] Trying coordinate (${coord.x}, ${coord.y}) at scrollTop=${coord.scrollTop} → CSS (${cssX}, ${cssY})`);
+    console.log(
+      `[EXTRACTION] Trying coordinate (${coord.x}, ${coord.y}) at scrollTop=${coord.scrollTop} → CSS (${cssX}, ${cssY})`,
+    );
 
     const result = await page.evaluate<ElementFromPointResult | null>(
       buildElementFromPointScript(cssX, cssY),
@@ -299,6 +301,8 @@ Additionally, if the extraction goal mentions a specific number of items to coll
   console.log(
     `[EXTRACTION] Combined ${allSelectors.length} selector(s), ${allElements.length} total element(s)`,
   );
+
+  console.log(allElements);
 
   const data = await structureElements({
     elements: allElements,
@@ -380,7 +384,7 @@ const COORDINATE_AGENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   },
 ];
 
-const MAX_AGENT_STEPS = 10;
+const MAX_AGENT_STEPS = 5;
 
 async function runCoordinateAgent(params: {
   stagehand: Stagehand;
@@ -496,6 +500,9 @@ Here is the current page screenshot. Select coordinates for all visible groups, 
     messages.push(assistantMessage);
 
     const toolCalls = assistantMessage.tool_calls;
+
+    console.log(toolCalls);
+
     if (!toolCalls || toolCalls.length === 0) {
       // No tool calls — agent is done
       break;
@@ -507,7 +514,21 @@ Here is the current page screenshot. Select coordinates for all visible groups, 
     for (const toolCall of toolCalls) {
       if (toolCall.type !== 'function') continue;
       const name = toolCall.function.name;
-      const args = JSON.parse(toolCall.function.arguments || '{}');
+      let args: Record<string, unknown>;
+      try {
+        args = JSON.parse(toolCall.function.arguments || '{}');
+      } catch (e) {
+        console.warn(
+          `[EXTRACTION] Malformed JSON from coordinate agent tool "${name}": ${toolCall.function.arguments}`,
+        );
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content:
+            'Error: your tool call had invalid JSON arguments. Please try again with valid JSON.',
+        });
+        continue;
+      }
 
       if (name === 'done') {
         console.log(
@@ -700,9 +721,26 @@ export async function extractWithKnownSelector(params: {
 // ── Element structuring (cleanup) ──────────────────────────────────────────
 
 /**
+ * Executes a JS parser function string against the elements array.
+ * The function receives the full elements array and must return an array of items.
+ */
+function executeParserFunction(parserCode: string, elements: ExtractedElement[]): unknown[] {
+  // The model returns a function body that takes `elements` and returns an array
+  const parserFn = new Function('elements', parserCode) as (els: ExtractedElement[]) => unknown[];
+  const result = parserFn(elements);
+  if (!Array.isArray(result)) {
+    console.warn('[EXTRACTION] Parser function did not return an array, wrapping result');
+    return [result];
+  }
+  return result;
+}
+
+/**
  * Structures raw extracted DOM elements into clean data using an LLM.
  * Single element → simple text extraction.
- * Multiple elements → batched LLM structuring with auto-detected field names.
+ * Multiple elements → the LLM can return either:
+ *   1. Direct items (JSON array) — for simple extractions
+ *   2. A JavaScript parser function — for complex/pattern-based extractions
  */
 export async function structureElements(params: {
   elements: ExtractedElement[];
@@ -718,19 +756,19 @@ export async function structureElements(params: {
     return { extraction: elements[0].innerText || elements[0].textContent };
   }
 
-  // Multiple elements: let the LLM decide the schema per item
-  const arraySchema = z.object({ items: z.array(z.record(z.string(), z.unknown())) });
+  const responseSchema = z.object({
+    mode: z.enum(['items', 'parser']),
+    items: z.array(z.record(z.string(), z.unknown())).nullable(),
+    parserFunction: z.string().nullable(),
+  });
 
-  const BATCH_SIZE = 30;
-  const allItems: unknown[] = [];
+  const BATCH_SIZE = 80;
+  const firstBatch = elements.slice(0, BATCH_SIZE);
+  const elementsSummary = firstBatch
+    .map((el, j) => `El ${j + 1}: ${el.innerText || el.textContent} (${el.href})`)
+    .join('\n');
 
-  for (let i = 0; i < elements.length; i += BATCH_SIZE) {
-    const batch = elements.slice(i, i + BATCH_SIZE);
-    const elementsSummary = batch
-      .map((el, j) => `El ${i + j + 1}: ${el.innerText || el.textContent} (${el.href})`)
-      .join('\n');
-
-    const mappingPrompt = `Extract structured data from these DOM elements.
+  const mappingPrompt = `Extract structured data from these DOM elements.
 
 Extraction goal: ${dataExtractionGoal}
 
@@ -739,20 +777,104 @@ Elements found via selector "${chosenSelector}":
 ${elementsSummary}
 ###
 
-Return a JSON object with an "items" array, where each entry is one extracted item. Choose appropriate field names based on the data (e.g. "name", "description", "url", etc.).
-Remove any elements that are not relevant to the extraction goal.`;
+Total elements: ${elements.length} (showing first ${firstBatch.length})
 
-    const mappingResponse = await llmClient.chat.completions.parse({
-      model,
-      messages: [{ role: 'user', content: mappingPrompt }],
-      response_format: zodResponseFormat(arraySchema, 'extracted_data'),
-    });
+You have two options for extracting data:
 
-    const parsed = mappingResponse.choices[0]?.message?.parsed;
-    if (parsed?.items) {
-      allItems.push(...parsed.items);
+**Option 1 - Direct items** (mode: "items"): Return the extracted items directly as a JSON array. Best for simple extractions where the data maps cleanly to fields.
+
+**Option 2 - Parser function** (mode: "parser"): Return a JavaScript function body that will parse ALL elements. Best when the data requires complex text splitting, regex, or pattern matching that would be lossy in a direct extraction.
+
+IMPORTANT: Each element is a PLAIN JavaScript object (NOT a DOM node). You CANNOT use DOM methods like querySelector, getElementsByClassName, children, closest, etc. The available fields on each element are:
+- el.innerText: string (the visible text, may contain newlines)
+- el.textContent: string (all text content)
+- el.tagName: string (e.g. "DIV", "A")
+- el.id: string
+- el.href: string (the link URL, if any)
+- el.outerHTML: string (the raw HTML of the element - use regex or string methods to parse this if you need sub-element data)
+
+The function receives an \`elements\` argument (array of these plain objects) and must return an array of item objects.
+
+Example parser function body:
+\`\`\`
+return elements.map(el => {
+  const lines = (el.innerText || '').split('\\n').filter(Boolean);
+  // To extract data from nested HTML, use regex on outerHTML:
+  const priceMatch = el.outerHTML.match(/class="price"[^>]*>([^<]+)/);
+  return { name: lines[0] || '', price: priceMatch ? priceMatch[1].trim() : '', url: el.href || '' };
+}).filter(item => item.name);
+\`\`\`
+
+Choose the approach that will produce the most accurate extraction. Remove any elements that are not relevant to the extraction goal.
+
+Return JSON with:
+- "mode": either "items" or "parser"
+- "items": (if mode is "items") array of extracted item objects with appropriate field names
+- "parserFunction": (if mode is "parser") the function body string`;
+
+  const mappingResponse = await llmClient.chat.completions.parse({
+    model,
+    messages: [{ role: 'user', content: mappingPrompt }],
+    response_format: zodResponseFormat(responseSchema, 'extracted_data'),
+  });
+
+  const parsed = mappingResponse.choices[0]?.message?.parsed;
+  if (!parsed) return null;
+
+  if (parsed.mode === 'parser' && parsed.parserFunction) {
+    console.log('[EXTRACTION] Using parser function mode');
+
+    console.log(parsed.parserFunction);
+
+    try {
+      const allItems = executeParserFunction(parsed.parserFunction, elements);
+      console.log(`[EXTRACTION] Parser function produced ${allItems.length} item(s)`);
+      return { items: allItems };
+    } catch (err) {
+      console.error('[EXTRACTION] Parser function failed, falling back to direct mode:', err);
+      // Fall through to direct items if parser fails
     }
   }
 
-  return { items: allItems };
+  // Direct items mode, or parser fallback — process in batches
+  if (parsed.mode === 'items' && parsed.items?.length) {
+    // First batch already done, process remaining batches
+    const allItems: unknown[] = [...parsed.items];
+
+    const directSchema = z.object({ items: z.array(z.record(z.string(), z.unknown())) });
+
+    for (let i = BATCH_SIZE; i < elements.length; i += BATCH_SIZE) {
+      const batch = elements.slice(i, i + BATCH_SIZE);
+      const batchSummary = batch
+        .map((el, j) => `El ${i + j + 1}: ${el.innerText || el.textContent} (${el.href})`)
+        .join('\n');
+
+      const batchPrompt = `Extract structured data from these DOM elements.
+
+Extraction goal: ${dataExtractionGoal}
+
+Elements found via selector "${chosenSelector}":
+###
+${batchSummary}
+###
+
+Return a JSON object with an "items" array, where each entry is one extracted item. Use the same field names as before.
+Remove any elements that are not relevant to the extraction goal.`;
+
+      const batchResponse = await llmClient.chat.completions.parse({
+        model,
+        messages: [{ role: 'user', content: batchPrompt }],
+        response_format: zodResponseFormat(directSchema, 'extracted_data'),
+      });
+
+      const batchParsed = batchResponse.choices[0]?.message?.parsed;
+      if (batchParsed?.items) {
+        allItems.push(...batchParsed.items);
+      }
+    }
+
+    return { items: allItems };
+  }
+
+  return null;
 }

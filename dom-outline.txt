@@ -1,351 +1,271 @@
-<body.a-m-us.a-aui_72554-c.a-aui_template_weblab_cache_333406-c>
-  <div#a-page>
-    <img>
-    <a#nav-top>
-    <nav#shortcut-menu.nav-assistant[role=navigation]>
-      <h2#nav-assistant-links-heading.nav-assistant-heading.nav-assistant-headers-font> "Skip to"
-      <ul.nav-assistant-links-container>
-        <li.nav-assistant-list-item>
-          <a#nav-assist-skip-to-main-content.nav-assistant-link.nav-assistant-menu-item.nav-assistant-link-item[href="#skippedLink"]> "Main content"
-        <li.nav-assistant-list-item>
-          <a#nav-assist-skip-to-results.nav-assistant-link.nav-assistant-menu-item.nav-assistant-link-item[href=".s-asin a:has(h2)"]> "Results"
-        <li.nav-assistant-list-item>
-          <a#nav-assist-skip-to-filters.nav-assistant-link.nav-assistant-menu-item.nav-assistant-link-item[href="#s-refinements > div.a-section > div:first-child"]> "Filters"
-        <li.nav-assistant-list-item>
-          <button#nav-assist-skip-to-filter-sidebar.nav-assistant-link.nav-assistant-menu-item.nav-assistant-link-item> "Filters"
-      <hr.nav-assistant-separator>
-      <h2#nav-assist-shortcuts-heading.nav-assistant-heading.nav-assistant-headers-font.font-color> "Keyboard shortcuts"
-      <ul#nav-assist-shortcuts-container.keyboard-shortcuts-list-container>
-        <li.nav-assistant-list-item>
-          <a#nav-assist-search.nav-assistant-menu-item.nav-assistant-link-item.nav-assistant-keyboard-shortcut-item[role=link][href="javascript:void(0)"]>
-            <div.keyboard-shortcut-container>
-              <span.shortcut-name.nav-assistant-card-font> "Search"
-              <div.shortcut-keys-container>
-                <span.shortcut-key.nav-assistant-card-font.font-color> "alt"
-                <span.plus-sign-color> "+"
-                <span.shortcut-key.nav-assistant-card-font.font-color> "/"
-        <li.nav-assistant-list-item>
-          <a#nav-assist-cart.nav-assistant-menu-item.nav-assistant-link-item.nav-assistant-keyboard-shortcut-item[role=link][href="javascript:void(0)"]>
-            <div.keyboard-shortcut-container>
-              <span.shortcut-name.nav-assistant-card-font> "Cart"
-              <div.shortcut-keys-container>
-                <span.shortcut-key.nav-assistant-card-font.font-color> "shift"
-                <span.plus-sign-color> "+"
-                <span.shortcut-key.nav-assistant-card-font.font-color> "alt"
-                <span.plus-sign-color> "+"
-                <span.shortcut-key.nav-assistant-card-font.font-color> "C"
-        <li.nav-assistant-list-item>
-          <a#nav-assist-home.nav-assistant-menu-item.nav-assistant-link-item.nav-assistant-keyboard-shortcut-item[role=link][href="javascript:void(0)"]>
-            <div.keyboard-shortcut-container>
-              <span.shortcut-name.nav-assistant-card-font> "Home"
-              <div.shortcut-keys-container>
-                <span.shortcut-key.nav-assistant-card-font.font-color> "shift"
-                <span.plus-sign-color> "+"
-                <span.shortcut-key.nav-assistant-card-font.font-color> "alt"
-                <span.plus-sign-color> "+"
-                <span.shortcut-key.nav-assistant-card-font.font-color> "H"
-        <li.nav-assistant-list-item>
-          <a#nav-assist-your-orders.nav-assistant-menu-item.nav-assistant-link-item.nav-assistant-keyboard-shortcut-item[role=link][href="javascript:void(0)"]>
-            <div.keyboard-shortcut-container>
-              <span.shortcut-name.nav-assistant-card-font> "Orders"
-              <div.shortcut-keys-container>
-                <span.shortcut-key.nav-assistant-card-font.font-color> "shift"
-                <span.plus-sign-color> "+"
-                <span.shortcut-key.nav-assistant-card-font.font-color> "alt"
-                <span.plus-sign-color> "+"
-                <span.shortcut-key.nav-assistant-card-font.font-color> "O"
-        <li.nav-assistant-list-item>
-          <button#nav-assist-show-shortcuts.nav-assistant-menu-item.nav-assistant-link-item.nav-assistant-keyboard-shortcut-item[role=button]>
-            <div.keyboard-shortcut-container>
-              <span.shortcut-name.nav-assistant-card-font> "Show/Hide shortcuts"
-              <div.shortcut-keys-container>
-                <span.shortcut-key.nav-assistant-card-font.font-color> "shift"
-                <span.plus-sign-color> "+"
-                <span.shortcut-key.nav-assistant-card-font.font-color> "alt"
-                <span.plus-sign-color> "+"
-                <span.shortcut-key.nav-assistant-card-font.font-color> "Z"
-      <div#nav-assist-shortcut-help>
-        <div.shortcut-help-container>
-          <div.shortcut-help-item-container>
-            <div.icon-container>
-              <i.a-icon.a-icon-info.a-icon-mini>
-            <div.help-text-container>
-              <span.shortcut-help-text.font-color> "To move between items, use your keyboard's up or down arrows..."
-    <header#navbar-main.nav-opt-sprite.nav-flex.nav-locale-us>
-      <div#navbar.nav-sprite-v1.celwidget.nav-bluebeacon[role=navigation]>
-        <div#nav-belt>
-          <div.nav-left>
-            <div#nav-logo>
-              <a#nav-logo-sprites.nav-logo-link.nav-progressive-attribute[href="/ref=nav_logo"]>
-                <span.nav-sprite.nav-logo-base>
-                <span#logo-ext.nav-sprite.nav-logo-ext.nav-progressive-content>
-                <span.nav-logo-locale> ".us"
-            <div#nav-global-location-slot>
-              <span#nav-global-location-data-modal-action.a-declarative.nav-progressive-attribute>
-                <a#nav-global-location-popover-link.nav-a.nav-a-2.a-popover-trigger[role=button]>
-              <input#unifiedLocation1ClickAddress.nav-progressive-attribute>
-              <input#ubbShipTo.nav-progressive-attribute>
-              <input#glowValidationToken.nav-progressive-attribute>
-              <input#glowDestinationType.nav-progressive-attribute>
-            <div#nav-global-location-toaster-script-container.nav-progressive-content>
-          <div#nav-fill-search.nav-fill>
-            <div#nav-search>
-              <div#nav-bar-left>
-              <form#nav-search-bar-form.nav-searchbar.nav-progressive-attribute[role=search]>
-                <div.nav-left>
-                <div.nav-fill>
-                <div.nav-right>
-          <div.nav-right>
-            <div#nav-tools.layoutToolbarPadding>
-              <div#icp-nav-flyout.nav-div>
-                <a.nav-a.nav-a-2.icp-link-style-2[href="/customer-preferences/edit?ie=UTF8&preferencesReturnUrl=%2F&"]>
-                <button.nav-flyout-button.nav-icon.nav-arrow>
-              <div#nav-link-accountList.nav-div>
-                <a.nav-a.nav-a-2.nav-progressive-attribute[href="https://www.amazon.com/ap/signin?openid.pape.max_auth_age=0&"]>
-                <button.nav-flyout-button.nav-icon.nav-arrow>
-              <a#nav-orders.nav-a.nav-a-2.nav-progressive-attribute[href="/gp/css/order-history?ref_=nav_orders_first"]>
-                <span.nav-line-1> "Returns"
-                <span.nav-line-2> "& Orders"
-              <a#nav-cart.nav-a.nav-a-2.nav-progressive-attribute[href="/gp/cart/view.html?ref_=nav_cart"]>
-                <div#nav-cart-count-container>
-                <div#nav-cart-text-container.nav-progressive-attribute>
-        <div#nav-flyout-iss-anchor>
-          <div#nav-flyout-searchAjax.nav-issFlyout.nav-flyout[role=dialog]>
-            <div.nav-template.nav-flyout-content>
-            <div#sac-autocomplete-results-container.autocomplete-results-container[role=grid]>
-              <div.two-pane-results-container[role=rowgroup]>
-                <div.left-pane-results-container>
-                <div.right-pane-results-container>
-            <div.status-message-container[role=status]>
-        <div#nav-flyout-anchor>
-          <div.nav-ewc-arrow>
-          <div#nav-flyout-amazonprime.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-accountList.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content>
-              <div#nav-al-container>
-                <div#nav-al-signin>
-                <div#nav-al-wishlist.nav-al-column.nav-tpl-itemList.nav-flyout-content>
-                <div#nav-al-your-account.nav-al-column.nav-template.nav-flyout-content>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-amazonfresh.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-groceries.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-transientFlyout.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-health.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-pharmacy.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-giftCards.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-creditCBCC.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-creditPLCCStore.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-creditPLCCSecured.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-books.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-abAcquisition.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-abActivation.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-abAccountLink.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-abCatAcquisition.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-abCatActivation.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-abCatAccountLink.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-abCatShuma.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-abCatClaimedDomain.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-abCatPendingInvitation.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-icp.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-          <div#nav-flyout-icp-footer-flyout.nav-coreFlyout.nav-flyout[role=dialog]>
-            <div.nav-arrow>
-              <div.nav-arrow-inner>
-            <div.nav-template.nav-flyout-content.nav-spinner>
-            <div.nav-flyout-buffer-left>
-            <div.nav-flyout-buffer-right>
-            <div.nav-flyout-buffer-top>
-            <div.nav-flyout-buffer-bottom>
-        <div#nav-belt-search.nav-fill>
-        <div#nav-main.nav-sprite>
-          <div.nav-left>
-            <a#nav-hamburger-menu[role=button][href="javascript: void(0)"]>
-              <i.hm-icon.nav-sprite>
-              <span.hm-icon-label> "All"
-            <div#nav-shop>
-          <div.nav-fill>
-            <div#nav-xshop-container>
-              <div#nav-xshop.nav-progressive-content>
-                <ul.nav-ul>
-          <div.nav-right>
-            <div#nav-swmslot>
-        <div#nav-subnav-toaster>
-        <div#nav-progressive-subnav>
-        <div#nav-flyout-ewc.nav-ewc-lazy-align.nav-ewcFlyout.nav-flyout[role=dialog]>
-          <div.nav-flyout-body.ewc-beacon>
-            <div.nav-ewc-content>
-          <div.nav-template.nav-flyout-content>
-    <a#skippedLink>
-    <link[href="https://m.media-amazon.com/images/I/21ydRHxh2JL._RC|21TR7G9c"]>
-    <link[href="https://m.media-amazon.com/images/I/11K9AUMQo9L.css?AUIClien"]>
-    <!-- +20 more -->
-  <div.brand-follow-tooltip-root>
-  <div#a-popover-root>
-  <div#amzn-nv-flyout-healthy-choice> "Test: amzn-nv-flyout-healthy-choice"
-  <div#nav-rufus-disc-txt> "Test: nav-rufus-disc-txt"
-  <div#a-truncate-cut> "Test: a-truncate-cut"
-  <div#sp-cc-wrapper> "Test: sp-cc-wrapper"
-  <div.mo-wp> "Test: .mo-wp"
-  <div.a-image-container> "Test: .a-image-container"
-  <div#sp-cc> "Test: sp-cc"
-  <div.amzn-box-inner> "Test: .amzn-box-inner"
-  <div.js-order-card> "Test: .js-order-card"
-  <div#pldn-deep-link> "Test: pldn-deep-link"
-  <div#add-to-cart-btn> "Test: add-to-cart-btn"
-  <div#amzn-nav-app-banner-container> "Test: amzn-nav-app-banner-container"
-  <div.sparkle-container> "Test: .sparkle-container"
+<body>
+  <span>
+    <link[href="https://www.youtube.com/channel/UCHnyfMqiRRG1u-2MsSQLbXA"]>
+    <link>
+  <span>
+    <span>
+      <meta>
+      <span>
+        <meta>
+  <link[href="https://yt3.googleusercontent.com/7vCbvtCqtjQ3YLgsJt7Y952MQV"]>
+  <span>
+    <link[href="https://yt3.googleusercontent.com/7vCbvtCqtjQ3YLgsJt7Y952MQV"]>
+    <meta>
+    <meta>
+  <meta>
+  <meta>
+  <link[href="android-app://com.google.android.youtube/http/www.youtube.co"]>
+  <link[href="ios-app://544007664/vnd.youtube/www.youtube.com/channel/UCHn"]>
+  <ytd-app>
+    <yt-guide-manager#guide-service.style-scope.ytd-app>
+    <yt-mdx-manager.style-scope.ytd-app>
+    <yt-playlist-manager.style-scope.ytd-app>
+    <yt-hotkey-manager.style-scope.ytd-app>
+    <ytd-miniplayer.ytdMiniplayerComponentHost>
+      <div.ytdMiniplayerComponentContent>
+        <yt-draggable.ytDraggableComponentHost.ytdMiniplayerComponentDraggable>
+          <ytd-miniplayer-info-bar.ytdMiniplayerInfoBarHost>
+            <div.ytdMiniplayerInfoBarContent>
+              <h1.ytdMiniplayerInfoBarTitle>
+              <div.ytdMiniplayerInfoBarSubtitle>
+                <h1>
+      <div.ytdMiniplayerComponentResizers>
+        <yt-draggable.ytDraggableComponentHost.ytdMiniplayerComponentResizer.ytdMiniplayerComponentResizerNorth>
+          <div.ytdMiniplayerComponentResizerCorner.ytdMiniplayerComponentResizerNorthCorner>
+        <yt-draggable.ytDraggableComponentHost.ytdMiniplayerComponentResizer.ytdMiniplayerComponentResizerDisabled>
+          <div.ytdMiniplayerComponentResizerCorner.ytdMiniplayerComponentResizerEastCorner>
+        <yt-draggable.ytDraggableComponentHost.ytdMiniplayerComponentResizer.ytdMiniplayerComponentResizerDisabled>
+          <div.ytdMiniplayerComponentResizerCorner.ytdMiniplayerComponentResizerSouthCorner>
+        <yt-draggable.ytDraggableComponentHost.ytdMiniplayerComponentResizer.ytdMiniplayerComponentResizerWest>
+          <div.ytdMiniplayerComponentResizerCorner.ytdMiniplayerComponentResizerWestCorner>
+    <div#content.style-scope.ytd-app>
+      <div#frosted-glass.none.style-scope.ytd-app>
+      <div#masthead-container.style-scope.ytd-app>
+        <ytd-masthead#masthead.masthead-finish[role=banner]>
+          <iron-media-query.style-scope.ytd-masthead>
+          <div#ticker.style-scope.ytd-masthead>
+          <div#interstitial.style-scope.ytd-masthead>
+          <div#background.style-scope.ytd-masthead>
+          <div#container.style-scope.ytd-masthead>
+            <div#start.style-scope.ytd-masthead>
+              <yt-icon-button#back-button.style-scope.ytd-masthead>
+                <button#button.style-scope.yt-icon-button>
+                <yt-interaction#interaction.circular.style-scope.yt-icon-button>
+              <tp-yt-paper-tooltip#back-button-tooltip.style-scope.ytd-masthead> "Back"
+              <yt-icon-button#guide-button.style-scope.ytd-masthead>
+                <button#button.style-scope.yt-icon-button>
+                <yt-interaction#interaction.circular.style-scope.yt-icon-button>
+              <ytd-topbar-logo-renderer#logo.style-scope.ytd-masthead>
+                <a#logo.yt-simple-endpoint.style-scope.ytd-topbar-logo-renderer[href="/"]>
+                <span#country-code.style-scope.ytd-topbar-logo-renderer>
+              <div#skip-navigation.style-scope.ytd-masthead>
+                <ytd-button-renderer.style-scope.ytd-masthead>
+            <div#center.style-scope.ytd-masthead>
+              <yt-searchbox.ytSearchboxComponentHost.ytSearchboxComponentDesktop.ytd-masthead[role=search]>
+                <div.ytSearchboxComponentInputContainer>
+                <div#i0.ytSearchboxComponentSuggestionsContainer.ytSearchboxComponentSuggestionsContainerScrollable[role=listbox]>
+              <yt-icon-button#search-button-narrow.style-scope.ytd-masthead>
+                <button#button.style-scope.yt-icon-button>
+                <yt-interaction#interaction.circular.style-scope.yt-icon-button>
+              <div#voice-search-button.style-scope.ytd-masthead>
+                <ytd-button-renderer.style-scope.ytd-masthead>
+              <div#ai-companion-button.style-scope.ytd-masthead>
+            <div#end.style-scope.ytd-masthead>
+              <div#masthead-skeleton-icons>
+                <div.masthead-skeleton-icon>
+                <div.masthead-skeleton-icon>
+                <div.masthead-skeleton-icon>
+              <div#buttons.style-scope.ytd-masthead>
+                <ytd-button-renderer.style-scope.ytd-masthead>
+                <ytd-notification-topbar-button-renderer.style-scope.ytd-masthead>
+                <ytd-topbar-menu-button-renderer.style-scope.ytd-masthead>
+      <tp-yt-app-drawer#guide.style-scope.ytd-app[role=navigation]>
+        <div#scrim.style-scope.tp-yt-app-drawer>
+        <div#contentContainer.style-scope.tp-yt-app-drawer>
+          <div#guide-wrapper.style-scope.ytd-app>
+            <div#guide-spacer.style-scope.ytd-app>
+            <div#guide-content.style-scope.ytd-app>
+              <div#header.style-scope.ytd-app>
+                <yt-icon-button#guide-button.style-scope.ytd-app>
+                <ytd-topbar-logo-renderer.style-scope.ytd-app>
+              <div#guide-inner-content.style-scope.ytd-app>
+                <dom-if.style-scope.ytd-app>
+      <ytd-mini-guide-renderer.style-scope.ytd-app[role=navigation]>
+        <div#items.style-scope.ytd-mini-guide-renderer>
+          <ytd-mini-guide-entry-renderer.style-scope.ytd-mini-guide-renderer>
+            <a#endpoint.yt-simple-endpoint.style-scope.ytd-mini-guide-entry-renderer[href="/"]>
+              <yt-icon#icon.guide-icon.style-scope.ytd-mini-guide-entry-renderer>
+                <span.yt-icon-shape.style-scope.yt-icon>
+              <span.title.style-scope.ytd-mini-guide-entry-renderer> "Home"
+              <tp-yt-paper-tooltip.style-scope.ytd-mini-guide-entry-renderer[role=tooltip]>
+                <div#tooltip.hidden.style-scope.tp-yt-paper-tooltip> "Home"
+              <yt-interaction.style-scope.ytd-mini-guide-entry-renderer>
+                <div.stroke.style-scope.yt-interaction>
+                <div.fill.style-scope.yt-interaction>
+            <span.style-scope.ytd-mini-guide-entry-renderer>
+              <button#ally-menu-button.ally-menu-button.style-scope.ytd-mini-guide-entry-renderer>
+          <ytd-mini-guide-entry-renderer.style-scope.ytd-mini-guide-renderer>
+            <a#endpoint.yt-simple-endpoint.style-scope.ytd-mini-guide-entry-renderer[href="/shorts/"]>
+              <yt-icon#icon.guide-icon.style-scope.ytd-mini-guide-entry-renderer>
+                <span.yt-icon-shape.style-scope.yt-icon>
+              <span.title.style-scope.ytd-mini-guide-entry-renderer> "Shorts"
+              <tp-yt-paper-tooltip.style-scope.ytd-mini-guide-entry-renderer[role=tooltip]>
+                <div#tooltip.hidden.style-scope.tp-yt-paper-tooltip> "Shorts"
+              <yt-interaction.style-scope.ytd-mini-guide-entry-renderer>
+                <div.stroke.style-scope.yt-interaction>
+                <div.fill.style-scope.yt-interaction>
+            <span.style-scope.ytd-mini-guide-entry-renderer>
+              <button#ally-menu-button.ally-menu-button.style-scope.ytd-mini-guide-entry-renderer>
+          <ytd-mini-guide-entry-renderer.style-scope.ytd-mini-guide-renderer>
+            <a#endpoint.yt-simple-endpoint.style-scope.ytd-mini-guide-entry-renderer[href="/feed/subscriptions"]>
+              <yt-icon#icon.guide-icon.style-scope.ytd-mini-guide-entry-renderer>
+                <span.yt-icon-shape.style-scope.yt-icon>
+              <span.title.style-scope.ytd-mini-guide-entry-renderer> "Subscriptions"
+              <tp-yt-paper-tooltip.style-scope.ytd-mini-guide-entry-renderer[role=tooltip]>
+                <div#tooltip.hidden.style-scope.tp-yt-paper-tooltip> "Subscriptions"
+              <yt-interaction.style-scope.ytd-mini-guide-entry-renderer>
+                <div.stroke.style-scope.yt-interaction>
+                <div.fill.style-scope.yt-interaction>
+            <span.style-scope.ytd-mini-guide-entry-renderer>
+              <button#ally-menu-button.ally-menu-button.style-scope.ytd-mini-guide-entry-renderer>
+          <ytd-mini-guide-entry-renderer.style-scope.ytd-mini-guide-renderer>
+            <a#endpoint.yt-simple-endpoint.style-scope.ytd-mini-guide-entry-renderer[href="/feed/you"]>
+              <yt-icon#icon.guide-icon.style-scope.ytd-mini-guide-entry-renderer>
+                <span.yt-icon-shape.style-scope.yt-icon>
+              <span.title.style-scope.ytd-mini-guide-entry-renderer> "You"
+              <tp-yt-paper-tooltip.style-scope.ytd-mini-guide-entry-renderer[role=tooltip]>
+                <div#tooltip.hidden.style-scope.tp-yt-paper-tooltip> "You"
+              <yt-interaction.style-scope.ytd-mini-guide-entry-renderer>
+                <div.stroke.style-scope.yt-interaction>
+                <div.fill.style-scope.yt-interaction>
+            <span.style-scope.ytd-mini-guide-entry-renderer>
+              <button#ally-menu-button.ally-menu-button.style-scope.ytd-mini-guide-entry-renderer>
+      <ytd-page-manager#page-manager.style-scope.ytd-app>
+        <ytd-browse.style-scope.ytd-page-manager>
+          <div#alert-banner.style-scope.ytd-browse>
+          <div#personal-greeting.style-scope.ytd-browse>
+          <div#masthead-ad.style-scope.ytd-browse>
+          <div#header.style-scope.ytd-browse>
+            <ytd-tabbed-page-header.style-scope.ytd-browse.grid>
+              <tp-yt-app-header-layout.style-scope.ytd-tabbed-page-header>
+                <div#wrapper.style-scope.tp-yt-app-header-layout>
+              <ps-dom-if.style-scope.ytd-tabbed-page-header>
+                <template>
+              <ps-dom-if.style-scope.ytd-tabbed-page-header>
+                <template>
+          <div#alerts.style-scope.ytd-browse>
+          <ytd-channel-legal-info-renderer.style-scope.ytd-browse>
+            <yt-formatted-string#text.style-scope.ytd-channel-legal-info-renderer>
+              <yt-attributed-string>
+            <tp-yt-paper-material#expand-button.style-scope.ytd-channel-legal-info-renderer>
+              <yt-icon-button.style-scope.ytd-channel-legal-info-renderer>
+                <button#button.style-scope.yt-icon-button>
+                <yt-interaction#interaction.circular.style-scope.yt-icon-button>
+          <ytd-playlist-sidebar-renderer.style-scope.ytd-browse>
+            <div#items.style-scope.ytd-playlist-sidebar-renderer>
+          <ytd-playlist-header-renderer.style-scope.ytd-browse>
+          <ytd-settings-sidebar-renderer.style-scope.ytd-browse>
+            <div#title.style-scope.ytd-settings-sidebar-renderer>
+            <div#items.style-scope.ytd-settings-sidebar-renderer>
+          <dom-if.style-scope.ytd-browse>
+            <template>
+          <ytd-two-column-browse-results-renderer.style-scope.ytd-browse.grid>
+            <div#primary.style-scope.ytd-two-column-browse-results-renderer>
+              <ytd-rich-grid-renderer.style-scope.ytd-two-column-browse-results-renderer>
+                <div#header.style-scope.ytd-rich-grid-renderer>
+                <div#big-yoodle.style-scope.ytd-rich-grid-renderer>
+                <div#masthead-ad.style-scope.ytd-rich-grid-renderer>
+                <div#title-container.style-scope.ytd-rich-grid-renderer>
+                <div#contents.style-scope.ytd-rich-grid-renderer>
+                  <!-- +31 more -->
+                <div#reload-content.style-scope.ytd-rich-grid-renderer>
+            <div#secondary.style-scope.ytd-two-column-browse-results-renderer>
+          <div#survey.style-scope.ytd-browse>
+          <div#metadata.style-scope.ytd-browse>
+            <ytd-channel-metadata-renderer.style-scope.ytd-browse>
+              <ps-dom-if.style-scope.ytd-channel-metadata-renderer>
+                <template>
+              <img.style-scope.ytd-channel-metadata-renderer>
+              <ps-dom-if.style-scope.ytd-channel-metadata-renderer>
+                <template>
+          <div#footer.style-scope.ytd-browse>
+          <ytd-refresh#refresh.style-scope.ytd-browse>
+            <yt-icon#icon.style-scope.ytd-refresh>
+              <span.yt-icon-shape.style-scope.yt-icon>
+                <div>
+            <tp-yt-paper-spinner-lite.style-scope.ytd-refresh>
+              <div#spinnerContainer.style-scope.tp-yt-paper-spinner-lite>
+                <div.spinner-layer.style-scope.tp-yt-paper-spinner-lite>
+        <ytd-watch-flexy.style-scope.ytd-page-manager.watch-root-element[role=main]>
+          <iron-media-query#two-column-query.style-scope.ytd-watch-flexy>
+          <iron-media-query#small-window-query.style-scope.ytd-watch-flexy>
+          <iron-media-query#large-window-query.style-scope.ytd-watch-flexy>
+          <div#microformat.style-scope.ytd-watch-flexy>
+            <player-microformat-renderer.playerMicroformatRendererHost>
+          <div#full-bleed-container.style-scope.ytd-watch-flexy>
+            <div#player-full-bleed-container.style-scope.ytd-watch-flexy>
+              <div.player-container-background.style-scope.ytd-watch-flexy>
+                <ytd-thumbnail.player-container-background-image.style-scope.ytd-watch-flexy>
+              <div#cinematics-full-bleed-container.style-scope.ytd-watch-flexy>
+            <div#panels-full-bleed-container.style-scope.ytd-watch-flexy>
+          <div#single-column-container.style-scope.ytd-watch-flexy>
+          <div#columns.style-scope.ytd-watch-flexy>
+            <div#primary.style-scope.ytd-watch-flexy>
+              <div#primary-inner.style-scope.ytd-watch-flexy>
+                <div#player.style-scope.ytd-watch-flexy>
+                <div#below.style-scope.ytd-watch-flexy>
+            <div#secondary.style-scope.ytd-watch-flexy>
+              <div#secondary-split-scroll-spacer.style-scope.ytd-watch-flexy>
+              <div#secondary-inner.style-scope.ytd-watch-flexy>
+                <div#panels.style-scope.ytd-watch-flexy>
+                <ytd-playlist-panel-renderer#playlist.style-scope.ytd-watch-flexy>
+                <div#chat-container.style-scope.ytd-watch-flexy>
+                <div#persistent-panel-container.style-scope.ytd-watch-flexy>
+                <div#donation-shelf.style-scope.ytd-watch-flexy>
+                <div#related.style-scope.ytd-watch-flexy>
+          <div#survey.style-scope.ytd-watch-flexy>
+          <div#engagement-panel-scrim.style-scope.ytd-watch-flexy>
+      <div#persistent-panel-container.style-scope.ytd-app>
+    <ytd-permission-role-bottom-bar-renderer.style-scope.ytd-app>
+      <div.pom-role-text.style-scope.ytd-permission-role-bottom-bar-renderer>
+        <yt-formatted-string.style-scope.ytd-permission-role-bottom-bar-renderer>
+          <yt-attributed-string>
+    <ytd-popup-container.style-scope.ytd-app>
+    <ytd-third-party-manager.style-scope.ytd-app>
+    <snackbar-container.ytSnackbarContainerHost>
+    <div#video-preview.style-scope.ytd-app>
+      <ytd-video-preview.style-scope.ytd-app>
+        <div#video-preview-container.style-scope.ytd-video-preview>
+          <div#media-container.style-scope.ytd-video-preview>
+            <a#media-container-link.yt-simple-endpoint.style-scope.ytd-video-preview>
+              <div#thumbnail-container.style-scope.ytd-video-preview>
+                <ytd-thumbnail.style-scope.ytd-video-preview>
+              <div#player-container-wrapper.style-scope.ytd-video-preview>
+                <div#player-container.style-scope.ytd-video-preview>
+              <div#overlays.style-scope.ytd-video-preview>
+            <div#player-controls.style-scope.ytd-video-preview>
+              <yt-inline-player-controls.style-scope.ytd-video-preview>
+              <dom-if.style-scope.ytd-video-preview>
+                <template>
+            <div#metadata.style-scope.ytd-video-preview>
+    <yt-ephemeral-actions.ytEphemeralActionsHost>
+    <yt-tooltip.ytTooltipContainerHost>
+      <yt-popover.ytPopoverComponentHost.ytPopoverComponentHostSeeThrough>
+    <dom-if.style-scope.ytd-app>
+      <template>
+    <yt-page-navigation-progress.style-scope.ytd-app>
+      <div#progress.style-scope.yt-page-navigation-progress>
+  <iron-iconset-svg>
+  <iron-iconset-svg>
+  <iron-iconset-svg>
+  <iron-iconset-svg>
+  <iron-iconset-svg>
+  <iron-iconset-svg>
+  <iron-iconset-svg>
+  <iron-iconset-svg>
+  <iron-iconset-svg>
+  <iron-iconset-svg>
+  <!-- +26 more -->
 
-<!-- IFRAME: iframe -->
-<body.a-meter-animate>
-  <div#a-popover-root>
+<!-- IFRAME: about:blank -->
+<body>
