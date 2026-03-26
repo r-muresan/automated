@@ -1,104 +1,1079 @@
-<body>
-  <div#lei>
-    <nav.top-nav-bar[role=navigation]>
-      <div.desktop-menu>
-        <div.container>
-          <a.logo[href="https://www.gleif.org/"]>
-            <img>
-          <a.nav-item.default-bold[href="https://www.gleif.org//en/lei-data/lei-search/about-lei-sear"]> "How to use"
-          <a.nav-item.default-bold[href="https://www.gleif.org//en/lei-data/challenge-lei-data"]> "Challenge LEI Data"
-          <a.nav-item.default-bold[href="https://www.gleif.org//en/lei-data/access-and-use-lei-data"]> "About LEI Data"
-          <div.auth-control>
-            <a.auth-control__register.default-bold[href="https://challengemanagement.gleif.org/register"]> "Register"
-            <button.lei-btn.auth-control__login.cyprus> "Login"
-      <div.mobile-menu>
-        <div.container>
-          <div.navbar-header>
-            <div.burger-menu>
-              <div.burger-bar>
-              <div.burger-bar>
-              <div.burger-bar>
-            <a.logo[href="https://www.gleif.org/"]>
-              <img>
-            <div.navbar-header__control>
-              <div.auth-control>
-                <a.auth-control__register.default-bold[href="https://challengemanagement.gleif.org/register"]> "Register"
-                <button.lei-btn.auth-control__login.cyprus> "Login"
-    <main>
-      <div.page.details-page>
-        <div.wrapper>
-          <div.lei-popover-box.container>
-            <div.go-back>
-              <i.arrow.el-icon-arrow-left>
-              <a.link> "Back to search results"
-          <section.container>
-            <div.header.simple>
-              <div.title-block>
-                <div.lei-popover-box>
-              <div.lei-toggle>
-                <div.lei-toggle__container>
-          <section.title-section.container>
-            <div.lei-popover-box>
-              <div.title-block>
-                <h2.title> "BERKSHIRE HATHAWAY INC."
-                <div.conformity>
-                <small.publish-date> "as of 2026-03-25 04:00:00-04:00"
-                <p.country> "United States of America"
-          <div.container>
-            <div.lei-tabs.el-tabs.el-tabs--card>
-              <div.el-tabs__header.is-top>
-                <div.el-tabs__nav-wrap.is-top>
-              <div.el-tabs__content>
-                <div#pane-record.el-tab-pane[role=tabpanel]>
-                <div#pane-record_modifications.el-tab-pane[role=tabpanel]>
-                <div#pane-show_xml.el-tab-pane[role=tabpanel]>
-                <div#pane-verifiable_credentials.el-tab-pane[role=tabpanel]>
-        <div>
-        <div.side-bar>
-          <div.toggle>
-            <i.el-icon-d-arrow-left>
-          <div.panel>
-            <div.blocks>
-              <div.panel-block.dark>
-                <div.header>
-                <div.content>
-                <div.footer>
-    <footer.nav-footer>
-      <ul.nav>
-        <li.nav-item>
-          <a.item-link[href="https://www.gleif.org//en/meta/imprint"]> "Imprint"
-          <i.dots> "·"
-        <li.nav-item>
-          <a.item-link[href="https://www.gleif.org//en/meta/terms"]> "Terms"
-          <i.dots> "·"
-        <li.nav-item>
-          <a.item-link[href="https://www.gleif.org//en/meta/lei-data-terms-of-use"]> "LEI Data Terms of Use"
-          <i.dots> "·"
-        <li.nav-item>
-          <a.item-link[href="https://www.gleif.org//en/meta/privacy-policy"]> "Privacy Policy"
-          <i.dots> "·"
-        <li.nav-item>
-          <a.item-link[href="https://www.gleif.org//en/meta/cookies"]> "Cookies"
-          <i.dots> "·"
-        <li.nav-item>
-          <a.item-link[href="https://www.gleif.org//en/meta/sitemap"]> "Sitemap"
-    <div>
-  <iframe[role=presentation]>
-  <iframe[role=presentation]>
-  <div>
-    <div.grecaptcha-badge>
-      <div.grecaptcha-logo>
-        <iframe[role=presentation]>
-      <div.grecaptcha-error>
-      <textarea#g-recaptcha-response-100000.g-recaptcha-response>
-      <div.cm-addon.cm-addon-recaptcha>
-        <div.cm-addon-inner>
-          <img.cm-addon-icon>
-          <span> "Ready!"
-    <iframe>
+Back
+[button: Skip navigation]
+[form]
+  [input:text placeholder="Search"]
+[button: Search]
+Search with your voice
+[button: Create]
+Notifications
+Why are these 3 letters on almost all of my zippers?
+[button: Tap to unmute]
+2x
+[button: Why are these 3 letters on almost all of my zippers?Veritasium   5,715,070 views]
+Includes paid promotion (https://support.google.com/youtube?p=ppp&nohelpkit=1)
+[button: Search]
+[button: Copy link]
+[button: InfoShopping]
+If playback doesn't begin shortly, try restarting your device.
+•
+You're signed out
+Videos you watch may be added to the TV's watch history and influence TV recomme
+[button: Cancel]
+[button: Confirm]
+And because it runs 24/7,
+Up next
+LiveUpcoming
+[button: Cancel]
+Play Now
+Veritasium (https://www.youtube.com/channel/UCHnyfMqiRRG1u-2MsSQLbXA)
+An element of truth - videos about science, education, and anything else we find
+How Pressure Can Come From *Nothing*1:15 (https://www.youtube.com/watch?v=zP5uhMpH4mE)
+Veritasium Newsletter
+veritasium.com
+Sign up (https://www.youtube.com/redirect?event=endscreen&redir_token)
+[button: Hide]
+  ... +6 more items
+## Why are these 3 letters on almost all of my zippers?
+Veritasium (/@veritasium)
+Veritasium
+20.5M subscribers
+[button: Subscribe]
+[button: Subscribed]
+[button: 173K]
+[button: Share]
+[button: Ask]
+[button: Save]
+5,715,070 views
+Mar 19, 2026
+How do zippers work? Sponsored by Hostinger. Host OpenClaw on a Hostinger VPS pl
+https://www.hostinger.com/veritasiumo... (https://www.youtube.com/redirect?event=video_description&red)
+- and use code 'veritasium' for an extra discount.
 
-<!-- IFRAME: __uspapiLocator -->
-<body>
+If you’re looking for a mole
+https://ve42.co/SnatomsV (https://www.youtube.com/redirect?event=video_description&red)
+Sign up for the Veritasium newsletter for weekly science updates -
+https://ve42.co/Newsletter (https://www.youtube.com/redirect?event=video_description&red)
+▀▀▀
+A huge thank you to Prof. Robert Friedel for his invaluable expertise and co
+http://ve42.co/friedel-zipper (https://www.youtube.com/redirect?event=video_description&red)
+Massive thanks to IPFL for fabricating our giant zipper -
+https://ve42.co/ipfl-fabrication (https://www.youtube.com/redirect?event=video_description&red)
+A huge thank you to Emily Zhang for her advice on how to best structure this sto
+‪@rabbithole_video‬ (/@rabbithole_video)
+The giant zipper was adapted from an original design by LoboCNC -
+https://ve42.co/fidget-zipper (https://www.youtube.com/redirect?event=video_description&red)
+We’d also like to thank everyone at YKK who helped organise our call, especially
+0:00 (/watch?v=9szhjhO9epA)
+The First Zipper
+2:51 (/watch?v=9szhjhO9epA&t=171s)
+Who invented the zipper?
+4:20 (/watch?v=9szhjhO9epA&t=260s)
+How does a zipper work?
+5:51 (/watch?v=9szhjhO9epA&t=351s)
+The Zipper Maker Machine
+7:46 (/watch?v=9szhjhO9epA&t=466s)
+Why is it called a zipper?
+9:32 (/watch?v=9szhjhO9epA&t=572s)
+The Novelty Of A Zipper
+12:57 (/watch?v=9szhjhO9epA&t=777s)
+The Most Popular Zipper Doesn’t Have Teeth
+14:08 (/watch?v=9szhjhO9epA&t=848s)
+  ... +7 more items
+How do zippers work? Sponsored by Hostinger. Host OpenClaw on a Hostinger VPS pl
+https://www.hostinger.com/veritasiumo... (https://www.youtube.com/redirect?event=video_description&red)
+- and use code 'veritasium' for an extra discount.
+…
+[button: ...more]
+[button: ...more]
+## Ask
+Get answers, explore topics, and more
+[button: Ask questions]
+## Chapters
+      
+    
+  
+  
+  
+  
+  
+  View all
+The First Zipper
+    The First Zipper
+    0:00 (/watch?v=9szhjhO9epA)
+The First Zipper (/watch?v=9szhjhO9epA)
+0:00
+Who invented the zipper?
+    Who invented the zipper?
+    2:51 (/watch?v=9szhjhO9epA&t=171s)
+Who invented the zipper? (/watch?v=9szhjhO9epA&t=171s)
+2:51
+How does a zipper work?
+    How does a zipper work?
+    4:20 (/watch?v=9szhjhO9epA&t=260s&pp=0gcJCRMDDuyUWbzu)
+How does a zipper work? (/watch?v=9szhjhO9epA&t=260s&pp=0gcJCRMDDuyUWbzu)
+4:20
+The Zipper Maker Machine
+    The Zipper Maker Machine
+    5:51 (/watch?v=9szhjhO9epA&t=351s)
+The Zipper Maker Machine (/watch?v=9szhjhO9epA&t=351s)
+5:51
+Why is it called a zipper?
+    Why is it called a zipper?
+    7:46 (/watch?v=9szhjhO9epA&t=466s)
+Why is it called a zipper? (/watch?v=9szhjhO9epA&t=466s)
+7:46
+The Novelty Of A Zipper
+    The Novelty Of A Zipper
+    9:32 (/watch?v=9szhjhO9epA&t=572s)
+The Novelty Of A Zipper (/watch?v=9szhjhO9epA&t=572s)
+9:32
+The Most Popular Zipper Doesn’t Have Teeth
+    The Most Popular Zipper Doesn’t H (/watch?v=9szhjhO9epA&t=777s&pp=0gcJCRMDDuyUWbzu)
+The Most Popular Zipper Doesn’t Have Teeth (/watch?v=9szhjhO9epA&t=777s&pp=0gcJCRMDDuyUWbzu)
+12:57
+Zippers Have A Lock
+    Zippers Have A Lock
+    14:08 (/watch?v=9szhjhO9epA&t=848s)
+Zippers Have A Lock (/watch?v=9szhjhO9epA&t=848s)
+14:08
+Transcript
+Follow along using the transcript.
+[button: Show transcript]
+Veritasium
+    
+      20.5M subscribers (/@veritasium)
+Videos (/channel/UCHnyfMqiRRG1u-2MsSQLbXA/videos)
+About (/channel/UCHnyfMqiRRG1u-2MsSQLbXA/about)
+Patreon (https://www.youtube.com/redirect?event=Watch_SD_EP&redir_tok)
+Facebook (https://www.youtube.com/redirect?event=Watch_SD_EP&redir_tok)
+TikTok (https://www.youtube.com/redirect?event=Watch_SD_EP&redir_tok)
+Twitter (https://www.youtube.com/redirect?event=Watch_SD_EP&redir_tok)
+Instagram (https://www.youtube.com/redirect?event=Watch_SD_EP&redir_tok)
+[button: Show less]
+## Why are these 3 letters on almost all of my zippers?
+5,715,070 views
+Mar 19, 2026
+[button: 173K]
+[button: Share]
+[button: Ask]
+[button: Save]
+[button: Download]
+Download
+## 6,387 Comments
+Sort comments
+[button: Sort by]
+Top
+                
+              
+              
+            
+            
+   
+Newest
+                
+              
+              
+            
+            
 
-<!-- IFRAME: iframe -->
-<body>
+[image: Robert Muresan]
+Add a comment...
+Pinned by @veritasium
+## @veritasium
+@veritasium
+  
+  
+  
+    @veritasium (/@veritasium)
+6 days ago (/watch?v=9szhjhO9epA&lc=Ugz55K_coqCLBP7tX6h4AaABAg)
+www.hostinger.com/veritasiumopenclaw (https://www.youtube.com/redirect?event=comments&redir_token=)
+[button: Show less]
+[button: Read more]
+Like
+514
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 116 replies]
+[button: Hide replies]
+[button: 116 replies]
+## @arthurdurham
+6 days ago (/watch?v=9szhjhO9epA&lc=Ugy1h6-DD52u9CKwnth4AaABAg)
+The guy you interview looks and sounds exactly like what I would assume an exper
+[button: Show less]
+[button: Read more]
+Like
+14K
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 65 replies]
+[button: Hide replies]
+[button: 65 replies]
+## @gregory596
+5 days ago (/watch?v=9szhjhO9epA&lc=UgzH0w9Q-OT5TsljpcN4AaABAg)
+It's the classic story. Boy meets girl. Boy invents zipper.
+[button: Show less]
+[button: Read more]
+Like
+6.1K
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 24 replies]
+[button: Hide replies]
+[button: 24 replies]
+## @CanoLearn
+6 days ago (/watch?v=9szhjhO9epA&lc=UgzclZzeNdvPhTZrC554AaABAg)
+Showing this to my trousers
+[button: Show less]
+[button: Read more]
+Like
+8K
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 13 replies]
+[button: Hide replies]
+[button: 13 replies]
+## @elementneon
+2 days ago (/watch?v=9szhjhO9epA&lc=UgybxbLsK82J6rEstVV4AaABAg)
+Alt Title: "Y YKK Zips? IYKYK"
+[button: Show less]
+[button: Read more]
+[button: Translate to English]
+Like
+733
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 8 replies]
+[button: Hide replies]
+[button: 8 replies]
+## @HiroChen5
+5 days ago (/watch?v=9szhjhO9epA&lc=UgxqVwVjEmSJzKaPaON4AaABAg)
+A rare video without math and physics. Finally, I can eat while watching Veritas
+[button: Show less]
+[button: Read more]
+Like
+4.7K
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 21 replies]
+[button: Hide replies]
+[button: 21 replies]
+## @Benjibluebill
+6 days ago (/watch?v=9szhjhO9epA&lc=UgxkCQlyUFwvilWfSSN4AaABAg)
+Most simple veritasium video in years
+[button: Show less]
+[button: Read more]
+Like
+5.7K
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 38 replies]
+[button: Hide replies]
+[button: 38 replies]
+## @tworiverwoman
+5 days ago (/watch?v=9szhjhO9epA&lc=UgwHCmeJjn9gchkBiVp4AaABAg)
+A few months ago, the pull tab broke off my favourite zip-up fleece sweater. It 
+[button: Show less]
+[button: Read more]
+Like
+1.3K
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 23 replies]
+[button: Hide replies]
+[button: 23 replies]
+## @nicktechnick
+1 day ago (edited) (/watch?v=9szhjhO9epA&lc=UgwOtDe6hZzSMfsqpvF4AaABAg)
+Fyi the updated thumbnail is the reason I finally watched the video.  It was def
+[button: Show less]
+[button: Read more]
+Like
+314
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 23 replies]
+[button: Hide replies]
+[button: 23 replies]
+## @riduanaqil1452
+6 days ago (/watch?v=9szhjhO9epA&lc=UgxPNn9Y0MwryoWSkgp4AaABAg)
+Imma just straight up say it, this is the kinda content I wanna see. Pls keep ex
+[button: Show less]
+[button: Read more]
+Like
+2.6K
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 30 replies]
+[button: Hide replies]
+[button: 30 replies]
+## @jomakjomak6641
+6 days ago (/watch?v=9szhjhO9epA&lc=UgzPWJh5fnSEsb-tndZ4AaABAg)
+alternate title: the miracle technology that always jams precisely when you need
+[button: Show less]
+[button: Read more]
+Like
+2.8K
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 30 replies]
+[button: Hide replies]
+[button: 30 replies]
+## @otmgi3865
+6 days ago (/watch?v=9szhjhO9epA&lc=Ugz5ni8C-ezuHm6KHIl4AaABAg)
+1:28 (/watch?v=9szhjhO9epA&t=88s)
+[button: Show less]
+[button: Read more]
+Like
+2.1K
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 26 replies]
+[button: Hide replies]
+[button: 26 replies]
+## @ryancory5958
+30 minutes ago (/watch?v=9szhjhO9epA&lc=Ugz6KPNzB6scqOiZUQB4AaABAg)
+ironically made for shoes...the 1 item that probably uses the least amount of zi
+[button: Show less]
+[button: Read more]
+Like
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+## @Caleb94Love
+5 days ago (edited) (/watch?v=9szhjhO9epA&lc=UgxfKNatT0MwR8l695J4AaABAg)
+Just so you know this video saved us from throwing one of our favorite jackets a
+[button: Show less]
+[button: Read more]
+Like
+460
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 12 replies]
+[button: Hide replies]
+[button: 12 replies]
+## @DrTFW
+5 days ago (/watch?v=9szhjhO9epA&lc=UgwkwQnkCz4SyfQFuLF4AaABAg)
+11:35 (/watch?v=9szhjhO9epA&t=695s&pp=0gcJCTAAlc8ueATH)
+[button: Show less]
+[button: Read more]
+Like
+358
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 2 replies]
+[button: Hide replies]
+[button: 2 replies]
+## @liviudanu5022
+5 days ago (/watch?v=9szhjhO9epA&lc=Ugzg4rjtrU_erAxAJEF4AaABAg)
+I love how veritasium never lost the initial quality and devotion, even when Der
+[button: Show less]
+[button: Read more]
+Like
+870
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 25 replies]
+[button: Hide replies]
+[button: 25 replies]
+## @Clate63
+2 days ago (/watch?v=9szhjhO9epA&lc=UgxMuGkDDy5zohxNVIx4AaABAg)
+Me looking at every zipper in the house after watching the video
+[button: Show less]
+[button: Read more]
+Like
+21
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+## @kuroblakka
+5 days ago (/watch?v=9szhjhO9epA&lc=UgzhoS_gyoIcw4UePDV4AaABAg)
+0:16 (/watch?v=9szhjhO9epA&t=16s)
+[button: Show less]
+[button: Read more]
+Like
+560
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 16 replies]
+[button: Hide replies]
+[button: 16 replies]
+## @mrnullptr
+6 days ago (/watch?v=9szhjhO9epA&lc=UgzdWcruLmuwNWiWW-t4AaABAg)
+This is like the Phineas and Ferb episode about Aglet - the end of the shoe lace
+[button: Show less]
+[button: Read more]
+Like
+338
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 8 replies]
+[button: Hide replies]
+[button: 8 replies]
+## @undefined2707
+5 days ago (/watch?v=9szhjhO9epA&lc=UgyPZ3R5Da7EsZ67d7h4AaABAg)
+12:25 (/watch?v=9szhjhO9epA&t=745s)
+[button: Show less]
+[button: Read more]
+Like
+288
+Dislike
+Reply (/create_channel?upsell=comment_reply)
+[button: 1 reply]
+[button: Hide replies]
+[button: 1 reply]
+## Comments
+      6.3K
+Top
+                
+              
+              
+            
+            
+   
+Newest
+                
+              
+              
+            
+            
+
+## In this video
+[button: Chapters]
+[button: Transcript]
+[input:text placeholder="Search in video"]
+[button: The First Zipper]
+[button: 0:00
+    
+  
+  
+  (zipper whirring)]
+[button: 0:02
+    
+  
+  
+  - How does a zipper actually work?]
+[button: 0:03
+    
+  
+  
+  Like try to push down on a zipper]
+[button: 0:05
+    
+  
+  
+  from above and it probably won't budge,]
+[button: 0:08
+    
+  
+  
+  but if you just use the pull tab,]
+[button: 0:09
+    
+  
+  
+  suddenly it's buttery smooth.]
+[button: 0:11
+    
+  
+  
+  So how does it do this?]
+[button: 0:12
+    
+  
+  
+  We've made more zippers]
+[button: 0:14
+    
+  
+  
+  than there are stars in the Milky Way.]
+[button: 0:16
+    
+  
+  
+  You probably used one 10 times
+today without even noticing,]
+[button: 0:19
+    
+  
+  
+  except the only time you
+do is when one breaks.]
+[button: 0:22
+    
+  
+  
+  I'll show you what to
+do when this happens,]
+[button: 0:24
+    
+  
+  
+  but what is actually going
+on inside this thing?]
+[button: 0:27
+    
+  
+  
+  I mean, obviously the teeth
+come together inside the slider,]
+[button: 0:30
+    
+  
+  
+  but it turns out there
+is a surprising amount]
+[button: 0:32
+    
+  
+  
+  of engineering to this thing.]
+[button: 0:33
+    
+  
+  
+  All of this is too small
+to see on a real zipper,]
+[button: 0:36
+    
+  
+  
+  which is why we made this one.]
+[button: 0:39
+    
+  
+  
+  This is a video about the
+surprising genius of zippers.]
+[button: 0:45
+    
+  
+  
+  What is that?]
+[button: 0:45
+    
+  
+  
+  - This is a device that
+basically started it all.]
+[button: 0:50
+    
+  
+  
+  The idea was just to take
+a bunch of hooks and eyes]
+[button: 0:54
+    
+  
+  
+  and try to put them
+together in some fashion]
+[button: 0:56
+    
+  
+  
+  to make them quote, "automatic", unquote.]
+[button: 0:59
+    
+  
+  
+  - [Gregor] The hooks seemed very sharp,]
+[button: 1:00
+    
+  
+  
+  like I don't think I'd
+want this on my fly.]
+[button: 1:02
+    
+  
+  
+  - No, no.]
+[button: 1:03
+    
+  
+  
+  Oh, definitely not there.]
+[button: 1:04
+    
+  
+  
+  (Robert laughing)]
+  ... +489 more items
+No results found
+[button: TAP TO RETRY]
+[button: English]
+English
+English (auto-generated)
+## Chapters
+The First Zipper
+    The First Zipper
+    0:00 (/watch?v=9szhjhO9epA)
+The First Zipper (/watch?v=9szhjhO9epA)
+0:00
+Who invented the zipper?
+    Who invented the zipper?
+    2:51 (/watch?v=9szhjhO9epA&t=171s&pp=0gcJCRMDDuyUWbzu)
+Who invented the zipper? (/watch?v=9szhjhO9epA&t=171s&pp=0gcJCRMDDuyUWbzu)
+2:51
+How does a zipper work?
+    How does a zipper work?
+    4:20 (/watch?v=9szhjhO9epA&t=260s)
+How does a zipper work? (/watch?v=9szhjhO9epA&t=260s)
+4:20
+The Zipper Maker Machine
+    The Zipper Maker Machine
+    5:51 (/watch?v=9szhjhO9epA&t=351s)
+The Zipper Maker Machine (/watch?v=9szhjhO9epA&t=351s)
+5:51
+Why is it called a zipper?
+    Why is it called a zipper?
+    7:46 (/watch?v=9szhjhO9epA&t=466s)
+Why is it called a zipper? (/watch?v=9szhjhO9epA&t=466s)
+7:46
+The Novelty Of A Zipper
+    The Novelty Of A Zipper
+    9:32 (/watch?v=9szhjhO9epA&t=572s)
+The Novelty Of A Zipper (/watch?v=9szhjhO9epA&t=572s)
+9:32
+The Most Popular Zipper Doesn’t Have Teeth
+    The Most Popular Zipper Doesn’t H (/watch?v=9szhjhO9epA&t=777s)
+The Most Popular Zipper Doesn’t Have Teeth (/watch?v=9szhjhO9epA&t=777s)
+12:57
+Zippers Have A Lock
+    Zippers Have A Lock
+    14:08 (/watch?v=9szhjhO9epA&t=848s)
+Zippers Have A Lock (/watch?v=9szhjhO9epA&t=848s)
+14:08
+Why do zippers have YKK on them?
+    Why do zippers have YKK on them?
+    15:31 (/watch?v=9szhjhO9epA&t=931s)
+Why do zippers have YKK on them? (/watch?v=9szhjhO9epA&t=931s)
+15:31
+How To Fix A Zipper
+    How To Fix A Zipper
+    18:39 (/watch?v=9szhjhO9epA&t=1119s)
+How To Fix A Zipper (/watch?v=9szhjhO9epA&t=1119s)
+18:39
+[button: Sync to video time]
+## Description
+Why are these 3 letters on almost all of my zippers?
+173K
+Likes
+5,715,070
+Views
+Mar 19
+2026
+How do zippers work? Sponsored by Hostinger. Host OpenClaw on a Hostinger VPS pl
+https://www.hostinger.com/veritasiumo... (https://www.youtube.com/redirect?event=video_description&red)
+- and use code 'veritasium' for an extra discount.
+
+If you’re looking for a mole
+https://ve42.co/SnatomsV (https://www.youtube.com/redirect?event=video_description&red)
+Sign up for the Veritasium newsletter for weekly science updates -
+https://ve42.co/Newsletter (https://www.youtube.com/redirect?event=video_description&red)
+▀▀▀
+A huge thank you to Prof. Robert Friedel for his invaluable expertise and co
+http://ve42.co/friedel-zipper (https://www.youtube.com/redirect?event=video_description&red)
+Massive thanks to IPFL for fabricating our giant zipper -
+https://ve42.co/ipfl-fabrication (https://www.youtube.com/redirect?event=video_description&red)
+A huge thank you to Emily Zhang for her advice on how to best structure this sto
+‪@rabbithole_video‬ (/@rabbithole_video)
+The giant zipper was adapted from an original design by LoboCNC -
+https://ve42.co/fidget-zipper (https://www.youtube.com/redirect?event=video_description&red)
+We’d also like to thank everyone at YKK who helped organise our call, especially
+0:00 (/watch?v=9szhjhO9epA)
+The First Zipper
+2:51 (/watch?v=9szhjhO9epA&t=171s)
+Who invented the zipper?
+4:20 (/watch?v=9szhjhO9epA&t=260s)
+How does a zipper work?
+5:51 (/watch?v=9szhjhO9epA&t=351s)
+The Zipper Maker Machine
+7:46 (/watch?v=9szhjhO9epA&t=466s)
+Why is it called a zipper?
+9:32 (/watch?v=9szhjhO9epA&t=572s)
+The Novelty Of A Zipper
+12:57 (/watch?v=9szhjhO9epA&t=777s)
+The Most Popular Zipper Doesn’t Have Teeth
+14:08 (/watch?v=9szhjhO9epA&t=848s)
+  ... +7 more items
+…
+[button: ...more]
+[button: ...more]
+[button: Show less]
+## Ask
+Get answers, explore topics, and more
+[button: Ask questions]
+## Chapters
+      
+    
+  
+  
+  
+  
+  
+  View all
+The First Zipper
+    The First Zipper
+    0:00 (/watch?v=9szhjhO9epA)
+The First Zipper (/watch?v=9szhjhO9epA)
+0:00
+Who invented the zipper?
+    Who invented the zipper?
+    2:51 (/watch?v=9szhjhO9epA&t=171s)
+Who invented the zipper? (/watch?v=9szhjhO9epA&t=171s)
+2:51
+How does a zipper work?
+    How does a zipper work?
+    4:20 (/watch?v=9szhjhO9epA&t=260s&pp=0gcJCRMDDuyUWbzu)
+How does a zipper work? (/watch?v=9szhjhO9epA&t=260s&pp=0gcJCRMDDuyUWbzu)
+4:20
+The Zipper Maker Machine
+    The Zipper Maker Machine
+    5:51 (/watch?v=9szhjhO9epA&t=351s)
+The Zipper Maker Machine (/watch?v=9szhjhO9epA&t=351s)
+5:51
+Transcript
+Follow along using the transcript.
+[button: Show transcript]
+Veritasium
+    
+      20.5M subscribers (/@veritasium)
+Videos (/channel/UCHnyfMqiRRG1u-2MsSQLbXA/videos)
+About (/channel/UCHnyfMqiRRG1u-2MsSQLbXA/about)
+Patreon (https://www.youtube.com/redirect?event=Watch_SD_EP&redir_tok)
+Facebook (https://www.youtube.com/redirect?event=Watch_SD_EP&redir_tok)
+TikTok (https://www.youtube.com/redirect?event=Watch_SD_EP&redir_tok)
+Twitter (https://www.youtube.com/redirect?event=Watch_SD_EP&redir_tok)
+Instagram (https://www.youtube.com/redirect?event=Watch_SD_EP&redir_tok)
+## Transcript
+[input:text placeholder="Search in video"]
+[button: The First Zipper]
+[button: 0:00
+    
+  
+  
+  (zipper whirring)]
+[button: 0:02
+    
+  
+  
+  - How does a zipper actually work?]
+[button: 0:03
+    
+  
+  
+  Like try to push down on a zipper]
+[button: 0:05
+    
+  
+  
+  from above and it probably won't budge,]
+[button: 0:08
+    
+  
+  
+  but if you just use the pull tab,]
+[button: 0:09
+    
+  
+  
+  suddenly it's buttery smooth.]
+[button: 0:11
+    
+  
+  
+  So how does it do this?]
+[button: 0:12
+    
+  
+  
+  We've made more zippers]
+[button: 0:14
+    
+  
+  
+  than there are stars in the Milky Way.]
+[button: 0:16
+    
+  
+  
+  You probably used one 10 times
+today without even noticing,]
+[button: 0:19
+    
+  
+  
+  except the only time you
+do is when one breaks.]
+[button: 0:22
+    
+  
+  
+  I'll show you what to
+do when this happens,]
+[button: 0:24
+    
+  
+  
+  but what is actually going
+on inside this thing?]
+[button: 0:27
+    
+  
+  
+  I mean, obviously the teeth
+come together inside the slider,]
+[button: 0:30
+    
+  
+  
+  but it turns out there
+is a surprising amount]
+[button: 0:32
+    
+  
+  
+  of engineering to this thing.]
+[button: 0:33
+    
+  
+  
+  All of this is too small
+to see on a real zipper,]
+[button: 0:36
+    
+  
+  
+  which is why we made this one.]
+[button: 0:39
+    
+  
+  
+  This is a video about the
+surprising genius of zippers.]
+[button: 0:45
+    
+  
+  
+  What is that?]
+[button: 0:45
+    
+  
+  
+  - This is a device that
+basically started it all.]
+[button: 0:50
+    
+  
+  
+  The idea was just to take
+a bunch of hooks and eyes]
+[button: 0:54
+    
+  
+  
+  and try to put them
+together in some fashion]
+[button: 0:56
+    
+  
+  
+  to make them quote, "automatic", unquote.]
+[button: 0:59
+    
+  
+  
+  - [Gregor] The hooks seemed very sharp,]
+[button: 1:00
+    
+  
+  
+  like I don't think I'd
+want this on my fly.]
+[button: 1:02
+    
+  
+  
+  - No, no.]
+[button: 1:03
+    
+  
+  
+  Oh, definitely not there.]
+[button: 1:04
+    
+  
+  
+  (Robert laughing)]
+  ... +489 more items
+No results found
+[button: TAP TO RETRY]
+[button: English]
+English
+English (auto-generated)
+NaN / NaN
+[button: All]
+[button: From Veritasium]
+[button: Related]
+[button: For you]
+[button: Recently uploaded]
+1:18:28 (/watch?v=vxUds5TjGoo)
+## 👼✝️👼 Jesus miracles / David & Goliath / prodigal Son- Beginners Bible
+67K views
+•
+5 years ago
+25:05 (/watch?v=Z-ZkmpQBIFo)
+## Algebra - How To Solve Equations Quickly!
+4.8M views
+•
+8 years ago
+11:30 (/watch?v=9xPMxULBT4g)
+## Volvimos a los vuelos | Way to The Full Planche
+High Lion
+1 view
+•
+41 minutes ago
+New
+54:08 (/watch?v=SC2eSujzrUY&pp=ugUEEgJlbg%3D%3D)
+## How One Company Secretly Poisoned The Planet
+33M views
+•
+10 months ago
+20:32 (/watch?v=cpfIYGCGhWg)
+## Jesus Helps Me Show Respect (Kids' Bible Lesson)
+Faithville Productions
+196K views
+•
+5 years ago
+25:00 (/watch?v=ID3J7hprG8g)
+## Pigeon Genius | Awesome Animals
+1.5M views
+•
+8 years ago
+42:52 (/watch?v=p6f2D5ZgLZ8)
+## What is the Best Poison Type Pokemon?
+2M views
+•
+8 months ago
+10:03 (/watch?v=iP8eoxYSETo)
+## What the Ship (Ep 126): Iran Oil | FMC | LNG Rates | Hormuz | Morning Midas | US
+What's Going on With Shipping?
+113K views
+•
+8 months ago
+21:07 (/watch?v=XdlE1sUvAYs)
+## Was ist der Urknall? 💥 l WOOZLE GOOZLE
+709K views
+•
+4 years ago
+LIVE (/watch?v=ovmeCF0sNzk)
+## 🔴 Makkah Live | مكة مباشر | الحرم المكي مباشر | قناة القران الكريم السعودية مبا
+FS Quran Tilawat
+1.4K watching
+46:39 (/watch?v=XtQMytORBmM)
+## The Unity Tutorial For Complete Beginners
+6.5M views
+•
+3 years ago
+11:34 (/watch?v=52tpYl2tTqk)
+## Algebra Basics: What Are Functions? - Math Antics
+3.9M views
+•
+9 years ago
+23:05 (/watch?v=fCVxUuYGa4U)
+## Liberty's Kids HD 133 - Deborah Samson Soldier of the Revolution | History Carto
+9.7K views
+•
+8 years ago
+18:25 (/watch?v=5qjnDd1rsII)
+## Skyblock: The Great Potato War
+58M views
+•
+6 years ago
+21:46 (/watch?v=qEWvM0Rwygg&pp=ugUEEgJlbtIHCQnZCgGHKiGM7w%3D%3D)
+## Does Allah Want You to Feel Better | Khutbah by Dr. Omar Suleiman
+326K views
+•
+6 months ago
+10:13 (/watch?v=iCsit-HWu48)
+## The United States' Broken Icebreakers | Commercial Replacement | Shipbuilding Pl
+What's Going on With Shipping?
+79K views
+•
+1 year ago
+18:43 (/watch?v=RQYuyHNLPTQ&pp=ugUEEgJlbg%3D%3D)
+## The Surprising Genius of Sewing Machines
+14M views
+•
+2 years ago
+20:05 (/watch?v=X8jsijhllIA&pp=ugUHEgVlbi1VUw%3D%3D)
+## But what are Hamming codes? The origin of error correction
+2.8M views
+•
+5 years ago
+1:17:15 (/watch?v=9l9Se-4QbdY&pp=sAQB)
+## Tim Burton's Corpse Bride
+Comedy • 2005
+Free with ads
+PG
+12:52 (/watch?v=eUJdseG2j40)
+## Area of a Triangle - 1/2 absin(C) - GCSE Higher Maths
+117K views
+•
+2 years ago
+12:07 (/watch?v=NybHckSEQBI)
+## Algebra Basics: What Is Algebra? - Math Antics
+10M views
+•
+10 years ago
+1:12:47 (/watch?v=Pw0-GoRyLUc)
+## 👉✝️  Jonah and the Whale / Daniel and the Lions' Den / Nativity - Beginners Bib
+158K views
+•
+5 years ago
+26:30 (/watch?v=-0luobboF7U)
+## The Fast Food Worker Who Exposed China's Secret Prisons
+Blackfiles
+80K views
+•
+4 days ago
+New
+27:14 (/watch?v=wjZofJX0v4M&pp=ugUHEgVlbi1VUw%3D%3D)
+## Transformers, the tech behind LLMs | Deep Learning Chapter 5
+9.5M views
+•
+1 year ago
+19:33 (/watch?v=7tO7o92dHOM)
+## Sole US Navy Oiler in the Middle East - USNS Big Horn - Damaged | September 23, 
+What's Going on With Shipping?
+734K views
+•
+1 year ago
+51:41 (/watch?v=65Pr4_2NcbY&pp=sAQB)
+## Life Behind the Stars
+Documentary • 2015
+Free with ads
+25:27 (/watch?v=Tt6WQYtefXA&pp=ugUEEgJlbtIHCQnZCgGHKiGM7w%3D%3D)
+## How Japanese Masters Turn Sand Into Swords
+21M views
+•
+2 years ago
+17:11 (/watch?v=ynkhxHilaKA)
+## 21 BEST Youth Basketball Drills for BEGINNERS (In 5 EASY Phases)
+One Up Basketball Training
+2.2M views
+•
+4 years ago
+15:16 (/watch?v=DdYULBK8vGQ&pp=ugUHEgVlbi1VUw%3D%3D)
+## Only Five People Know The Secret To Making Zildjian's Iconic Cymbals | Still Sta
+3M views
+•
+2 years ago
+16:41 (/watch?v=kdJbfen5BVA)
+## Tlobby | A NEW ROBLOX OBBY! RadioJH Games
+55K views
+•
+6 years ago
+  ... +11 more items
+  ... +29 more items
+
+--- IFRAME: about:blank ---

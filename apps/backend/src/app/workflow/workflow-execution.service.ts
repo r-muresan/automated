@@ -51,6 +51,8 @@ export class WorkflowExecutionService {
   private workflowLocalSessions: Map<string, string> = new Map();
   /** Pending credential requests by workflow run. */
   private pendingCredentialRequests: Map<string, PendingCredentialRequest> = new Map();
+  /** Monotonically increasing sequence counter per run for deterministic event ordering. */
+  private runLogSeq: Map<string, number> = new Map();
 
   constructor(
     private prisma: PrismaService,
@@ -917,13 +919,21 @@ export class WorkflowExecutionService {
     // Emit to SSE stream immediately (before DB write) to preserve event ordering.
     // DB writes are async and can complete out of order, which breaks loop iteration tracking.
     if (entry.eventType && runId) {
+      // Assign a monotonically increasing sequence number so the frontend can
+      // reconstruct the correct event order even when DB rows share the same
+      // millisecond timestamp (UUIDs provide no ordering guarantee).
+      const seq = (this.runLogSeq.get(runId) ?? 0) + 1;
+      this.runLogSeq.set(runId, seq);
+      const dataWithSeq = { ...(entry.data as Record<string, unknown> ?? {}), seq };
+      entry.data = dataWithSeq;
+
       this.emitAction(runId, {
         id: randomUUID(),
         runId,
         eventType: entry.eventType,
         message: entry.message,
         timestamp: new Date(entry.timestamp),
-        data: entry.data as WorkflowAction['data'],
+        data: dataWithSeq as WorkflowAction['data'],
         level: entry.level,
       });
     }
@@ -1001,6 +1011,7 @@ export class WorkflowExecutionService {
       subject.complete();
     }
     this.actionStreams.delete(runId);
+    this.runLogSeq.delete(runId);
   }
 
   private async assertRunExists(workflowId: string, runId: string): Promise<void> {

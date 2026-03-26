@@ -65,14 +65,22 @@ interface StepActionView {
 }
 
 const buildActionViews = (actions: WorkflowAction[]): StepActionView[] => {
-  // Sort by timestamp with array index as tiebreaker to preserve insertion order
-  // for events that share the same millisecond timestamp
+  // Sort by timestamp with the backend-assigned sequence number as tiebreaker.
+  // Events emitted in rapid succession (e.g. loop:iteration:start followed by
+  // step:start) can share the same millisecond timestamp.  PostgreSQL returns
+  // rows with identical timestamps in non-deterministic order (UUID PKs have no
+  // inherent ordering), so we use `data.seq` to reconstruct the original
+  // emission order.  Fall back to array index for legacy events without seq.
   const sorted = actions
     .map((a, i) => ({ ...a, _order: i }))
-    .sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime() || a._order - b._order,
-    );
+    .sort((a, b) => {
+      const tsDiff = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+      if (tsDiff !== 0) return tsDiff;
+      const seqA = typeof a.data?.seq === 'number' ? a.data.seq : Infinity;
+      const seqB = typeof b.data?.seq === 'number' ? b.data.seq : Infinity;
+      if (seqA !== seqB) return seqA - seqB;
+      return a._order - b._order;
+    });
   const byIndex = new Map<number, StepActionView>();
   const fallback: StepActionView[] = [];
 

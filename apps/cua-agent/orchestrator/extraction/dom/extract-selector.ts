@@ -981,8 +981,34 @@ export async function extractWithKnownSelector(params: {
  * The function receives the full elements array and must return an array of items.
  */
 function executeParserFunction(parserCode: string, elements: ExtractedElement[]): unknown[] {
-  // The model returns a function body that takes `elements` and returns an array
-  const parserFn = new Function('elements', parserCode) as (els: ExtractedElement[]) => unknown[];
+  // Wrap the parser in a safe harness that catches per-element errors
+  // so one malformed element doesn't crash the entire extraction
+  const safeParserCode = `
+    const __rawFn = function(elements) { ${parserCode} };
+    try {
+      const result = __rawFn(elements);
+      if (!Array.isArray(result)) return [result];
+      return result;
+    } catch(e) {
+      // If the whole function fails, try element-by-element
+      const results = [];
+      for (let i = 0; i < elements.length; i++) {
+        try {
+          const singleResult = __rawFn([elements[i]]);
+          if (Array.isArray(singleResult)) {
+            results.push(...singleResult);
+          } else if (singleResult != null) {
+            results.push(singleResult);
+          }
+        } catch(_) {
+          // skip this element
+        }
+      }
+      if (results.length > 0) return results;
+      throw e; // re-throw original if nothing worked
+    }
+  `;
+  const parserFn = new Function('elements', safeParserCode) as (els: ExtractedElement[]) => unknown[];
   const result = parserFn(elements);
   if (!Array.isArray(result)) {
     console.warn('[EXTRACTION] Parser function did not return an array, wrapping result');
@@ -1085,7 +1111,7 @@ Return JSON with:
       return { items: allItems };
     } catch (err) {
       console.error('[EXTRACTION] Parser function failed, falling back to direct mode:', err);
-      // Fall through to direct items if parser fails
+      // Fall through to re-request in direct items mode below
     }
   }
 
@@ -1127,6 +1153,50 @@ Remove any elements that are not relevant to the extraction goal.`;
     }
 
     return { items: allItems };
+  }
+
+  // Parser failed and no direct items available — re-request in direct mode
+  if (parsed.mode === 'parser') {
+    console.log('[EXTRACTION] Parser fallback: re-requesting in direct items mode');
+    const directSchema = z.object({ items: z.array(z.record(z.string(), z.unknown())) });
+    const fallbackItems: unknown[] = [];
+
+    for (let i = 0; i < elements.length; i += BATCH_SIZE) {
+      const batch = elements.slice(i, i + BATCH_SIZE);
+      const batchSummary = batch
+        .map((el, j) => `El ${i + j + 1}: ${el.innerText || el.textContent} (${el.href})`)
+        .join('\n');
+
+      const fallbackPrompt = `Extract structured data from these DOM elements.
+
+Extraction goal: ${dataExtractionGoal}
+
+Elements found via selector "${chosenSelector}":
+###
+${batchSummary}
+###
+
+Return a JSON object with an "items" array, where each entry is one extracted item with appropriate field names.
+Remove any elements that are not relevant to the extraction goal.`;
+
+      try {
+        const fallbackResponse = await llmClient.chat.completions.parse({
+          model,
+          messages: [{ role: 'user', content: fallbackPrompt }],
+          response_format: zodResponseFormat(directSchema, 'extracted_data'),
+        });
+        const fallbackParsed = fallbackResponse.choices[0]?.message?.parsed;
+        if (fallbackParsed?.items) {
+          fallbackItems.push(...fallbackParsed.items);
+        }
+      } catch (err) {
+        console.error('[EXTRACTION] Parser fallback batch failed:', err);
+      }
+    }
+
+    if (fallbackItems.length > 0) {
+      return { items: fallbackItems };
+    }
   }
 
   return null;
