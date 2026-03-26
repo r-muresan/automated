@@ -16,8 +16,21 @@ import {
 } from 'ai';
 import { StagehandZodObject } from '../zodCompat.js';
 import { processMessages } from '../agent/utils/messageProcessing.js';
+import { injectActionHistorySummary } from '../agent/utils/actionHistorySummary.js';
 import { LLMClient } from '../llm/LLMClient.js';
 import { SessionFileLogger } from '../flowLogger.js';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const AGENT_MESSAGES_PATH = path.resolve(process.cwd(), 'agent-messages.json');
+
+function writeAgentMessages(messages: ModelMessage[]): void {
+  try {
+    fs.writeFileSync(AGENT_MESSAGES_PATH, JSON.stringify(messages, null, 2));
+  } catch {
+    // Silently ignore write errors to avoid disrupting agent execution
+  }
+}
 import {
   AgentExecuteOptions,
   AgentStreamExecuteOptions,
@@ -73,6 +86,7 @@ export class V3AgentHandler {
   private mcpTools?: ToolSet;
   private mode: AgentToolMode;
   private interactionSync?: AgentInteractionSync;
+  private globalState?: any[];
 
   constructor(
     v3: V3,
@@ -83,6 +97,7 @@ export class V3AgentHandler {
     mcpTools?: ToolSet,
     mode?: AgentToolMode,
     interactionSync?: AgentInteractionSync,
+    globalState?: any[],
   ) {
     this.v3 = v3;
     this.logger = logger;
@@ -92,6 +107,7 @@ export class V3AgentHandler {
     this.mcpTools = mcpTools;
     this.mode = mode ?? 'dom';
     this.interactionSync = interactionSync;
+    this.globalState = globalState;
   }
 
   private async buildInitialContextMessage(initialPageUrl: string): Promise<ModelMessage | null> {
@@ -158,6 +174,7 @@ export class V3AgentHandler {
         isBrowserbase: true,
         excludeTools: options.excludeTools,
         variables: options.variables,
+        globalState: this.globalState,
       });
 
       const tools = this.createTools(options.excludeTools, options.variables);
@@ -279,6 +296,8 @@ export class V3AgentHandler {
   ): PrepareStepFunction<ToolSet> {
     return async (options) => {
       processMessages(options.messages);
+      injectActionHistorySummary(options.messages);
+      writeAgentMessages(options.messages);
       const stepConfig = userCallback ? await userCallback(options) : undefined;
       const activeTools = (stepConfig?.activeTools ?? Object.keys(allTools)).map((toolName) =>
         String(toolName),
@@ -417,6 +436,7 @@ export class V3AgentHandler {
 
       const result = await this.llmClient.generateText({
         model: wrappedModel,
+        maxRetries: 1,
         messages: prependSystemMessage(systemPrompt, messages),
         tools: allTools,
         stopWhen: (result) => this.handleStop(result, maxSteps),
@@ -435,6 +455,7 @@ export class V3AgentHandler {
       });
 
       const allMessages = [...messages, ...(result.response?.messages || [])];
+      writeAgentMessages(allMessages);
       // const doneResult = await this.ensureDone(
       //   state,
       //   wrappedModel,
@@ -536,6 +557,7 @@ export class V3AgentHandler {
 
     const streamResult = this.llmClient.streamText({
       model: wrappedModel,
+      maxRetries: 1,
       messages: prependSystemMessage(systemPrompt, messages),
       tools: allTools,
       stopWhen: (result) => this.handleStop(result, maxSteps),

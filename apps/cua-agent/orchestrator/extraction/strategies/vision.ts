@@ -1,17 +1,17 @@
 import OpenAI from 'openai';
 import type { Stagehand } from '../../../stagehand/v3';
 import { capturePageScreenshot } from '../common';
-import { identifyItemsFromVision } from '../vision';
-import { scrollPageDown, tryClickPaginationButton } from './page-scroll';
-import type { CollectedItem, ItemCollector } from './types';
+import { extractFromVision, identifyItemsFromVision } from '../vision';
+import { scrollPageDown, tryClickPaginationButton } from '../pagination';
+import type { UnifiedExtractor, ExtractOutput, CollectedItem } from '../types';
 
-export function createVisionCollector(params: {
+export function createVisionStrategy(params: {
   stagehand: Stagehand;
   llmClient: OpenAI;
   model: string;
-  description: string;
-}): ItemCollector {
-  const { stagehand, llmClient, model, description } = params;
+  dataExtractionGoal: string;
+}): UnifiedExtractor {
+  const { stagehand, llmClient, model, dataExtractionGoal } = params;
 
   const knownKeys = new Set<string>();
   let exhausted = false;
@@ -22,7 +22,7 @@ export function createVisionCollector(params: {
       llmClient,
       model,
       screenshotDataUrl,
-      description,
+      description: dataExtractionGoal,
       knownItemKeys: knownKeys,
     });
 
@@ -34,6 +34,28 @@ export function createVisionCollector(params: {
 
   return {
     name: 'vision',
+    targetItemCount: null,
+
+    async extract(): Promise<ExtractOutput> {
+      const screenshotStart = Date.now();
+      const screenshotDataUrl = await capturePageScreenshot(stagehand, { fullPage: true });
+      console.log(
+        `[EXTRACTION] vision:screenshot-ready duration_ms=${Date.now() - screenshotStart} chars=${screenshotDataUrl.length}`,
+      );
+      const visionStart = Date.now();
+      const result = await extractFromVision({
+        llmClient,
+        model,
+        screenshotDataUrl,
+        dataExtractionGoal,
+      });
+      console.log(`[EXTRACTION] vision:llm-ready duration_ms=${Date.now() - visionStart}`);
+      return {
+        mode: 'vision',
+        scraped_data: result,
+      };
+    },
+
     async collect(pageIndex: number): Promise<CollectedItem[]> {
       if (exhausted) return [];
 

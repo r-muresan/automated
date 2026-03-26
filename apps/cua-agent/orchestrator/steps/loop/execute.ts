@@ -1,6 +1,5 @@
 import type { LoopStep } from '../../../types';
-import { resolveCollector, type CollectedItem } from '../../extraction/loop';
-import { cleanExtractedItems } from '../../extraction/loop/clean-items';
+import { resolveCollector, type CollectedItem } from '../../extraction';
 import { waitForPageReady } from '../../page-ready';
 import type { LoopDeps } from './deps';
 import { deriveLoopPlan } from './plan';
@@ -43,8 +42,16 @@ async function processItems(params: {
   iterationStateAccumulator: any[];
 }): Promise<number> {
   const {
-    deps, step, index, items, maxItems, processedItems,
-    initialPages, initialActivePage, preLoopStateLength, iterationStateAccumulator,
+    deps,
+    step,
+    index,
+    items,
+    maxItems,
+    processedItems,
+    initialPages,
+    initialActivePage,
+    preLoopStateLength,
+    iterationStateAccumulator,
   } = params;
   let { totalProcessed } = params;
 
@@ -112,7 +119,8 @@ export async function executeLoopStep(
   deps.assertNotAborted();
 
   const loopPlan = await deriveLoopPlan(deps, step);
-  console.log(`[LOOP] Plan: query="${loopPlan.query}" maxItems=${loopPlan.maxItems}`);
+  let maxItems = loopPlan.maxItems;
+  console.log(`[LOOP] Plan: query="${loopPlan.query}" maxItems=${maxItems}`);
 
   let loopSuccess = true;
   let loopError: string | undefined;
@@ -134,6 +142,7 @@ export async function executeLoopStep(
       stagehand: deps.stagehand,
       llmClient: deps.openai,
       model: deps.models.extract,
+      agentModel: deps.models.agent,
       description: loopPlan.query,
       downloadedFiles: deps.getDownloadedFiles(),
     });
@@ -144,20 +153,18 @@ export async function executeLoopStep(
       return;
     }
 
-    const { mode, collector, firstPage: rawFirstPage } = resolved;
+    const { mode, collector, firstPage: rawFirstPage, targetItemCount } = resolved;
     console.log(`[LOOP] Using ${mode} collector`);
 
-    // Clean extracted items: remove empty and header/footer rows
-    const firstPage = await cleanExtractedItems({
-      items: rawFirstPage,
-      description: loopPlan.query,
-      llmClient: deps.openai,
-      model: deps.models.extract,
-    });
-    console.log(`[LOOP] Cleaned first page: ${rawFirstPage.length} → ${firstPage.length} items`);
+    // If the extraction model detected a specific target count (e.g. "first 6 stocks"),
+    // use it to cap maxItems so the loop stops at the right number.
+    if (targetItemCount != null && targetItemCount > 0) {
+      maxItems = Math.min(maxItems, targetItemCount);
+      console.log(`[LOOP] targetItemCount=${targetItemCount} → capped maxItems=${maxItems}`);
+    }
 
     const savedLoopItemsJson = JSON.stringify(
-      firstPage.map((i, idx) => ({ index: idx + 1, ...i.data })),
+      rawFirstPage.map((i, idx) => ({ index: idx + 1, ...i.data })),
       null,
       2,
     );
@@ -170,9 +177,9 @@ export async function executeLoopStep(
       deps,
       step,
       index,
-      items: firstPage,
+      items: rawFirstPage,
       totalProcessed: 0,
-      maxItems: loopPlan.maxItems,
+      maxItems: maxItems,
       processedItems,
       initialPages,
       initialActivePage,
@@ -182,35 +189,22 @@ export async function executeLoopStep(
 
     // Collect and process subsequent pages
     let pageIndex = 1;
-    while (totalProcessed < loopPlan.maxItems) {
+    while (totalProcessed < maxItems) {
       deps.assertNotAborted();
 
       const rawBatch = await collector.collect(pageIndex++);
 
       if (rawBatch.length === 0) break;
 
-      // Clean extracted items for this page
-      const batch = await cleanExtractedItems({
-        items: rawBatch,
-        description: loopPlan.query,
-        llmClient: deps.openai,
-        model: deps.models.extract,
-      });
-
-      if (batch.length === 0) {
-        console.log(`[LOOP] Page ${pageIndex - 1}: all ${rawBatch.length} items filtered out`);
-        continue;
-      }
-
-      console.log(`[LOOP] Page ${pageIndex - 1}: ${rawBatch.length} → ${batch.length} item(s) via ${mode}`);
+      console.log(`[LOOP] Page ${pageIndex - 1}: ${rawBatch.length} item(s) via ${mode}`);
 
       totalProcessed = await processItems({
         deps,
         step,
         index,
-        items: batch,
+        items: rawBatch,
         totalProcessed,
-        maxItems: loopPlan.maxItems,
+        maxItems: maxItems,
         processedItems,
         initialPages,
         initialActivePage,
@@ -237,6 +231,7 @@ export async function executeLoopStep(
   if (iterationStateAccumulator.length > 0) {
     deps.globalState.push(...iterationStateAccumulator);
   }
+  fs.writeFile('global-state.json', JSON.stringify(deps.globalState, null, 2));
 
   deps.emit({
     type: 'step:end',

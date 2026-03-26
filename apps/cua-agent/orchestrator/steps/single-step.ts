@@ -1,8 +1,9 @@
-import type { Step, LoopContext, OrchestratorEvent } from '../../types';
+import type { Step, LoopContext, OrchestratorEvent, SingleStep } from '../../types';
 import type { OrchestratorContext } from '../orchestrator-context';
 import { createBrowserTabTools } from '../agent-tools';
 import { buildSystemPrompt } from '../system-prompt';
 import { OPENROUTER_BASE_URL } from '../orchestrator-context';
+import { AGENT_STEP_TIMEOUT_MS } from '../constants';
 
 // ---------------------------------------------------------------------------
 // Local helpers
@@ -36,16 +37,17 @@ function logUsageAfterToolCall(
 
 export async function executeSingleStep(
   ctx: OrchestratorContext,
-  instruction: string,
+  step: SingleStep,
   context: LoopContext | undefined,
   index: number,
-  step: Step,
 ): Promise<void> {
   if (!ctx.stagehand) throw new Error('Browser session not initialized');
 
+  const instruction = step.description;
+
   const contextualInstruction =
     context && context.item != null
-      ? `${instruction} on item ${JSON.stringify(context.item)}`
+      ? `According to this data: ${JSON.stringify(context.item)}\n${instruction} `
       : instruction;
 
   console.log(`[STEP] Executing step: ${contextualInstruction}`);
@@ -60,12 +62,7 @@ export async function executeSingleStep(
   });
 
   const agentConfig = {
-    systemPrompt: buildSystemPrompt(
-      ctx.globalState,
-      ctx.sessionFiles.getDownloadedFiles(),
-      context,
-      ctx.getActivePageUrl(),
-    ),
+    systemPrompt: buildSystemPrompt(context),
     tools,
     model: {
       modelName: ctx.resolveModels().agent,
@@ -73,6 +70,7 @@ export async function executeSingleStep(
       baseURL: OPENROUTER_BASE_URL,
     },
     interactionSync: ctx.sessionFiles.createAgentInteractionSync(),
+    globalState: ctx.globalState,
   } as const;
 
   const usageTotals = {
@@ -136,6 +134,7 @@ export async function executeSingleStep(
         instruction: instruction,
         maxSteps: 50,
         highlightCursor: false,
+        signal: AbortSignal.timeout(AGENT_STEP_TIMEOUT_MS),
         callbacks: {
           prepareStep,
           onStepFinish,

@@ -138,6 +138,8 @@ MANDATORY USE CASES (always use fillFormVision for these):
             await screenController.typeText(field.value);
             await v3.syncActivePageFromFocus();
           } else {
+            // Select all existing text so typing replaces it instead of appending
+            await page.keyPress("ControlOrMeta+a");
             await page.type(field.value);
           }
 

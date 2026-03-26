@@ -248,22 +248,20 @@ const COMMON_GLUE = `
 
     try {
       nameBox.focus?.();
-      if (!setEditableValue(nameBox, parsed.rangePart)) {
-        return {
-          success: false,
-          message: 'Unable to type A1 range into name box.',
-        };
+      // Select all existing text so CDP typing will replace it.
+      if (typeof nameBox.select === 'function') {
+        nameBox.select();
+      } else if (typeof nameBox.setSelectionRange === 'function') {
+        nameBox.setSelectionRange(0, (nameBox.value || nameBox.textContent || '').length);
       }
-      pressEnterOn(nameBox);
-      await wait(90);
-      const activeSelectionA1 = getSelectionA1(context.provider);
-      const nameBoxStillFocused = document.activeElement === nameBox;
       return {
         success: true,
+        // Signal that the caller must type the range and press Enter via CDP.
+        needsCdpInput: true,
+        rangePart: parsed.rangePart,
         requestedRangeA1: buildRangeReference(parsed.sheetName, parsed.rangePart),
         activeSheetName: getActiveSheetName(),
-        activeSelectionA1,
-        nameBoxStillFocused,
+        activeSelectionA1: getSelectionA1(context.provider),
       };
     } catch (error) {
       return {
@@ -271,6 +269,15 @@ const COMMON_GLUE = `
         message: error && error.message ? String(error.message) : 'Range activation failed.',
       };
     }
+  };
+
+  const blurNameBox = () => {
+    const nameBox = findNameBoxElement();
+    if (nameBox && document.activeElement === nameBox) {
+      nameBox.blur?.();
+      return { blurred: true };
+    }
+    return { blurred: false };
   };
 
   const findAddSheetButton = () => {
@@ -724,6 +731,7 @@ const COMMON_GLUE = `
     getSheets: () => listSheets(),
     selectSheet,
     activateRange,
+    blurNameBox,
     createSheets,
     deleteSheets,
     renameSheet,

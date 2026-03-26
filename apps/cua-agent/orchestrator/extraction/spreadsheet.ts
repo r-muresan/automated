@@ -20,6 +20,23 @@ import {
 import { parseJsonFromText } from './common';
 
 const SPREADSHEET_PREVIEW_MAX_ROWS = 50;
+
+/**
+ * Execute a user-provided JS function string against spreadsheet data.
+ * The function receives `values` (string[][]) and `headers` (string[]) and should return the result.
+ */
+function executeParseFunction(
+  code: string,
+  values: string[][],
+): unknown {
+  const headers = (values[0] ?? []).map((h, i) => h.trim() || `column_${i + 1}`);
+  const dataRows = values.length > 0 ? values.slice(1) : [];
+
+  // Build a function from the code string.
+  // The code should be a function body that uses `values`, `headers`, and `dataRows`.
+  const fn = new Function('values', 'headers', 'dataRows', code);
+  return fn(values, headers, dataRows);
+}
 const SPREADSHEET_PREVIEW_LAST_COLUMN = 'Z';
 
 type SpreadsheetSnapshot = {
@@ -86,15 +103,11 @@ function resolveSampledRangeA1(activeSelectionA1: string, activeSheetName: strin
     return buildWindowRangeA1(activeSheetName, 1);
   }
 
-  const { sheetName, rangePart } = splitRangeReference(trimmedSelection);
-  const [leftCell] = rangePart.split(':', 1);
-  const parsedCell = parseCellAddress(leftCell ?? '');
-  if (!parsedCell) {
-    return buildWindowRangeA1(activeSheetName, 1);
-  }
-
+  // Extract sheet name from selection if present, but always start from row 1
+  // to ensure we capture headers and all data regardless of cursor position.
+  const { sheetName } = splitRangeReference(trimmedSelection);
   const targetSheet = sheetName || activeSheetName;
-  return buildWindowRangeA1(targetSheet, parsedCell.row);
+  return buildWindowRangeA1(targetSheet, 1);
 }
 
 async function bridgeCall(
@@ -126,9 +139,19 @@ async function activateRange(page: CdpPageLike, rangeA1: string): Promise<void> 
     throw new Error(message);
   }
 
-  if (activation.nameBoxStillFocused === true) {
+  // The bridge focused the Name Box and selected its text. Now type the range
+  // reference and press Enter via CDP so Excel Web processes real input events.
+  if (activation.needsCdpInput === true) {
+    const rangePart =
+      typeof activation.rangePart === 'string' ? activation.rangePart : rangeA1;
+    await page.keyPress('Control+A');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await page.sendCDP('Input.insertText', { text: rangePart });
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await page.keyPress('Enter');
-    await new Promise((resolve) => setTimeout(resolve, 90));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    // Blur the Name Box so focus returns to the grid.
+    await bridgeCall(page, 'blurNameBox');
   }
 }
 
@@ -137,7 +160,16 @@ async function readRangeViaClipboard(page: CdpPageLike, rangeA1: string): Promis
   console.log(`[SPREADSHEET_EXTRACT] clipboard-read:start range="${rangeA1}"`);
   await activateRange(page, rangeA1);
 
-  const keyCombo = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
+  // Detect browser platform (may differ from server — e.g. Browserbase runs Linux).
+  let browserIsMac = false;
+  try {
+    const res = await page.sendCDP<{ result?: { value?: string } }>('Runtime.evaluate', {
+      expression: 'navigator.platform',
+      returnByValue: true,
+    });
+    browserIsMac = typeof res.result?.value === 'string' && res.result.value.toLowerCase().includes('mac');
+  } catch {}
+  const keyCombo = browserIsMac ? 'Meta+C' : 'Control+C';
   await page.keyPress(keyCombo);
   await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -190,6 +222,7 @@ async function readRangeViaApi(
       `[SPREADSHEET_EXTRACT] excel-graph-read:start sheet="${sheetName || '(active)'}" range="${rangeOnly}"`,
     );
     const result = await readRangeViaExcelGraph(page, sheetName, rangeOnly);
+
     if (result.ok) {
       const { rows, cols } = gridDimensions(result.values);
       console.log(
@@ -326,6 +359,18 @@ export async function extractFromSpreadsheetWithLlm(params: {
     `- Sampled range: ${snapshot.sampledRangeA1}\n` +
     `- Total sheets: ${snapshot.totalSheets}\n\n` +
     `Table preview:\n${snapshot.tablePreview}\n\n` +
+    `You have two options for returning the extracted data:\n\n` +
+    `Option 1 — Direct JSON: Return the extracted data as a JSON object or array.\n` +
+    `Wrap it like: { "mode": "data", "data": <your extracted JSON> }\n\n` +
+    `Option 2 — Code function: Return a JavaScript function body that parses the raw spreadsheet values.\n` +
+    `The function receives three arguments:\n` +
+    `  - values: string[][] (all rows including header)\n` +
+    `  - headers: string[] (first row, cleaned)\n` +
+    `  - dataRows: string[][] (all rows after the header)\n` +
+    `The function body must return the extracted result.\n` +
+    `Wrap it like: { "mode": "code", "code": "<function body>" }\n\n` +
+    `Use Option 2 (code) when the data is large, repetitive, or follows a clear pattern that a function can parse more reliably than enumerating every value.\n` +
+    `Use Option 1 (data) when the extraction is simple or requires subjective judgment.\n\n` +
     'Return only JSON.';
 
   const response = await llmClient.chat.completions.create({
@@ -339,8 +384,36 @@ export async function extractFromSpreadsheetWithLlm(params: {
   }
 
   try {
-    const parsed = parseJsonFromText(raw);
-    console.log(`[SPREADSHEET_EXTRACT] llm:end duration_ms=${Date.now() - start} parsed=true`);
+    const parsed = parseJsonFromText(raw) as Record<string, unknown>;
+    console.log(`[SPREADSHEET_EXTRACT] llm:end duration_ms=${Date.now() - start} parsed=true mode=${parsed?.mode ?? 'legacy'}`);
+
+    if (parsed?.mode === 'code' && typeof parsed.code === 'string') {
+      try {
+        const result = executeParseFunction(parsed.code, snapshot.values);
+        console.log(`[SPREADSHEET_EXTRACT] code-execution:success`);
+        return result;
+      } catch (execError) {
+        console.warn(
+          `[SPREADSHEET_EXTRACT] code-execution:failed error="${(execError as Error).message}" fallback=snapshot`,
+        );
+        return {
+          snapshot: {
+            provider: snapshot.provider,
+            workbookTitle: snapshot.workbookTitle,
+            activeSheetName: snapshot.activeSheetName,
+            sampledRangeA1: snapshot.sampledRangeA1,
+          },
+          rows: rowsToObjects(snapshot.values),
+          values: snapshot.values,
+        };
+      }
+    }
+
+    if (parsed?.mode === 'data' && parsed.data !== undefined) {
+      return parsed.data;
+    }
+
+    // Legacy: model returned plain JSON without mode wrapper
     return parsed;
   } catch {
     console.log(
@@ -367,7 +440,11 @@ export async function extractLoopItemsFromSpreadsheetWithLlm(params: {
 }): Promise<Array<Record<string, unknown>>> {
   const { llmClient, model, description, snapshot } = params;
 
-  const itemsSchema = z.object({ items: z.array(z.record(z.string(), z.unknown())) });
+  const responseSchema = z.object({
+    mode: z.enum(['items', 'code']),
+    items: z.array(z.record(z.string(), z.unknown())).nullable(),
+    code: z.string().nullable(),
+  });
 
   const prompt =
     `You are identifying loop items from a spreadsheet snapshot.\n\n` +
@@ -376,12 +453,21 @@ export async function extractLoopItemsFromSpreadsheetWithLlm(params: {
     `- Active sheet: ${snapshot.activeSheetName || '(unknown)'}\n` +
     `- Sampled range: ${snapshot.sampledRangeA1}\n\n` +
     `Table preview:\n${snapshot.tablePreview}\n\n` +
-    'Return a JSON object with an "items" array only.';
+    `You have two options:\n\n` +
+    `Option 1 — Direct items: Return { "mode": "items", "items": [ ... ] } with each item as an object.\n\n` +
+    `Option 2 — Code function: Return { "mode": "code", "code": "<function body>" }.\n` +
+    `The function body receives three arguments:\n` +
+    `  - values: string[][] (all rows including header)\n` +
+    `  - headers: string[] (first row, cleaned)\n` +
+    `  - dataRows: string[][] (all rows after the header)\n` +
+    `It must return an array of objects (each object is one item).\n\n` +
+    `Use Option 2 (code) when the data is large, repetitive, or follows a clear pattern that a function can parse more reliably than enumerating every value.\n` +
+    `Use Option 1 (items) when the extraction is simple or requires subjective judgment.`;
 
   const response = await llmClient.chat.completions.parse({
     model,
     messages: [{ role: 'user', content: prompt }],
-    response_format: zodResponseFormat(itemsSchema, 'spreadsheet_loop_items_response'),
+    response_format: zodResponseFormat(responseSchema, 'spreadsheet_loop_items_response'),
   });
 
   const parsed = response.choices[0]?.message?.parsed;
@@ -389,5 +475,29 @@ export async function extractLoopItemsFromSpreadsheetWithLlm(params: {
     return rowsToObjects(snapshot.values);
   }
 
-  return parsed.items.map((item) => ({ ...item }));
+  if (parsed.mode === 'code' && typeof parsed.code === 'string') {
+    try {
+      const result = executeParseFunction(parsed.code, snapshot.values);
+      console.log(`[SPREADSHEET_EXTRACT] loop-code-execution:success`);
+      if (Array.isArray(result)) {
+        return result.filter(
+          (item): item is Record<string, unknown> =>
+            item != null && typeof item === 'object' && !Array.isArray(item),
+        );
+      }
+      console.warn(`[SPREADSHEET_EXTRACT] loop-code-execution:non-array-result fallback=rowsToObjects`);
+      return rowsToObjects(snapshot.values);
+    } catch (execError) {
+      console.warn(
+        `[SPREADSHEET_EXTRACT] loop-code-execution:failed error="${(execError as Error).message}" fallback=rowsToObjects`,
+      );
+      return rowsToObjects(snapshot.values);
+    }
+  }
+
+  if (parsed.items) {
+    return parsed.items.map((item) => ({ ...item }));
+  }
+
+  return rowsToObjects(snapshot.values);
 }

@@ -35,11 +35,21 @@ export function isExcelWebUrl(url: string): boolean {
     host === 'excel.cloud.microsoft' ||
     host === 'office.live.com' ||
     host === 'www.office.com' ||
+    host === 'onedrive.live.com' ||
     host === 'office.com';
   if (!isExcelHost) return false;
 
   // Require workbook-specific markers so we don't enable tools on home/start pages.
-  const workbookParamKeys = ['docid', 'resid', 'id', 'file', 'wopisrc', 'itemid', 'driveid'];
+  const workbookParamKeys = [
+    'docid',
+    'resid',
+    'id',
+    'file',
+    'wopisrc',
+    'itemid',
+    'driveid',
+    'sourcedoc',
+  ];
   const hasWorkbookQueryParam = workbookParamKeys.some(
     (key) => parsed.searchParams.has(key) || query.includes(`${key}=`),
   );
@@ -56,5 +66,6 @@ export function isExcelWebUrl(url: string): boolean {
 export function getSpreadsheetProvider(url: string): SpreadsheetProvider | null {
   if (isGoogleSheetsUrl(url)) return 'google_sheets';
   if (isExcelWebUrl(url)) return 'excel_web';
+
   return null;
 }

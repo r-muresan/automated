@@ -3,6 +3,7 @@ import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
 import { parseJsonFromText } from './common';
 import { buildDeterministicItemKey } from './item-key';
+import { stripNullKeys } from './types';
 
 export interface ExtractionItem {
   fingerprint: string;
@@ -56,7 +57,7 @@ Return a JSON object with an "items" array where each element is an object with 
   const items: ExtractionItem[] = [];
   for (const item of parsed.items) {
     if (!item || typeof item !== 'object') continue;
-    const normalizedItem = item as Record<string, unknown>;
+    const normalizedItem = stripNullKeys(item as Record<string, unknown>);
     const fingerprint = buildDeterministicItemKey(normalizedItem);
     if (knownItemKeys.has(fingerprint)) continue;
     items.push({ fingerprint, data: normalizedItem });

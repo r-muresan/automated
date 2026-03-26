@@ -3,6 +3,7 @@ import type { OrchestratorContext } from '../orchestrator-context';
 import { getSpreadsheetProvider } from '../agent-tools';
 import { extractWithSharedStrategy } from '../extraction';
 import { waitForPageReady } from '../page-ready';
+import fs from 'fs/promises';
 
 function flattenToMap(output: unknown): Record<string, unknown> {
   if (!output || typeof output !== 'object' || Array.isArray(output)) return {};
@@ -17,19 +18,6 @@ function extractExpandedItems(output: unknown): Record<string, unknown>[] | null
   if (!Array.isArray(value) || value.length === 0) return null;
   if (!value.every((v) => v && typeof v === 'object' && !Array.isArray(v))) return null;
   return value.map((item: Record<string, unknown>) => ({ ...item }));
-}
-
-function mergeIntoGlobalState(
-  globalState: { source: string; items: Record<string, unknown>[] }[],
-  source: string,
-  items: Record<string, unknown>[],
-): void {
-  const existing = globalState.find((entry) => entry.source === source);
-  if (existing) {
-    existing.items.push(...items);
-  } else {
-    globalState.push({ source, items });
-  }
 }
 
 export async function executeExtractStep(
@@ -69,6 +57,7 @@ export async function executeExtractStep(
       stagehand: ctx.stagehand,
       llmClient: ctx.openai,
       model: ctx.resolveModels().extract,
+      agentModel: ctx.resolveModels().agent,
       dataExtractionGoal: contextualInstruction,
       context,
       globalState: ctx.globalState,
@@ -79,18 +68,19 @@ export async function executeExtractStep(
 
     const output = result.scraped_data;
 
-    // Build source label: step description + loop context if any
-    let source = step.description;
-    if (context?.item != null) {
-      source += ` (loop item ${context.itemIndex ?? '?'}: ${JSON.stringify(context.item)})`;
-    }
-
     const expandedItems = extractExpandedItems(output);
     const items = expandedItems ?? [flattenToMap(output)];
     const nonEmpty = expandedItems ? items : items.filter((m) => Object.keys(m).length > 0);
 
     if (nonEmpty.length > 0) {
-      mergeIntoGlobalState(ctx.globalState, source, nonEmpty);
+      ctx.globalState.push({
+        step: step.description,
+        ...(context?.item
+          ? { stepIteration: context.item, stepIterationIndex: context.itemIndex }
+          : {}),
+        items,
+      });
+      fs.writeFile('global-state.json', JSON.stringify(ctx.globalState, null, 2));
       console.log(
         expandedItems
           ? `[ORCHESTRATOR] Extracted ${nonEmpty.length} items (expanded array, saved to global state)`

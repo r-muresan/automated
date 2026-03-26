@@ -686,6 +686,11 @@ export type AgentConfig = {
    * such as intercepted file uploads with the agent's tool loop.
    */
   interactionSync?: AgentInteractionSync;
+  /**
+   * Previously collected data from earlier workflow steps.
+   * Rendered as a dedicated section in the agent system prompt.
+   */
+  globalState?: any[];
 };
 
 /**

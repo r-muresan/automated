@@ -154,7 +154,9 @@ export class WorkflowGenerationService {
         parts.push(`  URL: ${interaction.data?.url || interaction.element?.href || 'unknown'}`);
       } else if (interaction.type === 'tab_navigation' && interaction.data?.type === 'new_tab') {
         const tabIdx = interaction.data?.tabIndex;
-        parts.push(`  Type: New Tab${tabIdx != null ? ` (tab index ${tabIdx})` : ''}`);
+        parts.push(
+          `  Type: New Tab${tabIdx != null ? ` (tab index ${tabIdx}, url: ${interaction.data.url})` : ''}`,
+        );
       } else if (interaction.type === 'tab_navigation' && interaction.data?.type === 'switch_tab') {
         const tabIdx = interaction.data?.tabIndex;
         parts.push(`  Type: Switch Tabs to index ${tabIdx ?? 'unknown'}`);

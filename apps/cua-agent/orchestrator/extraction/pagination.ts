@@ -1,4 +1,4 @@
-import type { Stagehand } from '../../../stagehand/v3';
+import type { Stagehand } from '../../stagehand/v3';
 
 type EvaluatablePage = {
   evaluate: <T = unknown>(expression: string) => Promise<T>;

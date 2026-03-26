@@ -3,20 +3,21 @@ import type { Stagehand } from '../../../stagehand/v3';
 import { getSpreadsheetProvider } from '../../agent-tools';
 import {
   captureSpreadsheetSnapshot,
+  extractFromSpreadsheetWithLlm,
   extractLoopItemsFromSpreadsheetWithLlm,
 } from '../spreadsheet';
-import type { CollectedItem, ItemCollector } from './types';
-import { deduplicateRawItems } from './types';
+import type { UnifiedExtractor, ExtractOutput, CollectedItem } from '../types';
+import { deduplicateRawItems } from '../types';
 
 const BATCH_SIZE = 20;
 
-export function createSpreadsheetCollector(params: {
+export function createSpreadsheetStrategy(params: {
   stagehand: Stagehand;
   llmClient: OpenAI;
   model: string;
-  description: string;
-}): ItemCollector | null {
-  const { stagehand, llmClient, model, description } = params;
+  dataExtractionGoal: string;
+}): UnifiedExtractor | null {
+  const { stagehand, llmClient, model, dataExtractionGoal } = params;
   const page = stagehand.context.activePage() ?? stagehand.context.pages()[0];
   const activeUrl = page?.url?.() ?? '';
 
@@ -26,6 +27,28 @@ export function createSpreadsheetCollector(params: {
 
   return {
     name: 'spreadsheet',
+    targetItemCount: null,
+
+    async extract(): Promise<ExtractOutput> {
+      const snapshotStart = Date.now();
+      const snapshot = await captureSpreadsheetSnapshot(stagehand);
+      console.log(
+        `[EXTRACTION] spreadsheet:snapshot-ready duration_ms=${Date.now() - snapshotStart} range="${snapshot.sampledRangeA1}"`,
+      );
+      const llmStart = Date.now();
+      const result = await extractFromSpreadsheetWithLlm({
+        llmClient,
+        model,
+        dataExtractionGoal,
+        snapshot,
+      });
+      console.log(`[EXTRACTION] spreadsheet:llm-ready duration_ms=${Date.now() - llmStart}`);
+      return {
+        mode: 'spreadsheet',
+        scraped_data: result,
+      };
+    },
+
     async collect(pageIndex: number): Promise<CollectedItem[]> {
       if (cachedItems === null) {
         console.log('[LOOP-COLLECT] Spreadsheet: loading items');
@@ -33,7 +56,7 @@ export function createSpreadsheetCollector(params: {
         const rawItems = await extractLoopItemsFromSpreadsheetWithLlm({
           llmClient,
           model,
-          description,
+          description: dataExtractionGoal,
           snapshot,
         });
         cachedItems = deduplicateRawItems(rawItems);

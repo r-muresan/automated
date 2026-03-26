@@ -1,5 +1,5 @@
-const DEFAULT_MAX_CREATES_PER_MINUTE = 20;
-const DEFAULT_MAX_CONCURRENT_SESSIONS = 25;
+const DEFAULT_MAX_CREATES_PER_MINUTE = 10;
+const DEFAULT_MAX_CONCURRENT_SESSIONS = 10;
 const CREATE_WINDOW_MS = 60_000;
 
 function readPositiveIntegerEnv(value: string | undefined, fallback: number): number {
@@ -7,11 +7,7 @@ function readPositiveIntegerEnv(value: string | undefined, fallback: number): nu
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function readSessionLimiterEnv(
-  primary: string,
-  legacy: string,
-  fallback: number,
-): number {
+function readSessionLimiterEnv(primary: string, legacy: string, fallback: number): number {
   return readPositiveIntegerEnv(process.env[primary] ?? process.env[legacy], fallback);
 }
 

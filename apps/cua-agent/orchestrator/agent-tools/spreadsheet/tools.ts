@@ -27,9 +27,33 @@ import {
   lettersToColumnNumber,
   parseCellAddress,
 } from './shared-utils';
+import type { Protocol } from 'devtools-protocol';
 
 function isBridgeError(result: BridgeRunResult): result is Extract<BridgeRunResult, { ok: false }> {
   return 'error' in result;
+}
+
+/**
+ * Detect whether the remote browser is running on macOS.
+ * process.platform reflects the Node.js host, NOT the browser.
+ */
+const browserPlatformCache = new WeakMap<CdpPageLike, 'mac' | 'other'>();
+async function isBrowserMac(page: CdpPageLike): Promise<boolean> {
+  const cached = browserPlatformCache.get(page);
+  if (cached) return cached === 'mac';
+  try {
+    const res = await page.sendCDP<Protocol.Runtime.EvaluateResponse>('Runtime.evaluate', {
+      expression: 'navigator.platform',
+      returnByValue: true,
+    });
+    const platform = typeof res.result?.value === 'string' ? res.result.value.toLowerCase() : '';
+    const isMac = platform.includes('mac');
+    browserPlatformCache.set(page, isMac ? 'mac' : 'other');
+    return isMac;
+  } catch {
+    browserPlatformCache.set(page, 'other');
+    return false;
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -305,20 +329,33 @@ async function activateRange(
       ? activation.value.activeSelectionA1
       : undefined;
 
-  if (activation.value.nameBoxStillFocused === true) {
+  // The bridge focused the Name Box and selected its text. Now type the range
+  // reference and press Enter via CDP so Excel Web processes real input events.
+  if (activation.value.needsCdpInput === true) {
+    const rangePart =
+      typeof activation.value.rangePart === 'string'
+        ? activation.value.rangePart
+        : rangeA1;
     try {
+      // Select all existing text in the Name Box and type over it.
+      await page.keyPress('Control+A');
+      await sleep(50);
+      // Type the range reference using CDP insertText for reliable input.
+      await page.sendCDP('Input.insertText', { text: rangePart });
+      await sleep(50);
       await page.keyPress('Enter');
     } catch (error: any) {
       return {
         ok: false,
         error: spreadsheetToolError(
           'UNSUPPORTED_PROVIDER_STATE',
-          error?.message ?? `Failed to confirm range activation for ${rangeA1}.`,
+          error?.message ?? `Failed to type range ${rangeA1} into Name Box via CDP.`,
           { rangeA1 },
         ),
       };
     }
-    await sleep(90);
+    // Wait for Excel to navigate to the range and move focus to the grid.
+    await sleep(300);
 
     const metadata = await bridgeResult(page, 'getSelectionMetadata');
     if ('error' in metadata) return { ok: false, error: metadata.error };
@@ -328,6 +365,9 @@ async function activateRange(
     if (typeof metadata.value.activeSelectionA1 === 'string') {
       activeSelectionA1 = metadata.value.activeSelectionA1;
     }
+
+    // Final safety: if the Name Box still has focus, blur it.
+    await bridgeResult(page, 'blurNameBox');
   }
 
   console.timeEnd(`activateRange(${rangeA1})`);
@@ -353,7 +393,8 @@ async function readRangeViaClipboard(
   console.timeEnd(`${label}:activateRange`);
   if ('error' in activated) return { ok: false, error: activated.error };
 
-  const keyCombo = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
+  const browserMac = await isBrowserMac(page);
+  const keyCombo = browserMac ? 'Meta+C' : 'Control+C';
   console.time(`${label}:keyPress(copy)`);
   try {
     await page.keyPress(keyCombo);
@@ -479,7 +520,8 @@ async function writeRangeViaClipboard(
     };
   }
 
-  const keyCombo = process.platform === 'darwin' ? 'Meta+V' : 'Control+V';
+  const browserMacPaste = await isBrowserMac(page);
+  const keyCombo = browserMacPaste ? 'Meta+V' : 'Control+V';
   console.time(`${label}:keyPress(paste)`);
   try {
     await page.keyPress(keyCombo);
