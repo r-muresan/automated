@@ -14,7 +14,7 @@
   <a href="#features">Features</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
-  <a href="#configuration">Configuration</a> &bull;
+  <a href="#configuration">Configuration</a>
 </p>
 
 ---
